@@ -237,7 +237,7 @@ private theorem segment_000000_sound (smStore pmStore : Store)
       rw [hPmWriter2]
       exact segment_000000_dx_shape _ _ _ 32 32 hg.2.2 hxShape2 hwShape2
     have hcomm := TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3 (pmFinal 1000)
-      (smFinal 200) [pmFinal 2000, pmFinal 2001, pmFinal 2002] [pmFinal 3000, pmFinal 3001, pmFinal 3002]
+      (smFinal 200) [pmFinal 2000, pmFinal 2001, pmFinal 2002] [pmFinal 3000, pmFinal 3001, pmFinal 3002] 32 32 (by decide) (by decide)
       (by simp) (by simp) hg.2.2 hx.full_shape hx.shard_shapes hw.shard_shapes
     simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hcomm
     have hOutValue : smFinal 400 = allGatherPrimDimN 2 3 0 [pmFinal 4000, pmFinal 4001, pmFinal 4002] := by

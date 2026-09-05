@@ -1366,10 +1366,15 @@ def test_gpt_goal107_bw_linear_dx_classifies_three_relation_families(monkeypatch
     assert sum(item.family == "column-sharded" for item in certs) == 10
     assert sum(item.family == "row-reduction" for item in certs) == 8
     column = [item for item in certs if item.family == "column-sharded"]
-    assert sum(item.lean_theorem.endswith("g276") for item in column) == 6
-    assert sum(item.lean_theorem.endswith("g245") for item in column) == 2
-    assert sum(item.lean_theorem.endswith("g213") for item in column) == 2
+    assert {item.rule_id for item in column} == {"bw-linear-dx-column-sharded-k-rank"}
+    assert {item.lean_theorem for item in column} == {
+        "TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
+    }
     by_step = {step.step_id: step for step in proof.steps}
+    from collections import Counter
+    assert Counter((by_step[item.sm_step_id].input_shapes[0][-1],
+                    by_step[item.pm_step_ids[0]].input_shapes[1][-1])
+                   for item in column) == {(32, 8): 6, (128, 8): 2, (32, 32): 2}
     assert all(
         frontier[0].startswith("init:") or by_step[frontier[0]].op != "BW_linear"
         for frontier in relation.unresolved_frontiers

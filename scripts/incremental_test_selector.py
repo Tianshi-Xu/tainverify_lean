@@ -104,6 +104,7 @@ BW_LINEAR_DX_PATHS = frozenset((
 ))
 
 BW_LINEAR_COLUMN_TESTS = (
+    "scripts/tests/test_model_authority.py::test_gpt_goal107_bw_linear_dx_classifies_three_relation_families",
     "scripts/tests/test_k_rank_bw_linear_dx_column.py",
     "scripts/tests/test_k_rank_bw_layernorm.py",
     "scripts/tests/test_proof_compiler.py::test_gpt_goal107_mixed_linear_collective_tuple_is_atomic",
@@ -114,9 +115,11 @@ BW_LINEAR_COLUMN_TESTS = (
     "scripts/tests/test_incremental_test_selector.py",
 )
 BW_LINEAR_COLUMN_PATHS = frozenset((
+    "scripts/tests/test_model_authority.py",
     "trainverify/bridge_emitter/relation_compiler.py",
     "trainverify/bridge_emitter/bw_linear_dx_column_renderer.py",
     "trainverify/bridge_emitter/bw_linear_column_dual_renderer.py",
+    "trainverify/bridge_emitter/bw_linear_gather_view_alltoall_renderer.py",
     "trainverify/bridge_emitter/closed_segment_import_policy.py",
     "trainverify/bridge_emitter/compound_rule_dispatch.py",
     "scripts/tests/test_k_rank_bw_layernorm.py",

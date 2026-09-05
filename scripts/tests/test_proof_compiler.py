@@ -1679,7 +1679,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     mixed_backward = next(s for s in relation.dependent_chain_plan.segments
                           if s.segment_id == "segment_000228")
     assert tuple(transitions[item].rule_id for item in mixed_backward.transition_ids) == (
-        "bw-linear-dx-column-sharded-rank4",
+        "bw-linear-dx-column-sharded-k-rank",
         "allgather-reconstruction-k-rank",
         "bw-view-joined",
         "alltoall-k-rank-layout-transport",
@@ -1688,6 +1688,56 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
         ir, relation, mixed_backward.segment_id
     )
     assert "private def segment_000228" in mixed_backward_source
+    assert "bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3" in mixed_backward_source
+    column_certs = [c for c in relation.certificates
+                    if getattr(c, "family", None) == "column-sharded"]
+    assert column_certs and all(c.rule_id == "bw-linear-dx-column-sharded-k-rank"
+                               for c in column_certs)
+    # Exercise the real compound, not only synthetic singleton records.
+    from copy import copy
+    from dataclasses import replace
+    from trainverify.bridge_emitter.composer import _typed_certificate_digest
+    linear_transition = transitions[mixed_backward.transition_ids[0]]
+    linear_cert = next(c for c in column_certs
+                       if c.sm_step_id == f"sm:{linear_transition.sm_node_indices[0]}:0")
+    for mutated_cert in (replace(linear_cert, gather_dim=1),
+                         replace(linear_cert, pm_step_ids=tuple(reversed(linear_cert.pm_step_ids)))):
+        bad_relation = replace(relation,
+            certificates=tuple(mutated_cert if c is linear_cert else c
+                               for c in relation.certificates),
+            transition_specs=tuple(
+                replace(t, certificate_digest=_typed_certificate_digest(mutated_cert))
+                if t is linear_transition else t for t in relation.transition_specs))
+        with pytest.raises(ValueError):
+            render_closed_segment(ir, bad_relation, mixed_backward.segment_id)
+    for tr_id, changes in (
+            (mixed_backward.transition_ids[2], {"input_shape": (9,)}),
+            (mixed_backward.transition_ids[2], {"sm_step_id": "sm:0:0"}),
+            (mixed_backward.transition_ids[2], {"pm_step_id": "pm:0:0"}),
+            (mixed_backward.transition_ids[1], {"gather_dim": -1}),
+            (mixed_backward.transition_ids[1], {"full_shape": (9,)}),
+            (mixed_backward.transition_ids[1], {"shard_shape": (9,)}),
+            (mixed_backward.transition_ids[1], {"pm_allgather_step": "pm:0:0"}),
+            (mixed_backward.transition_ids[-1], {"input_gather_dim": 1}),
+            (mixed_backward.transition_ids[-1], {"output_gather_dim": 2}),
+            (mixed_backward.transition_ids[-1], {"pm_step_ids": ("pm:0:0",)})):
+        tr = transitions[tr_id]
+        cert = next(c for c in relation.certificates
+                    if c.rule_id == tr.rule_id and c.lean_theorem == tr.lean_theorem
+                    and _typed_certificate_digest(c) == tr.certificate_digest)
+        mutated = replace(cert, **changes)
+        bad_relation = replace(relation,
+            certificates=tuple(mutated if c is cert else c for c in relation.certificates),
+            transition_specs=tuple(replace(t, certificate_digest=_typed_certificate_digest(mutated))
+                                   if t is tr else t for t in relation.transition_specs))
+        with pytest.raises(ValueError):
+            render_closed_segment(ir, bad_relation, mixed_backward.segment_id)
+    bad_ir = copy(ir)
+    bad_ir.pm_nodes = list(ir.pm_nodes)
+    linear_index = linear_transition.pm_node_indices[0]
+    bad_ir.pm_nodes[linear_index] = replace(ir.pm_nodes[linear_index], params=[1])
+    with pytest.raises(ValueError):
+        render_closed_segment(bad_ir, relation, mixed_backward.segment_id)
 
     triple_multiref = next(s for s in relation.dependent_chain_plan.segments
                            if s.segment_id == "segment_000231")
@@ -1836,7 +1886,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     column_linear_view = next(s for s in relation.dependent_chain_plan.segments
                               if s.segment_id == "segment_000320")
     assert tuple(transitions[item].rule_id for item in column_linear_view.transition_ids) == (
-        "bw-linear-dx-column-sharded-rank4",
+        "bw-linear-dx-column-sharded-k-rank",
         "bw-view-joined",
     )
     column_linear_view_source = render_closed_segment(

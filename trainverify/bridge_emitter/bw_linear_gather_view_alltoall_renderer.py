@@ -11,9 +11,13 @@ def render_closed_bw_linear_gather_view_alltoall_segment(ir, relation, segment_i
         from composer import _node_text, _render_mixed_final_value, _select_exact_typed_certificate, _shape_text
         from relation_compiler import (KRankBWLinearDxCertificate, KRankBWLinearDwColumnShardedCertificate,
             KRankAllGatherReconstructionCertificate, JoinedBWViewCertificate, KRankAllToAllRelationCertificate)
-    rules=("bw-linear-dx-column-sharded-rank4","allgather-reconstruction-k-rank","bw-view-joined","alltoall-k-rank-layout-transport")
-    dual_rules=("bw-linear-dx-column-sharded-rank4","bw-linear-dw-input-column-sharded-rank4","allgather-reconstruction-k-rank","bw-view-joined","alltoall-k-rank-layout-transport")
-    thL="TrainVerify.Denote.bw_linear_dx_csplit_dim1_4_1_8_8_g276"
+    try:
+        from .bw_linear_dx_column_renderer import column_dx_shape_spec, render_dynamic_column_commute
+    except ImportError:
+        from bw_linear_dx_column_renderer import column_dx_shape_spec, render_dynamic_column_commute
+    rules=("bw-linear-dx-column-sharded-k-rank","allgather-reconstruction-k-rank","bw-view-joined","alltoall-k-rank-layout-transport")
+    dual_rules=("bw-linear-dx-column-sharded-k-rank","bw-linear-dw-input-column-sharded-rank4","allgather-reconstruction-k-rank","bw-view-joined","alltoall-k-rank-layout-transport")
+    thL="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
     thG="TrainVerify.Denote.RelationCompiler.ShardedRel.to_joined_allGather"
     thV="TrainVerify.Denote.RelationCompiler.JoinedRel.fw_view"
     thA="TrainVerify.Denote.allGatherPrimDimN_allToAllPrimWithDims_ofFn"
@@ -34,7 +38,7 @@ def render_closed_bw_linear_gather_view_alltoall_segment(ir, relation, segment_i
     rec={r.source:r for r in chain.relation_facts}
     grad,act,weight=(rec[x] for x in cL.input_facts); outL=rec[cL.output_fact]
     outD=rec[cD.output_fact] if cD else None
-    if cD and set((cD.gradient_fact,cD.activation_fact,cD.weight_fact))!=set(cL.input_facts): raise ValueError("mixed backward shared dX/dW inputs disagree")
+    if cD and (cD.gradient_fact,cD.activation_fact,cD.weight_fact)!=cL.input_facts: raise ValueError("mixed backward shared dX/dW inputs disagree")
     inG,outG=rec[cG.input_fact],rec[cG.output_fact]; inV,outV=rec[cV.input_fact],rec[cV.output_fact]; inA,outA=rec[cA.input_fact],rec[cA.output_fact]
     if outL.fact_id!=inA.fact_id or outG.fact_id!=inV.fact_id: raise ValueError("mixed backward internal dependency mismatch")
     states={s.state_id:s for s in chain.states}; before,after=states[seg.pre_state_id],states[seg.post_state_id]
@@ -44,6 +48,11 @@ def render_closed_bw_linear_gather_view_alltoall_segment(ir, relation, segment_i
     if not required<=set(before.fact_ids) or not required_published<=set(after.fact_ids): raise ValueError("mixed backward liveness mismatch")
     if not set(after.fact_ids)<=set(before.fact_ids)|proved: raise ValueError("mixed backward publication mismatch")
     k=cL.rank_count
+    column_dx_shape_spec(grad,act,weight,outL,k)
+    if cL.family!="column-sharded" or cL.output_layout!="sharded" or cL.gather_dim!=2:
+        raise ValueError("mixed backward column dX certificate layout mismatch")
+    if cD and (grad.full_shape!=(1,8,32) or act.shard_shape!=(1,8,8)):
+        raise ValueError("mixed backward dW remains in the checked 32-by-8 domain")
     if k!=4 or any(c.rank_count!=k for c in (cG,cA)) or (cD and cD.rank_count!=k) or ir.pm_num_ranks!=k: raise ValueError("mixed backward rank mismatch")
     if (grad.kind!="joined" or act.kind!="sharded" or act.gather_dim!=2 or weight.kind!="sharded" or weight.gather_dim!=1
         or outL.kind!="sharded" or outL.gather_dim!=2 or (outD and (outD.kind!="sharded" or outD.gather_dim!=1 or outD.full_shape!=weight.full_shape or outD.shard_shape!=weight.shard_shape)) or inG.kind!="sharded" or outG.kind!="joined" or outV.kind!="joined"
@@ -51,16 +60,42 @@ def render_closed_bw_linear_gather_view_alltoall_segment(ir, relation, segment_i
     ss,se=seg.sm_range;ps,pe=seg.pm_range;sf=list(ir.sm_nodes[ss:se]);pf=list(ir.pm_nodes[ps:pe])
     if tuple(L.sm_node_indices)!=(se-1,) or tuple(V.sm_node_indices)!=(ss,) or G.sm_node_indices or A.sm_node_indices: raise ValueError("mixed backward SM authority mismatch")
     if len(L.pm_node_indices)!=k or len(G.pm_node_indices)!=1 or len(V.pm_node_indices)!=1 or len(A.pm_node_indices)!=k: raise ValueError("mixed backward PM footprint mismatch")
+    if (cL.sm_step_id!=f"sm:{L.sm_node_indices[0]}:0"
+            or cL.pm_step_ids!=tuple(f"pm:{i}:0" for i in L.pm_node_indices)
+            or not set(L.pm_node_indices)<=set(range(ps,pe))):
+        raise ValueError("mixed backward column dX footprint mismatch")
+    if (cG.gather_dim!=inG.gather_dim or cG.full_shape!=inG.full_shape
+            or cG.shard_shape!=inG.shard_shape or outG.full_shape!=inG.full_shape
+            or outG.sm_tid!=inG.sm_tid
+            or cG.pm_allgather_step!=f"pm:{G.pm_node_indices[0]}:0"
+            or len(inG.pm_tids)!=k):
+        raise ValueError("mixed backward AllGather metadata mismatch")
+    if (cA.input_gather_dim!=2 or cA.output_gather_dim!=1
+            or cA.pm_step_ids!=tuple(f"pm:{i}:0" for i in A.pm_node_indices)
+            or len(inA.pm_tids)!=k or len(outA.pm_tids)!=k
+            or inA.sm_tid!=outA.sm_tid or inA.full_shape!=outA.full_shape):
+        raise ValueError("mixed backward AllToAll metadata mismatch")
+    for fact,dim in ((inG,cG.gather_dim),(inA,2),(outA,1)):
+        shape=list(fact.shard_shape)
+        if dim<0 or dim>=len(shape):
+            raise ValueError("mixed backward collective tensor rank mismatch")
+        shape[dim]*=k
+        if tuple(shape)!=fact.full_shape:
+            raise ValueError("mixed backward collective shape mismatch")
     nLs=ir.sm_nodes[L.sm_node_indices[0]]; nLp=tuple(ir.pm_nodes[i] for i in L.pm_node_indices)
     nG=ir.pm_nodes[G.pm_node_indices[0]]; nVs=ir.sm_nodes[V.sm_node_indices[0]]; nVp=ir.pm_nodes[V.pm_node_indices[0]]; nAp=tuple(ir.pm_nodes[i] for i in A.pm_node_indices)
     if cD and (D.sm_node_indices!=L.sm_node_indices or D.pm_node_indices!=L.pm_node_indices
             or cD.sm_step_id!=f"sm:{L.sm_node_indices[0]}:1"
             or cD.pm_step_ids!=tuple(f"pm:{i}:1" for i in L.pm_node_indices)):
         raise ValueError("mixed backward dW shared-writer footprint mismatch")
-    if (nLs.op!="BW_linear" or tuple(nLs.ins)!=(grad.sm_tid,act.sm_tid,weight.sm_tid) or nLs.outs[0]!=outL.sm_tid or (outD and nLs.outs[1]!=outD.sm_tid)
-        or tuple(n.rank for n in nLp)!=tuple(range(k)) or any(n.op!="BW_linear" or tuple(n.ins)!=(grad.joined_pm_tid,act.pm_tids[r],weight.pm_tids[r]) or n.outs[0]!=outL.pm_tids[r] or (outD and n.outs[1]!=outD.pm_tids[r]) for r,n in enumerate(nLp))): raise ValueError("mixed backward BW_linear writers invalid")
+    if (nLs.op!="BW_linear" or nLs.rank!=0 or nLs.params or len(nLs.outs)!=2 or tuple(nLs.ins)!=(grad.sm_tid,act.sm_tid,weight.sm_tid) or nLs.outs[0]!=outL.sm_tid or (outD and nLs.outs[1]!=outD.sm_tid)
+        or tuple(n.rank for n in nLp)!=tuple(range(k)) or any(n.op!="BW_linear" or n.params or len(n.outs)!=2 or tuple(n.ins)!=(grad.joined_pm_tid,act.pm_tids[r],weight.pm_tids[r]) or n.outs[0]!=outL.pm_tids[r] or (outD and n.outs[1]!=outD.pm_tids[r]) for r,n in enumerate(nLp))): raise ValueError("mixed backward BW_linear writers invalid")
     if nG.op!="AllGatherPrim" or tuple(nG.ins)!=inG.pm_tids or nG.outs!=[outG.joined_pm_tid] or tuple(nG.params)!=(inG.gather_dim,): raise ValueError("mixed backward AllGather writer invalid")
     target=tuple(cV.target_shape)
+    if (cV.input_shape!=inV.full_shape or cV.target_shape!=outV.full_shape
+            or cV.sm_step_id!=f"sm:{V.sm_node_indices[0]}:0"
+            or cV.pm_step_id!=f"pm:{V.pm_node_indices[0]}:0"):
+        raise ValueError("mixed backward BW_view certificate metadata mismatch")
     if nVs.op!="BW_view" or nVp.op!="BW_view" or nVs.ins[0]!=inV.sm_tid or nVp.ins[0]!=inV.joined_pm_tid or nVs.outs!=[outV.sm_tid] or nVp.outs!=[outV.joined_pm_tid] or tuple(nVs.params)!=target or tuple(nVp.params)!=target: raise ValueError("mixed backward BW_view writers invalid")
     if tuple(n.rank for n in nAp)!=tuple(range(k)) or any(n.op!="AllToAllPrim" or tuple(n.ins)!=inA.pm_tids or n.outs!=[outA.pm_tids[r]] or tuple(n.params)!=(2,1) for r,n in enumerate(nAp)): raise ValueError("mixed backward AllToAll writers invalid")
     smn,pmn=f"{segment_id}_sm_nodes",f"{segment_id}_pm_nodes";smf,pmf=f"{segment_id}_sm_final",f"{segment_id}_pm_final"
@@ -90,7 +125,8 @@ def render_closed_bw_linear_gather_view_alltoall_segment(ir, relation, segment_i
         for r in range(k): lines += [f" have hDp{r}:={hDp[r]} pmStore",f" change pmFinal {outD.pm_tids[r]}=(bw_linear (pmFinal {nLp[r].ins[0]}) (pmFinal {nLp[r].ins[1]}) (pmFinal {nLp[r].ins[2]})).2 at hDp{r}",f" have hdS{r}:(pmFinal {outD.pm_tids[r]}).shape={wsh}:=by rw [hDp{r}];exact bw_linear_3d_snd_shape 1 8 {grad.full_shape[2]} {act.shard_shape[2]} _ _ _ hg.2.2 hxS{r} hwS{r}"]
         lines += [f" have hdcomm:={D.lean_theorem} (pmFinal {grad.joined_pm_tid}) "+" ".join(f"(pmFinal {u})" for u in act.pm_tids+weight.pm_tids)+" hg.2.2 "+" ".join(f"hxS{r}" for r in range(k))+" "+" ".join(f"hwS{r}" for r in range(k)),f" have hdV:smFinal {outD.sm_tid}=allGatherPrimDimN 1 4 0 {dlist}:=by rw [hDs,hg.1,hxV,hwV,hdcomm];rw ["+", ".join(f"←hDp{r}" for r in range(k))+"]",f" have hdVL:smFinal {outD.sm_tid}=allGatherPrimDimN 1 {dlist}.length 0 {dlist}:=by simpa only [List.length_cons,List.length_nil] using hdV",f" have hdF:(smFinal {outD.sm_tid}).shape={wf}:=by rw [hDs];exact bw_linear_3d_snd_shape 1 8 {grad.full_shape[2]} {act.full_shape[2]} _ _ _ hg.2.1 hx.full_shape hw.full_shape",f" have houtD:{outD.fact_id}.Holds smFinal pmFinal:=by",f"  change ShardedRel (smFinal {outD.sm_tid}) {dlist} 1 {wf} {wsh}","  refine {full_value:=hdVL,full_shape:=hdF,shards_nonempty:=by simp,gather_dim_lt:=by native_decide,shard_shapes:=?_,shape_contract:=by simp only [List.length_cons,List.length_nil];native_decide}","  intro shard hs; simp only [List.mem_cons,List.not_mem_nil,or_false] at hs;rcases hs with h0|h1|h2|h3"]
         for r in range(k): lines += ["  · subst shard",f"    exact hdS{r}"]
-    lines += [f" have hcomm:={thL} (pmFinal {grad.joined_pm_tid}) "+" ".join(f"(pmFinal {u})" for u in act.pm_tids+weight.pm_tids)+" hg.2.2 "+" ".join(f"hxS{r}" for r in range(k))+" "+" ".join(f"hwS{r}" for r in range(k)),f" have hLV:smFinal {outL.sm_tid}=allGatherPrimDimN 2 4 0 {olist}:=by rw [hLs,hg.1,hwV,hxV,hcomm];rw ["+", ".join(f"←hLp{r}" for r in range(k))+"]",f" have hLVL:smFinal {outL.sm_tid}=allGatherPrimDimN 2 {olist}.length 0 {olist}:=by simpa only [List.length_cons,List.length_nil] using hLV",f" have hLF:(smFinal {outL.sm_tid}).shape={of}:=by rw [hLs];exact {segment_id}_dx_shape _ _ _ {grad.full_shape[2]} {outL.full_shape[2]} hg.2.1 hx.full_shape hw.full_shape",f" have hLShapes:∀ shard∈{olist},shard.shape={osh}:=by\n  simp only [List.forall_mem_cons]\n  exact ⟨"+", ".join(f"hoS{r}" for r in range(k))+", List.forall_mem_nil _⟩",f" have houtL:{outL.fact_id}.Holds smFinal pmFinal:=by exact {{full_value:=hLVL,full_shape:=hLF,shards_nonempty:=List.cons_ne_nil _ _,gather_dim_lt:=by native_decide,shard_shapes:=hLShapes,shape_contract:=by simp only [List.map, List.length_cons,List.length_nil];native_decide}}"]
+    lines += [line[3:] for line in render_dynamic_column_commute(thL,grad,act,weight)]
+    lines += [f" have hLV:smFinal {outL.sm_tid}=allGatherPrimDimN 2 4 0 {olist}:=by rw [hLs,hg.1,hwV,hcomm];rw ["+", ".join(f"←hLp{r}" for r in range(k))+"]",f" have hLVL:smFinal {outL.sm_tid}=allGatherPrimDimN 2 {olist}.length 0 {olist}:=by simpa only [List.length_cons,List.length_nil] using hLV",f" have hLF:(smFinal {outL.sm_tid}).shape={of}:=by rw [hLs];exact {segment_id}_dx_shape _ _ _ {grad.full_shape[2]} {outL.full_shape[2]} hg.2.1 hx.full_shape hw.full_shape",f" have hLShapes:∀ shard∈{olist},shard.shape={osh}:=by\n  simp only [List.forall_mem_cons]\n  exact ⟨"+", ".join(f"hoS{r}" for r in range(k))+", List.forall_mem_nil _⟩",f" have houtL:{outL.fact_id}.Holds smFinal pmFinal:=by exact {{full_value:=hLVL,full_shape:=hLF,shards_nonempty:=List.cons_ne_nil _ _,gather_dim_lt:=by native_decide,shard_shapes:=hLShapes,shape_contract:=by simp only [List.map, List.length_cons,List.length_nil];native_decide}}"]
     gl=vals(inG); gshape=_shape_text(list(inG.full_shape)); lines += [f" have hgi:{inG.fact_id}.Holds smFinal pmFinal:=hframe _ (by native_decide)",f" change ShardedRel (smFinal {inG.sm_tid}) {gl} {inG.gather_dim} {gshape} {_shape_text(list(inG.shard_shape))} at hgi",f" have hGw:={hG} pmStore",f" change pmFinal {outG.joined_pm_tid}=allGatherPrimDimN {inG.gather_dim} {k} 0 {gl} at hGw",f" have hGEq:smFinal {inG.sm_tid}=pmFinal {outG.joined_pm_tid}:=(ShardedRel.to_joined_allGather hgi).trans hGw.symm",f" have houtG:{outG.fact_id}.Holds smFinal pmFinal:=by exact ⟨hGEq,hgi.full_shape,by rw [←hGEq];exact hgi.full_shape⟩",f" have hVs:={hVs} smStore",f" change smFinal {outV.sm_tid}=fw_view {_shape_text(list(outV.full_shape))} (smFinal {inV.sm_tid}) at hVs",f" have hVp:={hVp} pmStore",f" change pmFinal {outV.joined_pm_tid}=fw_view {_shape_text(list(outV.full_shape))} (pmFinal {inV.joined_pm_tid}) at hVp",f" have houtV:{outV.fact_id}.Holds smFinal pmFinal:=by change smFinal {outV.sm_tid}=pmFinal {outV.joined_pm_tid}∧_∧_;rw [hVs,hVp];exact JoinedRel.fw_view {_shape_text(list(outV.full_shape))} {gshape} houtG"]
     al=vals(inA); aol=vals(outA); lines += []
     for r in range(k): lines += [f" have hA{r}:={hAp[r]} pmStore",f" change pmFinal {outA.pm_tids[r]}=allToAllPrimWithDims 4 {r} {al} 2 1 at hA{r}"]

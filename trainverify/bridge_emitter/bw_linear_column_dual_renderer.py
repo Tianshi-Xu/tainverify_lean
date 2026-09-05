@@ -24,33 +24,11 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
 
     try:
         from .relation_compiler import get_closed_rule_spec
-        from .bw_linear_dx_column_renderer import render_dynamic_column_commute
+        from .bw_linear_dx_column_renderer import render_dynamic_column_commute, column_dx_shape_spec
     except ImportError:
         from relation_compiler import get_closed_rule_spec
-        from bw_linear_dx_column_renderer import render_dynamic_column_commute
-    chain = relation.dependent_chain_plan
-    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
-    selected_rules = {t.rule_id for t in relation.transition_specs
-                      if segment is not None and t.transition_id in segment.transition_ids}
-    dynamic = "bw-linear-dx-column-sharded-k-rank" in selected_rules
-    rule = "bw-linear-dx-column-sharded-k-rank" if dynamic else "bw-linear-dx-column-sharded-rank4"
-    theorem_specs = {
-        "TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3": {
-            "gradient": (1, 8, 32), "activation": ((1, 8, 128), (1, 8, 32)),
-            "weight": ((32, 128), (32, 32)),
-            "output": ((1, 8, 128), (1, 8, 32)), "full_x_arg": True,
-        },
-        "TrainVerify.Denote.bw_linear_dx_csplit_dim1_4_1_8_8_g245": {
-            "gradient": (1, 8, 128), "activation": ((1, 8, 32), (1, 8, 8)),
-            "weight": ((128, 32), (128, 8)),
-            "output": ((1, 8, 32), (1, 8, 8)), "full_x_arg": False,
-        },
-        "TrainVerify.Denote.bw_linear_dx_csplit_dim1_4_1_8_8_g276": {
-            "gradient": (1, 8, 32), "activation": ((1, 8, 32), (1, 8, 8)),
-            "weight": ((32, 32), (32, 8)),
-            "output": ((1, 8, 32), (1, 8, 8)), "full_x_arg": False,
-        },
-    }
+        from bw_linear_dx_column_renderer import render_dynamic_column_commute, column_dx_shape_spec
+    rule = "bw-linear-dx-column-sharded-k-rank"
     chain = relation.dependent_chain_plan
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
     if segment is None or len(segment.transition_ids) not in (2, 3):
@@ -66,8 +44,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
             or any(item.rule_id not in known for item in segment_transitions)
             or (len(segment_transitions) == 3 and view_transition is None)):
         raise ValueError("column BW_linear dual transition authority is malformed")
-    spec = theorem_specs.get(transition.lean_theorem)
-    if spec is None or transition.lean_theorem not in get_closed_rule_spec(rule).lean_theorems:
+    if transition.lean_theorem not in get_closed_rule_spec(rule).lean_theorems:
         raise ValueError("BW_linear column dX theorem identity is unsupported")
     theorem = transition.lean_theorem
     certificate = _select_exact_typed_certificate(
@@ -82,8 +59,8 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
         lambda cert: (tuple(sorted((cert.gradient_fact, cert.activation_fact,
                                     cert.weight_fact))), (cert.output_fact,)),
     )
-    if set((dw_certificate.gradient_fact, dw_certificate.activation_fact,
-            dw_certificate.weight_fact)) != set(certificate.input_facts):
+    if ((dw_certificate.gradient_fact, dw_certificate.activation_fact,
+         dw_certificate.weight_fact) != certificate.input_facts):
         raise ValueError("column BW_linear dX/dW input authority disagrees")
     view_certificate = None
     if view_transition is not None:
@@ -113,6 +90,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
     if not set(after.fact_ids) <= (fresh | set(before.fact_ids)):
         raise ValueError("BW_linear column dX post-state introduces an unproved fact")
     k = len(output.pm_tids)
+    spec = column_dx_shape_spec(gradient, activation, weight, output, k)
     if (k != 4 or certificate.rank_count != k or certificate.output_layout != "sharded"
             or certificate.gather_dim != 2
             or gradient.kind != "joined" or gradient.pm_tids != ()
@@ -126,12 +104,13 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
             or (output.full_shape, output.shard_shape) != spec["output"]
             or len(activation.pm_tids) != k or len(weight.pm_tids) != k):
         raise ValueError("BW_linear column dX metadata is not exact")
-    dw_theorems = {
-        "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_32_g214",
-        "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_o128_g211",
-        "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_g154",
-    }
-    if (dw_transition.lean_theorem not in dw_theorems
+    dw_theorem = {
+        (32,32): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_32_g214",
+        (128,8): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_o128_g211",
+        (32,8): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_g154",
+    }.get((gradient.full_shape[2],activation.shard_shape[2]))
+
+    if (dw_transition.lean_theorem != dw_theorem
             or dw_certificate.rank_count != k or dw_output.kind != "sharded"
             or dw_output.gather_dim != 1 or len(dw_output.pm_tids) != k
             or dw_output.full_shape != weight.full_shape
@@ -177,7 +156,9 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
     if view_transition is not None:
         if (view_input.kind!="joined" or view_output.kind!="joined"
                 or view_input.full_shape!=tuple(view_certificate.input_shape)
-                or view_output.full_shape!=tuple(view_certificate.target_shape)):
+                or view_output.full_shape!=tuple(view_certificate.target_shape)
+                or view_certificate.sm_step_id!=f"sm:{view_transition.sm_node_indices[0]}:0"
+                or view_certificate.pm_step_id!=f"pm:{view_transition.pm_node_indices[0]}:0"):
             raise ValueError("BW_linear column/view metadata mismatch")
         view_sm_node=ir.sm_nodes[view_transition.sm_node_indices[0]]
         view_pm_node=ir.pm_nodes[view_transition.pm_node_indices[0]]
@@ -318,25 +299,8 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
             f"      exact bw_linear_3d_snd_shape {gradient.full_shape[0]} {gradient.full_shape[1]} {gradient.full_shape[2]} {activation.shard_shape[2]} _ _ _",
             f"        hg.2.2 hxShape{rank} hwShape{rank}",
         ])
-    hcomm_lines = [
-        f"    have hcomm := {theorem}",
-        f"      (pmFinal {gradient.joined_pm_tid})",
-    ]
-    if spec["full_x_arg"]:
-        hcomm_lines.append(f"      (smFinal {activation.sm_tid})")
-    hcomm_lines.extend(f"      (pmFinal {tid})" for tid in activation.pm_tids)
-    hcomm_lines.extend(f"      (pmFinal {tid})" for tid in weight.pm_tids)
-    hcomm_lines.append("      hg.2.2")
-    if spec["full_x_arg"]:
-        hcomm_lines.append("      hx.full_shape")
-    hcomm_lines.extend(f"      hxShape{rank}" for rank in range(k))
-    hcomm_lines.extend(f"      hwShape{rank}" for rank in range(k))
-    if dynamic:
-        hcomm_lines = render_dynamic_column_commute(theorem, gradient, activation, weight)
-    value_rewrites = "hSmWriter, hg.1, hwValue"
-    if not spec["full_x_arg"]:
-        value_rewrites += ", hxValue"
-    value_rewrites += ", hcomm"
+    hcomm_lines = render_dynamic_column_commute(theorem, gradient, activation, weight)
+    value_rewrites = "hSmWriter, hg.1, hwValue, hcomm"
     lines.extend([
         *hcomm_lines,
         f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 2 4 0 {olist} := by",

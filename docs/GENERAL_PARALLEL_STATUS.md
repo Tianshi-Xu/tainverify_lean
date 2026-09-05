@@ -165,13 +165,47 @@ Validation:
 - Independent source review PASS; noncanonical artifacts are outside the repo at
   `/home/v-zhouziyu/trainverify-audits/parallel-linear-column/`.
 
+## Completed vertical slice: positive-width column `BW_linear dX`
+
+The same list-ABI theorem and certificate family now cover positive output width
+`O`, local feature width `I`, and ordered rank count `K`. Batch and sequence remain
+`1` and `8`: gradient `[1,8,O]`, local activation/dX `[1,8,I]`, local weight `[O,I]`,
+full activation/dX `[1,8,I*K]`, full weight `[O,I*K]`.
+
+The singleton, optional view, dual, and mixed collective callers share the same
+generic dX theorem. The old `g245`/`g276` dX registry and dispatch are removed.
+Independent dW remains K4 and only its checked `(O,I)` domains `(32,32)`, `(128,8)`,
+`(32,8)` are accepted. The mixed AllGather/view/AllToAll path retains K4, exact
+collective descriptors, and its optional dW retains `(32,8)`.
+
+Validation:
+- **170 focused tests passed (28.72 s)**, including zero/negative widths,
+  non-power-of-two ranks, unequal widths, recomputed-digest role/axis/footprint
+  mutations, real GPT107 view/collective descriptor mutations, and dW theorem binding.
+- Fresh generic theorem and committed witness Lake builds passed.
+- Exact generated Lean witnesses passed for `(K,O,I)=(3,7,5),(1,1,1),(5,3,1)`,
+  the retained 32-wide K3 case, and all three checked K4 dW dual domains.
+  Additional singleton+view and dual+view witnesses passed Lean/axiom checks.
+- All ten affected real Goal107 segments passed exact-source Lean/axiom audit
+  in 53.22 s: `195,199,205,228,229,236,240,246,311,320` (zero-padded segment IDs).
+- The generic theorem retains the kernel axiom triple; generated graph proofs
+  retain their explicit `native_decide` trust items, with no forbidden axioms.
+- Review reproductions exposed pre-existing dW role-set and collective payload
+  validation gaps; ordered role equality and descriptor/shape/footprint checks
+  now reject those mutations before rendering. Joined-view shapes and writer
+  step IDs are also bound to the exact materialized facts and transition.
+- Current re-emission is byte-identical to the previously kernel-checked width
+  and ten-real-segment artifacts; the canonical GPT 97-file snapshot is unchanged.
+- Audit sources and receipts: `/home/v-zhouziyu/trainverify-audits/parallel-linear-widths/`.
+
+These are conditional segment checks, not a new three-model public closure.
+
 ## Remaining ordinary TP and other axes
 
-The remaining 8-wide column dX shapes, other fixed-layout/fixed-rank BW_linear
-families, and BW_layernorm parameter reductions still require semantic migrations.
-Next extend the same column dX index theorem across positive gradient/feature
-widths and retire the remaining `g245`/`g276` dX dispatch, while preserving the
-separate dW and collective authority boundaries.
+Other fixed-layout/fixed-rank BW_linear families (including independent dW),
+BW_layernorm parameter reductions, and column dX batch/sequence extents still
+require semantic migrations. The next adjacent family is input-column dW;
+its value theorem and authority must be generalized independently from dX.
 Then proceed to CP/ring, EP/MoE, DP, PP and only compose independently closed
 axes. Arbitrary `DP×TP×PP×CP×EP` configuration support is not implemented.
 

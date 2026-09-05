@@ -16,28 +16,9 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         )
         from relation_compiler import get_closed_rule_spec
 
-    chain = relation.dependent_chain_plan
-    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
-    selected_rules = {t.rule_id for t in relation.transition_specs
-                      if segment is not None and t.transition_id in segment.transition_ids}
-    dynamic = "bw-linear-dx-column-sharded-k-rank" in selected_rules
-    rule_spec = get_closed_rule_spec("bw-linear-dx-column-sharded-k-rank" if dynamic
-                                    else "bw-linear-dx-column-sharded-rank4")
-    legacy_spec = get_closed_rule_spec("bw-linear-dx-column-sharded-rank4")
+    rule_spec = get_closed_rule_spec("bw-linear-dx-column-sharded-k-rank")
     view_rule_spec = get_closed_rule_spec("bw-view-joined")
     rule = rule_spec.rule_id
-    theorem_specs = {
-        legacy_spec.lean_theorems[0]: {
-            "gradient": (1, 8, 128), "activation": ((1, 8, 32), (1, 8, 8)),
-            "weight": ((128, 32), (128, 8)),
-            "output": ((1, 8, 32), (1, 8, 8)), "full_x_arg": False,
-        },
-        legacy_spec.lean_theorems[1]: {
-            "gradient": (1, 8, 32), "activation": ((1, 8, 32), (1, 8, 8)),
-            "weight": ((32, 32), (32, 8)),
-            "output": ((1, 8, 32), (1, 8, 8)), "full_x_arg": False,
-        },
-    }
     chain = relation.dependent_chain_plan
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
     if segment is None or len(segment.transition_ids) not in (1, 2):
@@ -48,15 +29,7 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     view_transition = next((item for item in segment_transitions if item.rule_id == view_rule_spec.rule_id), None)
     if transition is None or (len(segment_transitions) == 2 and view_transition is None):
         raise ValueError("BW_linear column dX transition authority is missing")
-    if dynamic:
-        k = len(transition.pm_node_indices)
-        theorem_specs = {rule_spec.lean_theorems[0]: {
-            "gradient": (1,8,32), "activation": ((1,8,32*k),(1,8,32)),
-            "weight": ((32,32*k),(32,32)), "output": ((1,8,32*k),(1,8,32)),
-            "full_x_arg": True,
-        }}
-    spec = theorem_specs.get(transition.lean_theorem)
-    if spec is None:
+    if transition.lean_theorem not in rule_spec.lean_theorems:
         raise ValueError("BW_linear column dX theorem identity is unsupported")
     theorem = transition.lean_theorem
     certificate = _select_exact_typed_certificate(
@@ -92,7 +65,8 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     if not set(after.fact_ids) <= (fresh | set(before.fact_ids)):
         raise ValueError("BW_linear column dX post-state introduces an unproved fact")
     k = len(output.pm_tids)
-    if ((k < 1 if dynamic else k != 4) or certificate.rank_count != k or certificate.output_layout != "sharded"
+    spec = column_dx_shape_spec(gradient, activation, weight, output, k)
+    if (k < 1 or certificate.rank_count != k or certificate.output_layout != "sharded"
             or certificate.gather_dim != 2
             or gradient.kind != "joined" or gradient.pm_tids != ()
             or gradient.joined_pm_tid is None
@@ -138,7 +112,9 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     if view_transition is not None:
         if (view_input.kind!="joined" or view_output.kind!="joined"
                 or view_input.full_shape!=tuple(view_certificate.input_shape)
-                or view_output.full_shape!=tuple(view_certificate.target_shape)):
+                or view_output.full_shape!=tuple(view_certificate.target_shape)
+                or view_certificate.sm_step_id!=f"sm:{view_transition.sm_node_indices[0]}:0"
+                or view_certificate.pm_step_id!=f"pm:{view_transition.pm_node_indices[0]}:0"):
             raise ValueError("BW_linear column/view metadata mismatch")
         view_sm_node=ir.sm_nodes[view_transition.sm_node_indices[0]]
         view_pm_node=ir.pm_nodes[view_transition.pm_node_indices[0]]
@@ -258,25 +234,8 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
             f"      rw [hPmWriter{rank}]",
             f"      exact {segment_id}_dx_shape _ _ _ {gradient.full_shape[2]} {output.shard_shape[2]} hg.2.2 hxShape{rank} hwShape{rank}",
         ])
-    hcomm_lines = [
-        f"    have hcomm := {theorem}",
-        f"      (pmFinal {gradient.joined_pm_tid})",
-    ]
-    if spec["full_x_arg"]:
-        hcomm_lines.append(f"      (smFinal {activation.sm_tid})")
-    hcomm_lines.extend(f"      (pmFinal {tid})" for tid in activation.pm_tids)
-    hcomm_lines.extend(f"      (pmFinal {tid})" for tid in weight.pm_tids)
-    hcomm_lines.append("      hg.2.2")
-    if spec["full_x_arg"]:
-        hcomm_lines.append("      hx.full_shape")
-    hcomm_lines.extend(f"      hxShape{rank}" for rank in range(k))
-    hcomm_lines.extend(f"      hwShape{rank}" for rank in range(k))
-    if dynamic:
-        hcomm_lines = render_dynamic_column_commute(theorem, gradient, activation, weight)
-    value_rewrites = "hSmWriter, hg.1, hwValue"
-    if not spec["full_x_arg"]:
-        value_rewrites += ", hxValue"
-    value_rewrites += ", hcomm"
+    hcomm_lines = render_dynamic_column_commute(theorem, gradient, activation, weight)
+    value_rewrites = "hSmWriter, hg.1, hwValue, hcomm"
     lines.extend([
         *hcomm_lines,
         f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 2 {k} 0 {olist} := by",
@@ -325,6 +284,27 @@ def render_dynamic_column_commute(theorem, gradient, activation, weight):
     xs="["+", ".join(f"pmFinal {t}" for t in activation.pm_tids)+"]"
     ws="["+", ".join(f"pmFinal {t}" for t in weight.pm_tids)+"]"
     return [f"    have hcomm := {theorem} (pmFinal {gradient.joined_pm_tid})",
-            f"      (smFinal {activation.sm_tid}) {xs} {ws}",
+            f"      (smFinal {activation.sm_tid}) {xs} {ws} {gradient.full_shape[2]} {activation.shard_shape[2]} (by decide) (by decide)",
             "      (by simp) (by simp) hg.2.2 hx.full_shape hx.shard_shapes hw.shard_shapes",
             "    simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hcomm"]
+
+
+def column_dx_shape_spec(gradient, activation, weight, output, k):
+    """Validate all role records against one positive-width column dX contract."""
+    if (k < 1 or len(gradient.full_shape) != 3 or gradient.full_shape[:2] != (1,8)
+            or len(activation.shard_shape) != 3 or activation.shard_shape[:2] != (1,8)):
+        raise ValueError("column dX tensor ranks or row shape are unsupported")
+    o,d=gradient.full_shape[2],activation.shard_shape[2]
+    if (o <= 0 or d <= 0 or gradient.kind != "joined" or gradient.pm_tids != ()
+            or gradient.joined_pm_tid is None
+            or activation.kind != "sharded" or activation.gather_dim != 2
+            or activation.full_shape != (1,8,d*k) or len(activation.pm_tids) != k
+            or weight.kind != "sharded" or weight.gather_dim != 1
+            or weight.full_shape != (o,d*k) or weight.shard_shape != (o,d)
+            or len(weight.pm_tids) != k
+            or output.kind != "sharded" or output.gather_dim != 2
+            or output.full_shape != (1,8,d*k) or output.shard_shape != (1,8,d)
+            or len(output.pm_tids) != k):
+        raise ValueError("column dX role shapes/layouts are inconsistent")
+    return {"gradient": (1,8,o), "activation": ((1,8,d*k),(1,8,d)),
+            "weight": ((o,d*k),(o,d)), "output": ((1,8,d*k),(1,8,d))}
