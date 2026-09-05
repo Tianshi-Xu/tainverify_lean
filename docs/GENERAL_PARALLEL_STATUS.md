@@ -1,5 +1,24 @@
 # General parallel-configuration status
 
+## CP frontier: arbitrary-K single-sequence inverse
+
+`KRankZigzagSingle.lean` proves the value-level left inverse
+`unshuffle(shuffle(xs)) = xs[rank]` for any positive CP count K, positive
+half-shard width d, exactly K ordered inputs, and homogeneous shape
+`(2*d) :: tail`. It uses the existing faithful collective/index functions and
+pinned nnScaler metadata equations. The tail can have zero volume.
+
+`KRankZigzagSingleWitness.lean` checks K=1/3/5 callers and distinguishes CP3
+rank-order gather `[0,5,1,4,2,3]` from canonical order. Both modules build;
+the two core and six witness declarations have kernel3-or-less axioms.
+
+This is a mathematical prerequisite, **not CP/ring compiler closure**. Packed
+multi-sequence inverse, process-group ownership binding, generic-K relation
+certificates/renderers, and ring attention remain separate obligations.
+Compiler acceptance is unchanged; CP>2 remains rejected. A synthetic
+BW_maybe_unshuffle substitution on existing YOCO topology additionally exposes
+an unresolved ordinary-to-zigzag frontier despite local planner acceptance.
+
 ## Scope split
 
 Parallel support is not one boolean:
