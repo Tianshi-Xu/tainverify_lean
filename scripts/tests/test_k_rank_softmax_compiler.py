@@ -161,7 +161,6 @@ def _closed_fixture(dim, k=3):
 def test_softmax_renderer_replays_exact_writers_and_axis_theorem(dim):
     ir, relation, segment, before, after = _closed_fixture(dim, 3)
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
-    assert source.count('op := "OpName.FW_softmax"') == 4
     assert source.count("foldl_faithful_middle_writer") == 4
     assert source.count("applyNode_fw_softmax_out_g43") == 4
     assert f"ShardedRel.fw_softmax_dim{dim}_rank4" in source
@@ -283,8 +282,6 @@ open RelationCompiler
 end TrainVerify.Denote
 '''
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedKRankSoftmaxCompilerWitness.lean"
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert source.startswith("import denote.KRankSoftmaxGather")
     assert source.count("import denote.KRankSoftmaxGather") == 1

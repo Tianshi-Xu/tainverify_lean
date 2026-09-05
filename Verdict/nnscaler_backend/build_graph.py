@@ -252,15 +252,13 @@ def _set_node_opname(cells: List[Cell]) -> List[Cell]:
                 (PTypes.AllReduceAllReducePrim, False): OpName.AllReducePrim,
                 (PTypes.AllReducePrim, True): OpName.AllReducePrim,
                 (PTypes.AllReducePrim, False): OpName.AllReducePrim,
-                # ReduceScatterAllGatherPrim = RS + AG fused, semantically equivalent
-                # to AllReduce on the full tensor. YOCO-3B PM (dp_sharded + tp=2)
-                # uses this for weight grad sync.
-                (PTypes.ReduceScatterAllGatherPrim, True): OpName.AllReducePrim,
-                (PTypes.ReduceScatterAllGatherPrim, False): OpName.AllReducePrim,
-                # AllGatherReduceScatterPrim = AG + RS fused, also AllReduce-equivalent
-                # on the sliced/sharded view (used in dp_sharded backward paths).
-                (PTypes.AllGatherReduceScatterPrim, True): OpName.AllReducePrim,
-                (PTypes.AllGatherReduceScatterPrim, False): OpName.AllReducePrim,
+                # These fused reducer paths publish per-rank shards.  Preserve that
+                # observable reduce-scatter semantics instead of mislabelling them
+                # as shape-preserving AllReduce; graph_to_lean records the shard dim.
+                (PTypes.ReduceScatterAllGatherPrim, True): OpName.ReduceScatterPrim,
+                (PTypes.ReduceScatterAllGatherPrim, False): OpName.ReduceScatterPrim,
+                (PTypes.AllGatherReduceScatterPrim, True): OpName.ReduceScatterPrim,
+                (PTypes.AllGatherReduceScatterPrim, False): OpName.ReduceScatterPrim,
                 (PTypes.IdentityAllreducePrim, True): OpName.IdentityPrim,
                 (PTypes.IdentityAllreducePrim, False): OpName.AllReducePrim,
                 (PTypes.BroadcastPrim, True): OpName.BroadcastPrim,

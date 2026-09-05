@@ -126,7 +126,7 @@ def test_sharded_contiguous_normalization_reaches_fixed_point_and_transition_is_
     ("target", "mutation", "message"),
     [
         ("pm", {"parameters": (1,)}, "no parameters"),
-        ("pm", {"input_bindings": ("pm:19:0", "pm:18:0")}, "unary"),
+        ("pm", {"input_bindings": ("pm:19:0", "pm:18:0")}, "input arity"),
         ("pm", {"input_shapes": ((2, 4, 3),)}, "declared input shape"),
         ("pm", {"output_shape": (2, 4, 3)}, "shape preserving"),
         ("sm", {"output_shape": (2, 8, 4)}, "shape preserving"),
@@ -181,12 +181,16 @@ def _closed_fixture(k=3):
     )
     transition = rc.build_certificate_transition_specs(SimpleNamespace(), (cert,))[0]
     pre = rc.ClosedRelationFactRecord(
-        "fact_in", input_fact, "sharded", 100, input_tids, None, None,
-        cert.full_shape, cert.shard_shape, cert.gather_dim,
+        fact_id="fact_in", source=input_fact, kind="sharded", sm_tid=100,
+        pm_tids=input_tids, metadata_tid=None, metadata_region_id=None,
+        full_shape=cert.full_shape, shard_shape=cert.shard_shape,
+        row_shard_shape=None, gather_dim=cert.gather_dim,
     )
     post = rc.ClosedRelationFactRecord(
-        "fact_out", output_fact, "sharded", 110, output_tids, None, None,
-        cert.full_shape, cert.shard_shape, cert.gather_dim,
+        fact_id="fact_out", source=output_fact, kind="sharded", sm_tid=110,
+        pm_tids=output_tids, metadata_tid=None, metadata_region_id=None,
+        full_shape=cert.full_shape, shard_shape=cert.shard_shape,
+        row_shard_shape=None, gather_dim=cert.gather_dim,
     )
     before = SimpleNamespace(state_id="state_pre", fact_ids=(pre.fact_id,))
     after = SimpleNamespace(state_id="state_post", fact_ids=(post.fact_id,))
@@ -221,7 +225,7 @@ def test_closed_sharded_contiguous_renderer_replays_exact_ordered_writers():
     assert source == composer.render_closed_k_rank_contiguous_segment(
         ir, relation, segment.segment_id
     )
-    assert source.count('op := "OpName.FW_contiguous"') == 4
+    assert source.count('op := "OpName.FW_contiguous"') == 2 * 4
     assert source.count("foldl_faithful_middle_writer") == 4
     assert source.count("applyNode_fw_contiguous_out") == 4
     assert "ShardedRel.fw_contiguous" in source
@@ -271,8 +275,6 @@ def test_generated_sharded_contiguous_witness_is_exact_renderer_output():
     rendered = composer.render_closed_segment(ir, relation, segment.segment_id)
     source = _witness_source(rendered)
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedShardedContiguousWitness.lean"
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
 
     assert witness.read_text(encoding="utf-8") == source
     assert "sorry" not in source

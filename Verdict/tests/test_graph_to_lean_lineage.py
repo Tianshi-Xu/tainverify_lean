@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 
 import pytest
 from pathlib import Path
@@ -25,6 +26,8 @@ from Verdict.graph_to_lean import (
     close_nodes_to_external_inputs,
     deduplicate_intermediate_lineages,
     derive_input_value_classes,
+    compress_if_replicated,
+    final_writer_ranks_by_tid,
 )
 
 
@@ -67,6 +70,49 @@ class Graph:
     def node_outputs(self, n): return list(n.outs)
     def tensor_shape(self, t): return list(t.shape)
     def node_kwargs(self, n): return n.kwargs or {}
+
+
+def test_checked_in_gpt_replicated_goals_name_the_surviving_pm_writer():
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "trainverify/denote/gpt_ly4_regen/GeneratedData.lean").read_text()
+    pm_start = source.index("def pm : GraphDecl")
+    pm_end = source.index("def initGoal_", pm_start)
+    pm_source = source[pm_start:pm_end]
+    final_writers = {}
+    for rank, outputs in re.findall(
+        r'\{ rank := (\d+),.*?outs := \[([^]]+)\]', pm_source
+    ):
+        for tid in re.findall(r"\d+", outputs):
+            final_writers[int(tid)] = int(rank)
+    mismatches = []
+    for goal_id, body in re.findall(
+        r"def goal_(\d+) : LineageGoal :=\s*\n\s*\{([^\n]+)\}", source
+    ):
+        pieces = [
+            (int(rank), int(tid))
+            for rank, tid in re.findall(r"rank := (\d+), tid := (\d+)", body)
+        ]
+        if len(pieces) == 1 and pieces[0][1] in final_writers:
+            expected = final_writers[pieces[0][1]]
+            if pieces[0][0] != expected:
+                mismatches.append((int(goal_id), pieces[0], expected))
+    assert mismatches == []
+
+
+def test_replicated_lineage_uses_the_writer_that_survives_ordered_pm_fold():
+    shared = Tensor(577, (1, 8, 4, 8))
+    graph = Graph([
+        Node("OpName.FW_view", (), (shared,), rank=rank)
+        for rank in range(4)
+    ])
+    lineage = SelectedLineage(
+        ts=577, tps=[(rank, 577) for rank in range(4)]
+    )
+    writers = final_writer_ranks_by_tid(graph)
+    assert writers[577] == 3
+    assert compress_if_replicated(lineage, writers) == SelectedLineage(
+        ts=577, tps=[(3, 577)]
+    )
 
 
 def test_goal_faithful_evaluator_selection_is_collective_driven():
@@ -256,7 +302,15 @@ def test_generated_authority_tree_rejects_oversize_and_high_heartbeat(tmp_path):
 
 
 def test_generated_authority_tree_rejects_forbidden_proof_placeholders(tmp_path):
-    for forbidden in ("sorry", "admit", "axiom forged : False", "unsafe def forged := 0", "False.elim h"):
+    for forbidden in (
+        "sorry",
+        "sorryAx False true",
+        "admit",
+        "axiom forged : False",
+        "private axiom forged : False",
+        "unsafe def forged := 0",
+        "False.elim h",
+    ):
         path = tmp_path / "Forbidden.lean"
         path.write_text(f"def goal_1_stmt_full : Prop := True\n{forbidden}\n", encoding="utf-8")
         with pytest.raises(ValueError, match="contains forbidden"):

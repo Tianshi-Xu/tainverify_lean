@@ -13,7 +13,10 @@ from trainverify.bridge_emitter.proof_compiler import build_default_registry, co
 from trainverify.bridge_emitter.relation_compiler import compile_relation_plan
 
 
-AUTHORITY = Path("/tmp/gptfresh-root/trainverify/denote/gpt_ly4_regen")
+AUTHORITY = (
+    Path(__file__).resolve().parents[2]
+    / "trainverify/denote/gpt_ly4_regen"
+)
 RULES = {
     "linear-sharded-k-rank-dim1",
     "alltoall-k-rank-layout-transport",
@@ -26,17 +29,28 @@ RULES = {
 @pytest.fixture(scope="module")
 def real_authority():
     assert AUTHORITY.is_dir()
-    old = (parser_module.DENOTE_DIR, parser_module.GEN_DIR, parser_module.GEN_FILE)
+    old = (
+        parser_module.DENOTE_DIR,
+        parser_module.GEN_DIR,
+        parser_module.GEN_FILE,
+        parser_module.MOD_PREFIX,
+    )
     parser_module.DENOTE_DIR = str(AUTHORITY)
     parser_module.GEN_DIR = str(AUTHORITY)
     parser_module.GEN_FILE = "GeneratedData.lean"
+    parser_module.MOD_PREFIX = "denote.gpt_ly4_regen"
     try:
         ir = parser_module.load_goal_ir(1, "/")
         proof = compile_proof_plan(ir, build_default_registry())
         relation = compile_relation_plan(ir, proof)
     finally:
-        parser_module.DENOTE_DIR, parser_module.GEN_DIR, parser_module.GEN_FILE = old
-    assert (len(ir.sm_nodes), len(ir.pm_nodes), len(relation.dependent_chain_plan.segments)) == (684, 4555, 565)
+        (
+            parser_module.DENOTE_DIR,
+            parser_module.GEN_DIR,
+            parser_module.GEN_FILE,
+            parser_module.MOD_PREFIX,
+        ) = old
+    assert (len(ir.sm_nodes), len(ir.pm_nodes), len(relation.dependent_chain_plan.segments)) == (236, 1565, 190)
     return ir, relation
 
 
@@ -44,19 +58,20 @@ def real_authority():
     ("segment_id", "family", "sm_range", "pm_range"),
     (
         (
-            "segment_000429",
+            "segment_000053",
             (
                 "linear-sharded-k-rank-dim1",
+                "alltoall-k-rank-layout-transport",
+                "linear-reduction-producer-k-rank",
                 "alltoall-k-rank-layout-transport",
                 "linear-reduction-producer-k-rank",
                 "allgather-reconstruction-k-rank",
-                "linear-output-sharded-k-rank",
             ),
-            (258, 261),
-            (1690, 1707),
+            (34, 37),
+            (205, 226),
         ),
         (
-            "segment_000471",
+            "segment_000142",
             (
                 "linear-sharded-k-rank-dim1",
                 "alltoall-k-rank-layout-transport",
@@ -64,8 +79,8 @@ def real_authority():
                 "alltoall-k-rank-layout-transport",
                 "linear-reduction-producer-k-rank",
             ),
-            (286, 289),
-            (1867, 1887),
+            (90, 93),
+            (582, 602),
         ),
     ),
 )
@@ -103,7 +118,7 @@ def test_real_mixed_linear_sequence_is_generic_atomic_and_deterministic(
 
 def test_real_mixed_sequence_rejects_non_exhaustive_footprint(real_authority):
     ir, relation = real_authority
-    segment = next(s for s in relation.dependent_chain_plan.segments if s.segment_id == "segment_000471")
+    segment = next(s for s in relation.dependent_chain_plan.segments if s.segment_id == "segment_000142")
     target = segment.transition_ids[0]
     transitions = tuple(
         replace(t, pm_node_indices=t.pm_node_indices[:-1]) if t.transition_id == target else t
@@ -118,10 +133,114 @@ def test_generic_renderer_source_has_no_real_segment_model_or_transition_literal
         Path(__file__).resolve().parents[2]
         / "trainverify/bridge_emitter/mixed_linear_sequence_renderer.py"
     ).read_text(encoding="utf-8")
-    assert not ({"segment_000429", "segment_000471", "GPT2", "000227", "000120"} & set(source.split()))
+    forbidden = {
+        "segment_000429", "segment_000471", "segment_000097",
+        "Goal107", "GPT2", "000227", "000120",
+    }
+    assert not any(item in source for item in forbidden)
     assert "len(transitions) == 5" not in source
     assert "len(transitions) != 5" not in source
     assert "[single]" not in source
+
+    bw_sum_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_sum_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_sum_source for item in (
+        "segment_000188", "Goal107", "fact_000102", "fact_000197", "fact_000198",
+        "3373", "3387",
+    ))
+
+    bw_linear_dx_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_linear_dx_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_linear_dx_source for item in (
+        "segment_000189", "Goal107", "fact_000008", "fact_000107", "fact_000170",
+        "3387", "3394",
+    ))
+
+    bw_layernorm_dx_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_layernorm_dx_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_layernorm_dx_source for item in (
+        "segment_000192", "Goal107", "fact_000168", "fact_000201", "3335",
+        "800000",
+    ))
+
+    bw_add_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_add_identity_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_add_source for item in (
+        "segment_000193", "Goal107", "fact_000187", "fact_000203", "3333",
+    ))
+
+    bw_linear_column_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_linear_dx_column_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_linear_column_source for item in (
+        "segment_000195", "Goal107", "fact_000", "3305",
+        "2000000",
+    ))
+
+    bw_gelu_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_gelu_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_gelu_source for item in (
+        "segment_000197", "Goal107", "fact_000", "BW_gelu [",
+    ))
+
+    bw_multiref_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_multiref_sum_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_multiref_source for item in (
+        "segment_000202", "Goal107", "fact_000", "3191",
+    ))
+
+    bw_view_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_view_joined_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_view_source for item in (
+        "segment_000207", "Goal107", "fact_000",
+    ))
+
+    bw_matmul_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_matmul_shared_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_matmul_source for item in (
+        "segment_000213", "Goal107", "fact_000", "3090",
+    ))
+
+    bw_softmax_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/transpose_bw_softmax_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_softmax_source for item in (
+        "segment_000217", "Goal107", "fact_000", "3057",
+    ))
+
+    bw_div_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_view_bw_div_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_div_source for item in (
+        "segment_000220", "Goal107", "fact_000", "3033",
+    ))
+
+    bw_attention_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/bridge_emitter/bw_linear_matmul_batch_renderer.py"
+    ).read_text(encoding="utf-8")
+    assert not any(item in bw_attention_source for item in (
+        "segment_000223", "Goal107", "fact_000", "2914",
+    ))
 
 
 LOCAL_THEOREM = "TrainVerify.Denote.fw_linear_3d_allGatherPrimDimN_dim1_comm"
@@ -412,7 +531,6 @@ def test_generated_synthetic_mixed_sequence_witnesses_are_exact_and_self_contain
             "",
         ))
         witness = root / "trainverify/denote" / f"{namespace}.lean"
-        witness.write_text(source, encoding="utf-8")
         assert witness.read_text(encoding="utf-8") == source
         assert witness.stat().st_size < 2_500_000
         assert "sorry" not in source and "False.elim" not in source

@@ -5,19 +5,117 @@
 
 Like emit.py but drives renderer_uni.render_universal (any topology, no family-A gate).
 """
-import os, sys, re, subprocess, argparse, hashlib, fcntl, ctypes, secrets, shutil, json
+import os, sys, re, subprocess, argparse, hashlib, fcntl, ctypes, secrets, shutil, json, tempfile
 from pathlib import Path
 from typing import Callable, Optional
-sys.path.insert(0, os.path.dirname(__file__))
-from parser import load_goal_ir, analyze
-from probe import DENOTE_DIR
-from emit import trace_input_sources, compute_imports
-from target_config import DENOTE_DIR as _RELDIR, MOD_PREFIX, GEN_FILE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TV   = os.path.dirname(HERE)
 REPO = os.path.dirname(TV)
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
+from trainverify.bridge_emitter.parser import load_goal_ir, analyze
+from trainverify.bridge_emitter.probe import DENOTE_DIR
+from trainverify.bridge_emitter.emit import trace_input_sources, compute_imports
+from trainverify.bridge_emitter.target_config import (
+    DENOTE_DIR as _RELDIR, MOD_PREFIX, GEN_FILE,
+)
 DENOTE = _RELDIR
+
+SUPPORTED_WHOLE_MODEL_ARTIFACTS = {
+    "gpt2": {
+        "targets": (2, 3, 48),
+        "namespace": "GPT2Whole",
+        "module_prefix": "denote.gpt_ly4_regen.GPT2Whole",
+        "aggregate_theorem": "gpt2_all_goals",
+        "public_statement": "TrainVerify.Denote.GeneratedGoals.all_goals_stmt_full",
+    },
+    "yoco-a04b": {
+        "targets": (1, 2, 3, 4, 5),
+        "namespace": "YOCOA04BWhole",
+        "module_prefix": "denote.yoco_goals.YOCOA04BWhole",
+        "aggregate_theorem": "yoco_a04b_all_goals",
+        "public_statement": "TrainVerify.Denote.GeneratedGoals.all_goals_stmt_full",
+    },
+    "yoco-3b": {
+        "targets": (1, 2, 3, 4, 5),
+        "namespace": "YOCO3BWhole",
+        "module_prefix": "denote.yoco3b_heldout.YOCO3BWhole",
+        "aggregate_theorem": "yoco3b_all_goals",
+        "public_statement": "TrainVerify.Denote.GeneratedYOCO3BHeldout.all_goals_stmt_full",
+    },
+}
+
+
+def whole_model_artifact_root(project_dir: str | Path = TV) -> Path:
+    return Path(project_dir) / ".artifacts" / "whole-models"
+
+
+def whole_model_artifact_path(model_id: str, project_dir: str | Path = TV) -> Path:
+    try:
+        module_prefix = SUPPORTED_WHOLE_MODEL_ARTIFACTS[model_id]["module_prefix"]
+    except KeyError as exc:
+        raise ValueError(f"unsupported whole-model artifact: {model_id}") from exc
+    return whole_model_artifact_root(project_dir).joinpath(*module_prefix.split("."))
+
+
+def _build_whole_model_catalog_bundle(artifact_root: str | Path) -> dict[str, bytes]:
+    root = Path(artifact_root)
+    models = []
+    lean_entries = {}
+    catalog_names = {
+        "gpt2": "GPT2",
+        "yoco-a04b": "YOCOA04B",
+        "yoco-3b": "YOCO3B",
+    }
+    for model_id, spec in SUPPORTED_WHOLE_MODEL_ARTIFACTS.items():
+        publication = root.joinpath(*spec["module_prefix"].split("."))
+        if publication.is_symlink() or not publication.is_dir():
+            raise ValueError(f"missing whole-model publication: {model_id}")
+        main = publication / "Main.lean"
+        if main.is_symlink() or not main.is_file() or main.stat().st_size == 0:
+            raise ValueError(f"{model_id} publication is missing Main.lean")
+        files = sorted(path for path in publication.rglob("*") if path.is_file())
+        if any(path.is_symlink() for path in files):
+            raise ValueError(f"{model_id} publication contains a symlink")
+        theorem_ref = (
+            f"TrainVerify.Denote.{spec['namespace']}.{spec['aggregate_theorem']}"
+        )
+        catalog_name = catalog_names[model_id]
+        catalog_module = f"denote.WholeModels.{catalog_name}"
+        catalog_theorem = (
+            f"TrainVerify.Denote.WholeModels.{catalog_name}.verified"
+        )
+        lean_entries[f"{catalog_name}.lean"] = "\n".join([
+            f"import {spec['module_prefix']}.Main",
+            "",
+            f"namespace TrainVerify.Denote.WholeModels.{catalog_name}",
+            "",
+            f"theorem verified : {spec['public_statement']} := {theorem_ref}",
+            "",
+            f"end TrainVerify.Denote.WholeModels.{catalog_name}",
+            "",
+        ]).encode("utf-8")
+        models.append({
+            "model_id": model_id,
+            "targets": list(spec["targets"]),
+            "path": publication.relative_to(root).as_posix(),
+            "module_prefix": spec["module_prefix"],
+            "aggregate_theorem": theorem_ref,
+            "catalog_module": catalog_module,
+            "catalog_theorem": catalog_theorem,
+            "modules": len(files),
+            "source_bytes": sum(path.stat().st_size for path in files),
+        })
+    manifest = {
+        "schema_version": 1,
+        "composition": "isolated-model-entrypoints",
+        "models": models,
+    }
+    return {
+        **lean_entries,
+        "Manifest.json": (json.dumps(manifest, indent=2) + "\n").encode("utf-8"),
+    }
 
 F_ADD_SEALS = getattr(fcntl, "F_ADD_SEALS", 1033)
 F_SEAL_SEAL = getattr(fcntl, "F_SEAL_SEAL", 0x0001)
@@ -190,8 +288,245 @@ def _publish_composed_source(
             os.close(parent_fd)
 
 
-def _publish_closed_bundle(bundle: dict[str, bytes], out_dir: str | Path) -> None:
-    """Publish one validated bundle as a clean same-filesystem directory snapshot."""
+def _compile_closed_bundle_sources(
+    bundle: dict[str, bytes],
+    out_dir: str | Path,
+    module_prefix: str,
+    *,
+    project_dir: str | Path = TV,
+    compile_project_dependencies: bool = True,
+) -> tuple[str, int, str] | None:
+    """Kernel-check a bundle while materializing each importable `.olean`.
+
+    A plain `lean Source.lean` invocation checks a file but does not write the
+    object required by the next generated module.  Closed bundles are ordered
+    by dependency, so compile each source explicitly into the matching module
+    path under Lake's object tree and reject a missing/empty output as failure.
+    """
+    project = Path(project_dir)
+    source_root = Path(out_dir)
+    object_root = project / ".lake" / "build" / "lib" / "lean"
+    module_root = object_root.joinpath(*module_prefix.split("."))
+
+    def imports(source: str) -> tuple[str, ...]:
+        names = []
+        for match in re.finditer(
+            r"(?m)^\s*import\s+(.+?)(?:\s+--.*)?$", source
+        ):
+            names.extend(match.group(1).split())
+        return tuple(names)
+
+    def compile_one(label: str, source_path: Path, output_path: Path):
+        output_path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        if output_path.is_symlink():
+            return label, 1, f"refusing symlink object path: {output_path}"
+        if output_path.exists():
+            output_path.chmod(0o600)
+            output_path.unlink()
+        compiled = subprocess.run(
+            [
+                "lake", "env", "lean", "--tstack=65536", "-o",
+                str(output_path), str(source_path),
+            ],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            timeout=900,
+            env={**os.environ, "LEAN_NUM_THREADS": "1"},
+            check=False,
+        )
+        output = compiled.stdout + compiled.stderr
+        if compiled.returncode != 0 or "sorry" in output.lower():
+            return label, compiled.returncode, output
+        if not output_path.is_file() or output_path.stat().st_size == 0:
+            return label, 1, output + f"\nLean produced no object file: {output_path}"
+        output_path.chmod(0o400)
+        return None
+
+    bundle_modules = {
+        f"{module_prefix}.{Path(relative).stem}" for relative in bundle
+    }
+    visited: set[str] = set()
+    visiting: set[str] = set()
+
+    def compile_project_import(module: str):
+        if module in visited or module in bundle_modules:
+            return None
+        source_path = project.joinpath(*module.split(".")).with_suffix(".lean")
+        if not source_path.is_file():
+            visited.add(module)
+            return None
+        if module in visiting:
+            return f"dependency:{module}", 1, "cyclic project-local Lean imports"
+        visiting.add(module)
+        for dependency in imports(source_path.read_text(encoding="utf-8")):
+            failure = compile_project_import(dependency)
+            if failure is not None:
+                return failure
+        visiting.remove(module)
+        output_path = object_root.joinpath(*module.split(".")).with_suffix(".olean")
+        failure = compile_one(f"dependency:{module}", source_path, output_path)
+        if failure is None:
+            visited.add(module)
+        return failure
+
+    if compile_project_dependencies:
+        for payload in bundle.values():
+            for module in imports(payload.decode("utf-8")):
+                failure = compile_project_import(module)
+                if failure is not None:
+                    return failure
+
+    for relative in bundle:
+        source_path = source_root / relative
+        output_path = module_root / Path(relative).with_suffix(".olean")
+        failure = compile_one(relative, source_path, output_path)
+        if failure is not None:
+            return failure
+    return None
+
+
+def _validate_print_axioms_output(output: str, targets: tuple[str, ...]) -> None:
+    allowed = {
+        "propext", "Classical.choice", "Quot.sound",
+        "Lean.ofReduceBool", "Lean.trustCompiler",
+    }
+    for target in targets:
+        escaped = re.escape(target)
+        if re.search(rf"'{escaped}' does not depend on any axioms", output):
+            continue
+        matched = re.search(
+            rf"'{escaped}' depends on axioms: \[(.*?)\]", output, re.DOTALL
+        )
+        if matched is None:
+            raise ValueError(f"missing #print axioms result: {target}")
+        names = tuple(
+            name.strip() for name in matched.group(1).split(",") if name.strip()
+        )
+        rejected = tuple(
+            name for name in names
+            if name not in allowed and not re.fullmatch(
+                r".+\._native\.native_decide\.ax_[0-9_]+✝*",
+                name,
+            )
+        )
+        if rejected or any("sorryAx" in name for name in names):
+            raise ValueError(f"untrusted axioms for {target}: {rejected or names}")
+
+
+def _validate_chunked_axioms_output(output: str, target: str) -> None:
+    escaped = re.escape(target)
+    begin = re.search(rf"^AXIOM_RECEIPT_BEGIN {escaped} ([0-9]+)$", output, re.MULTILINE)
+    end = re.search(rf"^AXIOM_RECEIPT_END {escaped} ([0-9]+)$", output, re.MULTILINE)
+    if begin is None or end is None or begin.group(1) != end.group(1):
+        raise ValueError(f"missing complete chunked axiom receipt: {target}")
+    names = tuple(re.findall(r"^AXIOM (.+)$", output, re.MULTILINE))
+    expected = int(begin.group(1))
+    if len(names) != expected or len(set(names)) != expected:
+        raise ValueError(
+            f"incomplete chunked axiom receipt for {target}: "
+            f"expected {expected}, got {len(names)} ({len(set(names))} unique)"
+        )
+    synthetic = f"'{target}' depends on axioms: [{', '.join(names)}]"
+    _validate_print_axioms_output(synthetic, (target,))
+
+
+def _chunked_axiom_audit_source(module: str, target: str) -> str:
+    return f"""import {module}
+import Lean.Util.CollectAxioms
+
+open Lean Elab Command
+
+syntax (name := trainVerifyPrintAxiomsChunked) "#trainverify_print_axioms_chunked " ident : command
+
+@[command_elab trainVerifyPrintAxiomsChunked]
+def elabTrainVerifyPrintAxiomsChunked : CommandElab
+  | `(#trainverify_print_axioms_chunked $id:ident) => do
+      let constName := id.getId
+      let axioms ← collectAxioms constName
+      logInfo m!"AXIOM_RECEIPT_BEGIN {{constName}} {{axioms.size}}"
+      for axiomName in axioms.qsort Name.lt do
+        logInfo m!"AXIOM {{axiomName}}"
+      logInfo m!"AXIOM_RECEIPT_END {{constName}} {{axioms.size}}"
+  | _ => throwUnsupportedSyntax
+
+#trainverify_print_axioms_chunked {target}
+"""
+
+
+def _audit_closed_bundle_axioms(
+    staged: Path,
+    module_prefix: str,
+    targets: tuple[str, ...],
+    *,
+    project_dir: str | Path = TV,
+    imported_module: str | None = None,
+) -> tuple[str, int, str] | None:
+    if not targets:
+        return None
+    audit_path = staged / ".AxiomAudit.lean"
+    imported = "Main" if (staged / "Main.lean").is_file() else "Public"
+    imported_module = imported_module or f"{module_prefix}.{imported}"
+    source = "\n".join([
+        f"import {imported_module}",
+        *(f"#print axioms {target}" for target in targets),
+        "",
+    ])
+    audit_path.write_text(source, encoding="utf-8")
+    try:
+        audited = subprocess.run(
+            ["lake", "env", "lean", "--tstack=65536", str(audit_path)],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=900,
+            env={**os.environ, "LEAN_NUM_THREADS": "1"},
+            check=False,
+        )
+        output = audited.stdout + audited.stderr
+        if audited.returncode != 0:
+            if audited.returncode != 134 or "Stack overflow detected" not in output:
+                return "axiom-audit", audited.returncode, output
+            # Lean's stock #print axioms first materializes the complete Array as
+            # one recursive MessageData List.  Very broad, valid aggregate
+            # receipts can overflow there after collectAxioms has succeeded.
+            # Retry the same aggregate collector and emit one axiom per message;
+            # this is not a per-target union or a weakened transitive audit.
+            for index, target in enumerate(targets):
+                audit_path.write_text(
+                    _chunked_axiom_audit_source(
+                        imported_module, target
+                    ),
+                    encoding="utf-8",
+                )
+                chunked = subprocess.run(
+                    ["lake", "env", "lean", "--tstack=65536", str(audit_path)],
+                    cwd=project_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=900,
+                    env={**os.environ, "LEAN_NUM_THREADS": "1"},
+                    check=False,
+                )
+                chunked_output = chunked.stdout + chunked.stderr
+                if chunked.returncode != 0:
+                    return f"axiom-audit-chunked[{index}]", chunked.returncode, chunked_output
+                try:
+                    _validate_chunked_axioms_output(chunked_output, target)
+                except ValueError as exc:
+                    return f"axiom-audit-chunked[{index}]", 1, f"{exc}\n{chunked_output}"
+            return None
+        try:
+            _validate_print_axioms_output(output, targets)
+        except ValueError as exc:
+            return "axiom-audit", 1, f"{exc}\n{output}"
+        return None
+    finally:
+        audit_path.unlink(missing_ok=True)
+
+
+def _stage_closed_bundle(bundle: dict[str, bytes], out_dir: str | Path) -> Path:
+    """Materialize a private same-filesystem candidate without publishing it."""
     destination = Path(os.path.abspath(os.fspath(out_dir)))
     parent = destination.parent
     parent.mkdir(parents=True, exist_ok=True)
@@ -203,9 +538,7 @@ def _publish_closed_bundle(bundle: dict[str, bytes], out_dir: str | Path) -> Non
             raise ValueError(f"invalid closed bundle path: {relative!r}")
         if not isinstance(payload, bytes):
             raise TypeError(f"closed bundle payload must be bytes: {relative}")
-    token = secrets.token_hex(16)
-    staged = parent / f".{destination.name}.staged-{token}"
-    exchanged = False
+    staged = parent / f".{destination.name}.staged-{secrets.token_hex(16)}"
     try:
         staged.mkdir(mode=0o700)
         for relative, payload in bundle.items():
@@ -223,31 +556,357 @@ def _publish_closed_bundle(bundle: dict[str, bytes], out_dir: str | Path) -> Non
             os.fsync(staged_fd)
         finally:
             os.close(staged_fd)
-        parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-        try:
-            if destination.exists():
-                result = _RENAMEAT2(
-                    parent_fd, os.fsencode(staged.name),
-                    parent_fd, os.fsencode(destination.name), 2,
-                )
-                if result != 0:
-                    error = ctypes.get_errno()
-                    raise OSError(error, os.strerror(error), destination.name)
-                exchanged = True
-            else:
-                os.rename(staged.name, destination.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
-        if exchanged:
+        return staged
+    except BaseException:
+        if staged.exists():
             shutil.rmtree(staged)
+        raise
+
+
+def _publish_staged_closed_bundle(
+    staged: Path,
+    out_dir: str | Path,
+    *,
+    parent_fd: Optional[int] = None,
+) -> None:
+    """Atomically publish one already-checked private candidate directory."""
+    destination = Path(os.path.abspath(os.fspath(out_dir)))
+    parent = destination.parent
+    staged = Path(os.path.abspath(os.fspath(staged)))
+    if staged.parent != parent or staged.is_symlink() or not staged.is_dir():
+        raise ValueError("closed bundle stage must be a real sibling directory")
+    if destination.is_symlink():
+        raise ValueError(f"closed bundle destination may not be a symlink: {destination}")
+    if destination.exists() and not destination.is_dir():
+        raise ValueError(
+            f"closed bundle destination must be a real directory: {destination}"
+        )
+    staged_identity = (staged.stat().st_dev, staged.stat().st_ino)
+    exchanged = False
+    retired_identity: Optional[tuple[int, int]] = None
+    owns_parent_fd = parent_fd is None
+    if parent_fd is None:
+        parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    else:
+        held = os.fstat(parent_fd)
+        observed_parent = os.stat(parent, follow_symlinks=False)
+        if (held.st_dev, held.st_ino) != (
+            observed_parent.st_dev, observed_parent.st_ino
+        ):
+            raise ValueError("held publication lock does not belong to destination parent")
+    try:
+        if owns_parent_fd:
+            fcntl.flock(parent_fd, fcntl.LOCK_EX)
+        current = os.stat(staged.name, dir_fd=parent_fd, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != staged_identity:
+            raise RuntimeError("closed bundle stage identity changed before publication")
+        if destination.exists():
+            retired = os.stat(
+                destination.name, dir_fd=parent_fd, follow_symlinks=False
+            )
+            retired_identity = (retired.st_dev, retired.st_ino)
+            result = _RENAMEAT2(
+                parent_fd, os.fsencode(staged.name),
+                parent_fd, os.fsencode(destination.name), 2,
+            )
+            if result != 0:
+                error = ctypes.get_errno()
+                raise OSError(error, os.strerror(error), destination.name)
+            exchanged = True
+        else:
+            os.rename(
+                staged.name, destination.name,
+                src_dir_fd=parent_fd, dst_dir_fd=parent_fd,
+            )
+        os.fsync(parent_fd)
+        if exchanged and retired_identity is not None:
+            retired_now = os.stat(
+                staged.name, dir_fd=parent_fd, follow_symlinks=False
+            )
+            if (retired_now.st_dev, retired_now.st_ino) == retired_identity:
+                try:
+                    shutil.rmtree(staged)
+                except OSError:
+                    # Publication already committed atomically.  Preserve an
+                    # unretired predecessor rather than misreporting failure
+                    # and deleting the new snapshot's matching objects.
+                    pass
+    finally:
+        if owns_parent_fd:
+            os.close(parent_fd)
+
+
+def _publish_closed_bundle(bundle: dict[str, bytes], out_dir: str | Path) -> None:
+    """Publish a bundle without a kernel gate (used only by explicit no-compile flows)."""
+    staged = _stage_closed_bundle(bundle, out_dir)
+    try:
+        _publish_staged_closed_bundle(staged, out_dir)
     finally:
         if staged.exists():
             shutil.rmtree(staged)
 
+
+def _remove_closed_bundle_objects(
+    bundle: dict[str, bytes], module_prefix: str, project_dir: str | Path
+) -> None:
+    module_root = (
+        Path(project_dir) / ".lake" / "build" / "lib" / "lean"
+    ).joinpath(*module_prefix.split("."))
+    for relative in bundle:
+        object_path = module_root / Path(relative).with_suffix(".olean")
+        if object_path.is_symlink() or not object_path.is_file():
+            continue
+        object_path.chmod(0o600)
+        object_path.unlink()
+
+
+def _compile_and_publish_closed_bundle(
+    bundle: dict[str, bytes],
+    out_dir: str | Path,
+    module_prefix: str,
+    *,
+    project_dir: str | Path = TV,
+    axiom_targets: tuple[str, ...] = (),
+) -> tuple[str, int, str] | None:
+    """Kernel-check exact private bytes, then atomically publish that directory."""
+    staged = _stage_closed_bundle(bundle, out_dir)
+    published = False
+    try:
+        failure = _compile_closed_bundle_sources(
+            bundle, staged, module_prefix, project_dir=project_dir
+        )
+        if failure is not None:
+            return failure
+        failure = _audit_closed_bundle_axioms(
+            staged, module_prefix, axiom_targets, project_dir=project_dir
+        )
+        if failure is not None:
+            return failure
+        _publish_staged_closed_bundle(staged, out_dir)
+        published = True
+        return None
+    finally:
+        if not published:
+            _remove_closed_bundle_objects(bundle, module_prefix, project_dir)
+        if staged.exists():
+            shutil.rmtree(staged)
+
+def _compile_and_publish_whole_model_catalog(
+    artifact_root: str | Path, *, project_dir: str | Path = TV,
+) -> tuple[str, int, str] | None:
+    root = Path(artifact_root)
+    bundle = _build_whole_model_catalog_bundle(root)
+    destination = root / "Catalog"
+    staged = _stage_closed_bundle(bundle, destination)
+    lean_bundle = {
+        name: payload for name, payload in bundle.items()
+        if name.endswith(".lean")
+    }
+    published = False
+    try:
+        failure = _compile_closed_bundle_sources(
+            lean_bundle,
+            staged,
+            "denote.WholeModels",
+            project_dir=project_dir,
+            compile_project_dependencies=False,
+        )
+        if failure is not None:
+            return failure
+        for model in json.loads(bundle["Manifest.json"])["models"]:
+            failure = _audit_closed_bundle_axioms(
+                staged,
+                "denote.WholeModels",
+                (model["catalog_theorem"],),
+                project_dir=project_dir,
+                imported_module=model["catalog_module"],
+            )
+            if failure is not None:
+                return failure
+        _publish_staged_closed_bundle(staged, destination)
+        published = True
+        published_bundle = {
+            path.name: path.read_bytes()
+            for path in destination.iterdir()
+            if path.is_file()
+        }
+        if published_bundle != bundle:
+            return "catalog-readback", 1, "whole-model catalog publication mismatch"
+        return None
+    finally:
+        if not published:
+            _remove_closed_bundle_objects(lean_bundle, "denote.WholeModels", project_dir)
+        if staged.exists():
+            shutil.rmtree(staged)
+
+
+def _compile_whole_model_snapshot_models(
+    artifact_root: str | Path, *, project_dir: str | Path = TV
+) -> tuple[str, int, str] | None:
+    """Rebuild and audit every model from the exact private snapshot sources."""
+    root = Path(artifact_root)
+    for model_id, spec in SUPPORTED_WHOLE_MODEL_ARTIFACTS.items():
+        publication = root.joinpath(*spec["module_prefix"].split("."))
+        if publication.is_symlink() or not publication.is_dir():
+            return model_id, 1, f"missing whole-model publication: {model_id}"
+        files = sorted(publication.rglob("*.lean"))
+        if not files or any(path.is_symlink() for path in files):
+            return model_id, 1, f"invalid whole-model source inventory: {model_id}"
+        by_module = {
+            f"{spec['module_prefix']}.{path.relative_to(publication).with_suffix('').as_posix().replace('/', '.')}": path
+            for path in files
+        }
+        internal_prefix = f"{spec['module_prefix']}."
+        for source_path in by_module.values():
+            source = source_path.read_text(encoding="utf-8")
+            for match in re.finditer(
+                r"(?m)^\s*import\s+(.+?)(?:\s+--.*)?$", source
+            ):
+                for dependency in match.group(1).split():
+                    if dependency.startswith(internal_prefix) and dependency not in by_module:
+                        return (
+                            model_id,
+                            1,
+                            f"missing internal whole-model source: {dependency}",
+                        )
+        ordered: list[Path] = []
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(module: str) -> None:
+            if module in visited:
+                return
+            if module in visiting:
+                raise ValueError(f"cyclic whole-model source imports: {module}")
+            visiting.add(module)
+            source = by_module[module].read_text(encoding="utf-8")
+            for match in re.finditer(
+                r"(?m)^\s*import\s+(.+?)(?:\s+--.*)?$", source
+            ):
+                for dependency in match.group(1).split():
+                    if dependency in by_module:
+                        visit(dependency)
+            visiting.remove(module)
+            visited.add(module)
+            ordered.append(by_module[module])
+
+        for module in sorted(by_module):
+            visit(module)
+        bundle = {
+            path.relative_to(publication).as_posix(): path.read_bytes()
+            for path in ordered
+        }
+        failure = _compile_closed_bundle_sources(
+            bundle, publication, spec["module_prefix"], project_dir=project_dir
+        )
+        if failure is not None:
+            return failure
+        theorem = f"TrainVerify.Denote.{spec['namespace']}.{spec['aggregate_theorem']}"
+        failure = _audit_closed_bundle_axioms(
+            publication,
+            spec["module_prefix"],
+            (theorem,),
+            project_dir=project_dir,
+        )
+        if failure is not None:
+            return failure
+    return None
+
+
+def _remove_whole_model_snapshot_objects(
+    artifact_root: str | Path, *, project_dir: str | Path = TV
+) -> None:
+    root = Path(artifact_root)
+    for spec in SUPPORTED_WHOLE_MODEL_ARTIFACTS.values():
+        publication = root.joinpath(*spec["module_prefix"].split("."))
+        if not publication.is_dir() or publication.is_symlink():
+            continue
+        bundle = {
+            path.relative_to(publication).as_posix(): b""
+            for path in publication.rglob("*.lean")
+            if path.is_file() and not path.is_symlink()
+        }
+        _remove_closed_bundle_objects(bundle, spec["module_prefix"], project_dir)
+
+
+def _compile_and_publish_canonical_whole_model(
+    bundle: dict[str, bytes],
+    model_id: str,
+    module_prefix: str,
+    *,
+    project_dir: str | Path = TV,
+    axiom_targets: tuple[str, ...] = (),
+) -> tuple[str, int, str] | None:
+    """Validate model and catalog privately, then publish one enclosing snapshot."""
+    project = Path(project_dir)
+    root = whole_model_artifact_root(project)
+    root.parent.mkdir(parents=True, exist_ok=True)
+    transaction_parent_fd = os.open(
+        root.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    )
+    staged: Optional[Path] = None
+    published = False
+    catalog_bundle: dict[str, bytes] = {}
+    try:
+        fcntl.flock(transaction_parent_fd, fcntl.LOCK_EX)
+        if root.is_symlink() or (root.exists() and not root.is_dir()):
+            raise ValueError("whole-model artifact root must be a real directory")
+        staged = Path(
+            tempfile.mkdtemp(prefix=".whole-models.staged-", dir=root.parent)
+        )
+        if root.exists():
+            if any(path.is_symlink() for path in root.rglob("*")):
+                raise ValueError("whole-model artifact snapshot contains a symlink")
+            shutil.copytree(root, staged, dirs_exist_ok=True)
+        model_relative = whole_model_artifact_path(model_id, project).relative_to(root)
+        model_destination = staged / model_relative
+        if model_destination.exists():
+            shutil.rmtree(model_destination)
+        model_stage = _stage_closed_bundle(bundle, model_destination)
+        try:
+            _publish_staged_closed_bundle(model_stage, model_destination)
+        finally:
+            if model_stage.exists():
+                shutil.rmtree(model_stage)
+        failure = _compile_whole_model_snapshot_models(
+            staged, project_dir=project
+        )
+        if failure is not None:
+            return failure
+        failure = _compile_and_publish_whole_model_catalog(staged, project_dir=project)
+        if failure is not None:
+            return failure
+        catalog_bundle = {
+            path.name: path.read_bytes()
+            for path in (staged / "Catalog").glob("*.lean")
+            if path.is_file()
+        }
+        _publish_staged_closed_bundle(
+            staged, root, parent_fd=transaction_parent_fd
+        )
+        published = True
+        return None
+    finally:
+        try:
+            if not published and staged is not None:
+                _remove_whole_model_snapshot_objects(staged, project_dir=project)
+                if catalog_bundle:
+                    lean_catalog = {
+                        name: payload for name, payload in catalog_bundle.items()
+                        if name.endswith(".lean")
+                    }
+                    _remove_closed_bundle_objects(
+                        lean_catalog, "denote.WholeModels", project
+                    )
+            if not published and staged is not None and staged.exists():
+                shutil.rmtree(staged)
+        finally:
+            os.close(transaction_parent_fd)
+
+
 # Auto-detect pm.numRanks from generated-data file and expose via BRIDGE_PM_NUMRANKS
 # env var BEFORE importing renderer_uni (which reads it at module load).
-from parser import GEN_DIR as _GD_INIT
+from trainverify.bridge_emitter.parser import GEN_DIR as _GD_INIT
 _gd_path_init = os.path.join(REPO, _GD_INIT, GEN_FILE)
 try:
     _gd_text_init = open(_gd_path_init).read()
@@ -256,14 +915,23 @@ try:
         os.environ["BRIDGE_PM_NUMRANKS"] = _pm_m_init.group(1)
 except Exception:
     pass
-import renderer_uni as RU
-from proof_compiler import (
+from trainverify.bridge_emitter import renderer_uni as RU
+from trainverify.bridge_emitter.proof_compiler import (
     ProofPlanningError,
     build_default_registry,
     require_supported_plan,
 )
-from composer import compose_closed_dependent_bundle, compose_full_topology
-from relation_compiler import compile_relation_plan
+from trainverify.bridge_emitter.composer import (
+    compose_closed_dependent_bundle,
+    compose_full_topology,
+    compose_shared_closed_bundle,
+)
+from trainverify.bridge_emitter.model_authority import load_model_authority
+from trainverify.bridge_emitter.model_compiler import (
+    compile_shared_proof_dag,
+    compile_shared_relation_dag,
+)
+from trainverify.bridge_emitter.relation_compiler import compile_relation_plan
 
 # parse #eval probe output, capturing ALL writer indices per tid (take max = last writer)
 LINE_RE = re.compile(r'(SM|PM):(\d+)\s+\[(.*?)\]\s*$', re.M)
@@ -307,7 +975,7 @@ def parse_probe_last(raw: str):
 
 
 def run_probe_all(imports, sm_tids, pm_tids, timeout=900, multi_out=False):
-    from probe import _eval_line
+    from trainverify.bridge_emitter.probe import _eval_line
     # The probe only evaluates `denoteGraph sm/pm` over the GLOBAL graphs (provided by
     # GeneratedData via BridgeKit) — it never references prereq-bridge theorems. So we
     # drop any prereq-bridge import whose .olean has not been built; otherwise a single
@@ -357,18 +1025,215 @@ def run_probe_all(imports, sm_tids, pm_tids, timeout=900, multi_out=False):
             os.remove(p)
 
 
+def _build_whole_model_bundle(
+    target_ids: tuple[int, ...],
+    *,
+    model_id: str,
+    namespace: str,
+    module_prefix: str,
+    aggregate_theorem_name: str,
+    root: str = REPO,
+) -> dict[str, bytes]:
+    """Compile the one strict whole-model authority into one closed bundle."""
+    model = load_model_authority(
+        target_ids, root, model_id=model_id, allow_partial=False
+    )
+    proof = compile_shared_proof_dag(model, build_default_registry())
+    relation = compile_shared_relation_dag(model, proof)
+    bundle = compose_shared_closed_bundle(
+        model,
+        relation,
+        namespace,
+        module_prefix,
+        aggregate_theorem_name=aggregate_theorem_name,
+    )
+    if "Main.lean" not in bundle:
+        raise ValueError("whole-model production bundle must contain Main.lean")
+    return bundle
+
+
+def _parse_target_inventory(raw: str) -> tuple[int, ...]:
+    ids: list[int] = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            raise ValueError("target inventory contains an empty item")
+        if "-" in token:
+            bounds = token.split("-")
+            if len(bounds) != 2 or not all(item.isdigit() for item in bounds):
+                raise ValueError(f"invalid target range: {token!r}")
+            start, stop = (int(item) for item in bounds)
+            if start <= 0 or stop < start:
+                raise ValueError(f"invalid target range: {token!r}")
+            ids.extend(range(start, stop + 1))
+        elif token.isdigit() and int(token) > 0:
+            ids.append(int(token))
+        else:
+            raise ValueError(f"invalid target ID: {token!r}")
+    if not ids or len(ids) != len(set(ids)):
+        raise ValueError("target inventory must be nonempty and contain unique IDs")
+    return tuple(ids)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("n", type=int)
+    ap.add_argument("n", type=int, nargs="?")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-compile", action="store_true")
     ap.add_argument("--out", default=None)
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--closed-bundle", action="store_true")
+    ap.add_argument("--whole-model", action="store_true")
+    ap.add_argument("--targets")
+    ap.add_argument("--model-id")
+    ap.add_argument("--namespace")
+    ap.add_argument("--aggregate-theorem")
     ap.add_argument("--module-prefix", default=None)
     args = ap.parse_args()
-    n = args.n
     log = (lambda *a: None) if args.quiet else print
+
+    if args.whole_model:
+        required = {
+            "--targets": args.targets,
+            "--model-id": args.model_id,
+            "--namespace": args.namespace,
+            "--module-prefix": args.module_prefix,
+            "--aggregate-theorem": args.aggregate_theorem,
+        }
+        missing = [name for name, value in required.items() if not value]
+        if args.n is not None or args.closed_bundle or missing:
+            detail = f"; missing {', '.join(missing)}" if missing else ""
+            ap.error(
+                "--whole-model excludes positional n/--closed-bundle and requires "
+                "explicit authority fields" + detail
+            )
+        try:
+            targets = _parse_target_inventory(args.targets)
+            canonical_output = False
+            if args.out is None:
+                try:
+                    spec = SUPPORTED_WHOLE_MODEL_ARTIFACTS[args.model_id]
+                except KeyError as exc:
+                    raise ValueError(
+                        "--out is required for an unsupported whole-model artifact"
+                    ) from exc
+                supplied = (
+                    targets, args.namespace, args.module_prefix, args.aggregate_theorem,
+                )
+                expected = (
+                    spec["targets"], spec["namespace"], spec["module_prefix"],
+                    spec["aggregate_theorem"],
+                )
+                if supplied != expected:
+                    raise ValueError(
+                        f"canonical {args.model_id} authority fields do not match registry"
+                    )
+                args.out = str(whole_model_artifact_path(args.model_id, TV))
+                canonical_output = True
+            else:
+                requested_output = Path(args.out).resolve()
+                canonical_root = whole_model_artifact_root(TV).resolve()
+                if requested_output.is_relative_to(canonical_root):
+                    try:
+                        spec = SUPPORTED_WHOLE_MODEL_ARTIFACTS[args.model_id]
+                    except KeyError as exc:
+                        raise ValueError(
+                            "unsupported model may not publish inside canonical artifact root"
+                        ) from exc
+                    supplied = (
+                        targets, args.namespace, args.module_prefix,
+                        args.aggregate_theorem,
+                    )
+                    expected = (
+                        spec["targets"], spec["namespace"], spec["module_prefix"],
+                        spec["aggregate_theorem"],
+                    )
+                    expected_output = whole_model_artifact_path(
+                        args.model_id, TV
+                    ).resolve()
+                    if requested_output != expected_output or supplied != expected:
+                        raise ValueError(
+                            "canonical whole-model output does not match registry authority"
+                        )
+                    canonical_output = True
+            bundle = _build_whole_model_bundle(
+                targets,
+                model_id=args.model_id,
+                namespace=args.namespace,
+                module_prefix=args.module_prefix,
+                aggregate_theorem_name=args.aggregate_theorem,
+                root=REPO,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            log("[whole-model] render_complete=false kernel_checked=false proof_complete=false")
+            log(f"  FAIL {exc}")
+            sys.exit(1)
+        if args.dry_run:
+            log(json.dumps({
+                "model_id": args.model_id,
+                "targets": targets,
+                "module_prefix": args.module_prefix,
+                "paths": list(bundle),
+                "bytes": {path: len(payload) for path, payload in bundle.items()},
+                "render_complete": True,
+                "kernel_checked": False,
+                "proof_complete": False,
+            }, sort_keys=True))
+            return
+        if args.no_compile and canonical_output:
+            log(
+                "[whole-model] render_complete=true published=false "
+                "kernel_checked=false proof_complete=false"
+            )
+            log("  FAIL canonical whole-model publication requires kernel and axiom checks")
+            sys.exit(1)
+        if args.no_compile:
+            _publish_closed_bundle(bundle, args.out)
+            log(
+                f"[whole-model] render_complete=true published=true "
+                f"kernel_checked=false proof_complete=false targets={len(targets)} "
+                f"modules={len(bundle)} wrote={args.out}"
+            )
+            return
+        axiom_targets = (
+            f"TrainVerify.Denote.{args.namespace}.{args.aggregate_theorem}",
+        )
+        if canonical_output:
+            failure = _compile_and_publish_canonical_whole_model(
+                bundle,
+                args.model_id,
+                args.module_prefix,
+                project_dir=TV,
+                axiom_targets=axiom_targets,
+            )
+        else:
+            failure = _compile_and_publish_closed_bundle(
+                bundle,
+                args.out,
+                args.module_prefix,
+                project_dir=TV,
+                axiom_targets=axiom_targets,
+            )
+        if failure is not None:
+            relative, returncode, output = failure
+            log(
+                f"[whole-model] render_complete=true published=false "
+                f"kernel_checked=false proof_complete=false "
+                f"first_blocker={relative} exit={returncode}"
+            )
+            log(output[-2500:])
+            sys.exit(1)
+        log(
+            f"[whole-model] render_complete=true published=true kernel_checked=true "
+            f"proof_complete=true catalog_published={str(canonical_output).lower()} "
+            f"targets={len(targets)} modules={len(bundle)} "
+            f"wrote={args.out}"
+        )
+        return
+
+    if args.n is None:
+        ap.error("positional n is required unless --whole-model is used")
+    n = args.n
 
     ir = load_goal_ir(n, REPO)
     try:
@@ -399,34 +1264,40 @@ def main():
                 "proof_complete": False,
             }, sort_keys=True))
             return
-        try:
-            _publish_closed_bundle(bundle, out_dir)
-        except (OSError, TypeError, ValueError) as exc:
-            log(f"[g{n}] render_complete=true published=false kernel_checked=false proof_complete=false")
-            log(f"  FAIL {exc}")
-            sys.exit(1)
         if args.no_compile:
+            try:
+                _publish_closed_bundle(bundle, out_dir)
+            except (OSError, TypeError, ValueError) as exc:
+                log(f"[g{n}] render_complete=true published=false kernel_checked=false proof_complete=false")
+                log(f"  FAIL {exc}")
+                sys.exit(1)
             log(
                 f"[g{n}] render_complete=true published=true kernel_checked=false "
                 f"proof_complete=false modules={len(bundle)} wrote={out_dir}"
             )
             return
-        for relative in bundle:
-            source_path = os.path.join(out_dir, relative)
-            compiled = subprocess.run(
-                ["lake", "env", "lean", "--tstack=65536", source_path],
-                cwd=TV, capture_output=True, text=True, timeout=900,
-                env={**os.environ, "LEAN_NUM_THREADS": "1"},
-                check=False,
+        try:
+            failure = _compile_and_publish_closed_bundle(
+                bundle,
+                out_dir,
+                module_prefix,
+                project_dir=TV,
+                axiom_targets=(
+                    f"TrainVerify.Denote.{namespace}.prove_goal_{n}_closed",
+                ),
             )
-            output = compiled.stdout + compiled.stderr
-            if compiled.returncode != 0 or "sorry" in output.lower():
-                log(
-                    f"[g{n}] render_complete=true published=true kernel_checked=false "
-                    f"proof_complete=false first_blocker={relative} exit={compiled.returncode}"
-                )
-                log(output[-2500:])
-                sys.exit(1)
+        except (OSError, TypeError, ValueError) as exc:
+            log(f"[g{n}] render_complete=true published=false kernel_checked=false proof_complete=false")
+            log(f"  FAIL {exc}")
+            sys.exit(1)
+        if failure is not None:
+            relative, returncode, output = failure
+            log(
+                f"[g{n}] render_complete=true published=false kernel_checked=false "
+                f"proof_complete=false first_blocker={relative} exit={returncode}"
+            )
+            log(output[-2500:])
+            sys.exit(1)
         log(
             f"[g{n}] render_complete=true published=true kernel_checked=true "
             f"proof_complete=true modules={len(bundle)} wrote={out_dir}"
@@ -601,8 +1472,8 @@ def main():
     _prove_fmt = os.environ.get("BRIDGE_PROVE_GOAL_FMT", "prove_goal_{n}_cut")
     _prove_ref = _prove_fmt.format(n=n)
     # Auto-detect pm.numRanks from the generated-data file (parses `def pm : GraphDecl := by refine { numRanks := N, ... }`).
-    from parser import GEN_DIR
-    from target_config import GEN_FILE
+    from trainverify.bridge_emitter.parser import GEN_DIR
+    from trainverify.bridge_emitter.target_config import GEN_FILE
     _gd_text = open(os.path.join(REPO, GEN_DIR, GEN_FILE)).read()
     _pm_nr_m = re.search(r'def\s+pm\s*:\s*GraphDecl.*?numRanks\s*:=\s*(\d+)', _gd_text, re.S)
     _pm_nr = _pm_nr_m.group(1) if _pm_nr_m else os.environ.get("BRIDGE_PM_NUMRANKS", "4")

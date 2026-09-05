@@ -283,7 +283,6 @@ def test_generated_mixed_layernorm_alltoall_witness_is_exact_renderer_output():
         Path(__file__).parents[2]
         / "trainverify/denote/GeneratedMixedKRankLayernormAllToAllAtomicWitness.lean"
     )
-    path.write_text(source, encoding="utf-8")
     assert path.read_text(encoding="utf-8") == source
     assert "sorry" not in source
 

@@ -35,21 +35,18 @@ def render_closed_k_rank_alltoall_tuple_segment(ir, relation, segment_id):
     if any(len(items) != 1 for items in matches):
         raise ValueError("AllToAll tuple transition authority is missing or duplicated")
     transitions = [items[0] for items in matches]
-    def sm_topology_key(transition):
-        step = transition.post_facts[0].step_triple[0]
-        parts = step.split(":")
-        if len(parts) != 3 or parts[0] != "sm":
-            raise ValueError("AllToAll tuple SM topology authority is malformed")
-        try:
-            return (int(parts[1]), int(parts[2]))
-        except ValueError as exc:
-            raise ValueError(
-                "AllToAll tuple SM topology authority is malformed"
-            ) from exc
+    def pm_authority_key(transition):
+        indices = tuple(transition.pm_node_indices)
+        if not indices or indices != tuple(sorted(indices)) or len(set(indices)) != len(indices):
+            raise ValueError("AllToAll tuple PM transition authority is malformed")
+        return indices[0]
 
+    first_writers = tuple(pm_authority_key(transition) for transition in transitions)
+    if len(set(first_writers)) != len(first_writers):
+        raise ValueError("AllToAll tuple PM transition orientation is ambiguous")
     expected_order = tuple(
         transition.transition_id
-        for transition in sorted(transitions, key=sm_topology_key)
+        for transition in sorted(transitions, key=pm_authority_key)
     )
     if segment.transition_ids != expected_order:
         raise ValueError("AllToAll tuple transition order is not exact")

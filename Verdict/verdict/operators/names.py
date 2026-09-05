@@ -176,6 +176,7 @@ class OpName(Enum):
     MovePrim = ("MovePrim", None)
     AllGatherPrim = ("AllGatherPrim", None)
     AllReducePrim = ("AllReducePrim", None)
+    ReduceScatterPrim = ("ReduceScatterPrim", None)
     BroadcastPrim = ("BroadcastPrim", None)
     AllToAllPrim = ("AllToAllPrim", None)
     IdentityPrim = ("IdentityPrim", None)

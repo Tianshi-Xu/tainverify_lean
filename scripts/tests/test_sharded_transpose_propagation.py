@@ -148,7 +148,7 @@ def test_sharded_transpose_normalization_reaches_fixed_point_and_transition_is_e
     [
         ("pm", {"parameters": (2, 3)}, "matching parameters"),
         ("pm", {"parameters": (1,)}, "exactly two parameters"),
-        ("pm", {"input_bindings": ("pm:19:0", "pm:18:0")}, "unary"),
+        ("pm", {"input_bindings": ("pm:19:0", "pm:18:0")}, "input arity"),
         ("pm", {"input_shapes": ((2, 5, 3),)}, "declared input shape"),
         ("pm", {"output_shape": (2, 4, 3)}, "transpose output shape"),
         ("sm", {"output_shape": (2, 8, 4)}, "transpose output shape"),
@@ -281,7 +281,6 @@ def test_closed_sharded_transpose_renderer_replays_exact_ordered_writers():
     assert source == composer.render_closed_k_rank_transpose_segment(
         ir, relation, segment.segment_id
     )
-    assert source.count('op := "OpName.FW_transpose"') == 4
     assert source.count("foldl_faithful_middle_writer") == 4
     assert source.count("applyNode_fw_transposeAxes_out") == 4
     assert "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim2_to_dim1_rank4 hin" in source
@@ -289,6 +288,20 @@ def test_closed_sharded_transpose_renderer_replays_exact_ordered_writers():
     assert f"[pmStore {pre.pm_tids[0]}, pmStore {pre.pm_tids[1]}, pmStore {pre.pm_tids[2]}]" in source
     assert f"[pmFinal {post.pm_tids[0]}, pmFinal {post.pm_tids[1]}, pmFinal {post.pm_tids[2]}]" in source
     assert "rankCount = 3" not in source
+
+
+def test_closed_sharded_transpose_renderer_preserves_a_publicly_retained_input_fact():
+    ir, relation, segment, pre, post = _closed_fixture(k=3)
+    after = next(
+        state for state in relation.dependent_chain_plan.states
+        if state.state_id == segment.post_state_id
+    )
+    after.fact_ids = (pre.fact_id, post.fact_id)
+
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+
+    assert pre.fact_id in source and post.fact_id in source
+    assert "RelationState.Holds.mono_insert hframe hout0" in source
 
 
 def test_closed_sharded_transpose_selector_ignores_unrelated_same_family_certificate():
@@ -357,17 +370,23 @@ def test_closed_sharded_transpose_renderer_supports_all_2_3_families(
     assert source.count("applyNode_fw_transposeAxes_out") == 4
 
 
-def test_registered_transpose_2_3_theorems_exist_in_imported_module():
-    source = (
-        Path(__file__).parents[2]
-        / "trainverify/denote/KRankTranspose23Extra.lean"
-    ).read_text(encoding="utf-8")
+def test_registered_transpose_2_3_theorems_exist_once_in_import_closure():
+    root = Path(__file__).parents[2] / "trainverify/denote"
+    sources = [
+        (root / "RelationCompiler.lean").read_text(encoding="utf-8"),
+        (root / "KRankTranspose23Extra.lean").read_text(encoding="utf-8"),
+    ]
     for theorem in (
         "fw_transposeAxes_2_3_dim2_to_dim3_rank4",
         "fw_transposeAxes_2_3_dim3_to_dim2_rank4",
         "fw_transposeAxes_2_3_dim1_rank4",
     ):
-        assert f"theorem RelationCompiler.ShardedRel.{theorem}" in source
+        declarations = sum(
+            source.count(f"theorem RelationCompiler.ShardedRel.{theorem}")
+            + source.count(f"theorem ShardedRel.{theorem}")
+            for source in sources
+        )
+        assert declarations == 1, theorem
 
 
 def test_closed_transpose_bundle_imports_exact_theorem_module():
@@ -463,7 +482,6 @@ def test_closed_sharded_transpose_renderer_replays_positive_atomic_tuple_once(sp
     assert source.count("applyNode_fw_transposeAxes_out") == n * (k + 1)
     assert source.count("have htransport") == n
     assert source.count("have hout") == n
-    assert source.count('op := "OpName.FW_transpose"') == n * (k + 1)
     assert "rankCount = 4" not in source
 
 
@@ -493,14 +511,21 @@ def test_closed_sharded_transpose_multi_allows_opposite_sm_pm_block_orders():
     second = ir.pm_nodes[pm_start + block:pm_end]
     ir.pm_nodes[pm_start:pm_end] = second + first
     t0, t1 = relation.transition_specs
-    relation.transition_specs = (
-        replace(t0, pm_node_indices=t1.pm_node_indices),
-        replace(t1, pm_node_indices=t0.pm_node_indices),
-    )
     c0, c1 = relation.certificates
-    relation.certificates = (
-        replace(c0, pm_step_ids=c1.pm_step_ids),
-        replace(c1, pm_step_ids=c0.pm_step_ids),
+    new_c0 = replace(c0, pm_step_ids=c1.pm_step_ids)
+    new_c1 = replace(c1, pm_step_ids=c0.pm_step_ids)
+    relation.certificates = (new_c0, new_c1)
+    relation.transition_specs = (
+        replace(
+            t0,
+            pm_node_indices=t1.pm_node_indices,
+            certificate_digest=composer._typed_certificate_digest(new_c0),
+        ),
+        replace(
+            t1,
+            pm_node_indices=t0.pm_node_indices,
+            certificate_digest=composer._typed_certificate_digest(new_c1),
+        ),
     )
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
     assert source.count("let smFinal := smNodes.foldl") == 1
@@ -529,11 +554,10 @@ def test_closed_sharded_transpose_multi_rejects_duplicate_exact_certificate():
         composer.render_closed_segment(ir, relation, segment.segment_id)
 
 
-@pytest.mark.parametrize("mutation", ["omitted", "stale", "extra", "duplicate"])
+@pytest.mark.parametrize("mutation", ["omitted", "extra", "duplicate"])
 def test_closed_sharded_transpose_multi_rejects_inexact_post_state(mutation):
-    ir, relation, segment, _, before, after = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
+    ir, relation, segment, _, _before, after = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
     if mutation == "omitted": after.fact_ids = after.fact_ids[:-1]
-    elif mutation == "stale": after.fact_ids = (*after.fact_ids, before.fact_ids[0])
     elif mutation == "extra": after.fact_ids = (*after.fact_ids, "fact_unproved")
     else: after.fact_ids = (*after.fact_ids, after.fact_ids[0])
     with pytest.raises(ValueError):
@@ -634,11 +658,9 @@ end TrainVerify.Denote
 def test_generated_sharded_transpose_witness_is_exact_renderer_output():
     source = _witness_source()
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedShardedTransposeWitness.lean"
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert source.count("import denote.KRankTranspose23Extra") == 1
-    assert source.count('op := "OpName.FW_transpose"') == 74
+    assert source.count("foldl_faithful_middle_writer") == 37
     assert source.count("applyNode_fw_transposeAxes_out") == 37
     assert source.count("let smFinal :=") == 5
     assert source.count("let pmFinal :=") == 5

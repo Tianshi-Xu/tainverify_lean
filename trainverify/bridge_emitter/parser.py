@@ -95,6 +95,7 @@ class GoalIR:
     public_statement_module: str = ""
     public_statement_ref: str = ""
     public_statement_uses_contract_wrapper: bool = True
+    public_statement_contract_ref: str = ""
     public_statement_uses_faithful_evaluator: bool = False
     lineage_ref: str = ""
     init_goals_ref: str = ""
@@ -106,6 +107,8 @@ class GoalIR:
     tensor_value_bound_contracts: tuple[TensorValueBoundContract, ...] = ()
     sm_input_value_classes: tuple[InputValueClass, ...] = ()
     pm_input_value_classes: tuple[InputValueClass, ...] = ()
+    sm_input_value_classes_ref: str = ""
+    pm_input_value_classes_ref: str = ""
     init_lineages: dict[int, LineageGoal] = field(default_factory=dict)
     full_init_goal_ids: tuple[int, ...] = ()
 
@@ -301,11 +304,26 @@ def extract_def_block(text: str, def_name: str) -> str:
     return m.group(0) if m else ""
 
 def parse_shapes(block: str):
-    """parse `(tid, [a, b, c]),` entries."""
-    out = []
-    for m in re.finditer(r'\(\s*(\d+),\s*\[([0-9,\s]*)\]\s*\)', block):
-        tid = int(m.group(1)); shape = _ints(m.group(2))
-        out.append((tid, shape))
+    """Parse a complete literal `(tid, shape)` authority list."""
+    assignment = re.search(r":=\s*(?:by\s+exact\s*)?\[", block)
+    if assignment is None:
+        raise ValueError("shape authority has no literal list")
+    source, end = _balanced_region(block, assignment.end() - 1, "[", "]")
+    if block[end:].strip():
+        raise ValueError("unparsed shape authority suffix")
+    matches = list(re.finditer(r'\(\s*(\d+),\s*\[([0-9,\s]*)\]\s*\)', source))
+    residue = []
+    cursor = 0
+    for match in matches:
+        residue.append(source[cursor:match.start()])
+        cursor = match.end()
+    residue.append(source[cursor:])
+    if re.sub(r"[\s,]", "", "".join(residue)):
+        raise ValueError("unparsed shape authority entry")
+    out = [(int(match.group(1)), _ints(match.group(2))) for match in matches]
+    tids = [tid for tid, _shape in out]
+    if len(tids) != len(set(tids)):
+        raise ValueError("shape authority contains duplicate TID")
     return out
 
 
@@ -326,6 +344,8 @@ def parse_lineage_block(blk: str, name: str) -> LineageGoal:
     ts = int(ts_match.group(1))
     tsShape = _ints(shape_match.group(1))
     # tps: list of { rank := r, tid := t }
+    if re.search(r"\btps\s*:=\s*\[", blk) is None:
+        raise ValueError(f"lineage definition {name} is missing tps authority")
     tps = [(int(r), int(t)) for r, t in
            re.findall(r'\{\s*rank\s*:=\s*(\d+),\s*tid\s*:=\s*(\d+)\s*\}', blk)]
     # tpShapes: list of [..]
@@ -334,10 +354,19 @@ def parse_lineage_block(blk: str, name: str) -> LineageGoal:
         blk,
         re.DOTALL,
     )
-    tpShapes = []
-    if tpsh_m:
-        for sm in re.finditer(r'\[([0-9,\s]*)\]', tpsh_m.group(1)):
-            tpShapes.append(_ints(sm.group(1)))
+    if tpsh_m is None:
+        raise ValueError(f"lineage definition {name} is missing tpShapes authority")
+    tpShapes = [
+        _ints(sm.group(1))
+        for sm in re.finditer(r'\[([0-9,\s]*)\]', tpsh_m.group(1))
+    ]
+    if not tps:
+        raise ValueError(f"lineage definition {name} has empty tps authority")
+    if len(tps) != len(tpShapes):
+        raise ValueError(f"lineage definition {name} tps/tpShapes cardinality mismatch")
+    ranks = [rank for rank, _tid in tps]
+    if len(ranks) != len(set(ranks)):
+        raise ValueError(f"lineage definition {name} contains duplicate ranks")
     gd_m = re.search(r'gatherDim\s*:=\s*(\d+)', blk)
     gatherDim = int(gd_m.group(1)) if gd_m else None
     replicated_m = re.search(r'replicated\s*:=\s*(true|false)', blk)
@@ -356,14 +385,30 @@ def parse_lineage(gen_text: str, n: int) -> LineageGoal:
     return parse_lineage_block(extract_def_block(gen_text, f"goal_{n}"), f"goal_{n}")
 
 
+def public_statement_name(statement_text: str, n: int) -> str:
+    """Resolve the exact exported statement, preferring the modern full name."""
+    for name in (f"goal_{n}_stmt_full", f"goal_{n}_stmt"):
+        if re.search(rf"\bdef\s+{re.escape(name)}\s*:", statement_text):
+            return name
+    raise ValueError(f"cannot resolve exported statement for goal {n}")
+
+
 def parse_full_init_goal_ids(goal_text: str, gen_text: str, n: int) -> tuple[int, ...]:
-    full_block = extract_def_block(goal_text, f"goal_{n}_full_initGoals")
-    statement_block = extract_def_block(goal_text, f"goal_{n}_stmt_full")
+    try:
+        full_block = extract_def_block(goal_text, f"goal_{n}_full_initGoals")
+    except ValueError:
+        full_block = ""
+    try:
+        statement_name = public_statement_name(goal_text, n)
+    except ValueError:
+        statement_block = ""
+    else:
+        statement_block = extract_def_block(goal_text, statement_name)
     direct_generated = re.search(
         r"CoarseLineageHoldsWithInit(?:DistributedFaithful(?:WithContract)?)?[^\n]*\binitGoals\b",
         statement_block,
     ) or re.search(r"InitGoalsHold[^\n]*\binitGoals\b", statement_block)
-    if re.search(r":=\s*initGoals\b", full_block) or direct_generated:
+    if re.search(r":=\s*(?:[A-Za-z_][A-Za-z0-9_.]*\.)?initGoals\b", full_block) or direct_generated:
         source = extract_def_block(gen_text, "initGoals")
     else:
         source = full_block
@@ -371,7 +416,7 @@ def parse_full_init_goal_ids(goal_text: str, gen_text: str, n: int) -> tuple[int
 
 def parse_full_init_goals_name(statement_text: str, n: int) -> str:
     """Recover the exact init-goal list consumed by the exported full statement."""
-    block = extract_def_block(statement_text, f"goal_{n}_stmt_full")
+    block = extract_def_block(statement_text, public_statement_name(statement_text, n))
     direct = re.search(
         r"InitGoalsHold\s+\S+\s+([A-Za-z_][A-Za-z0-9_.]*)\b", block
     )
@@ -388,6 +433,71 @@ def parse_full_init_goals_name(statement_text: str, n: int) -> str:
     return matches[0]
 
 
+def parse_public_statement_contract_ref(statement_text: str, n: int) -> str:
+    """Return an explicit named external-contract premise, if present."""
+    block = extract_def_block(statement_text, public_statement_name(statement_text, n))
+    for match in re.finditer(
+        r"(?m)^\s*([A-Za-z_][A-Za-z0-9_'.]*)\s+initSM\s+initPM\s*→\s*$",
+        block,
+    ):
+        name = match.group(1).rsplit(".", 1)[-1]
+        try:
+            contract = _definition_from_sources(name, statement_text)
+        except ValueError:
+            continue
+        if re.search(
+            rf"def\s+{re.escape(name)}\s*\(initSM\s+initPM\s*:\s*Store\)\s*:\s*Prop\s*:=",
+            contract,
+        ):
+            return _qualified_definition_name(name, statement_text)
+    constructor = re.search(
+        r"\bCoarseLineageHoldsWithInitDistributedFaithfulWithContract\b(.*)",
+        block,
+        re.DOTALL,
+    )
+    if constructor is not None:
+        names = re.findall(r"[A-Za-z_][A-Za-z0-9_'.]*", constructor.group(1))
+        for candidate in reversed(names):
+            name = candidate.rsplit(".", 1)[-1]
+            try:
+                contract = _definition_from_sources(name, statement_text)
+            except ValueError:
+                continue
+            if re.search(
+                rf"def\s+{re.escape(name)}\s*\(initSM\s+initPM\s*:\s*Store\)\s*:\s*Prop\s*:=",
+                contract,
+            ):
+                return _qualified_definition_name(name, statement_text)
+    return ""
+
+
+def parse_input_value_classes_ref(
+    statement_text: str, n: int, side: str, *sources: str
+) -> str:
+    """Resolve the exact value-class list named by the public caller contract."""
+    if side not in {"sm", "pm"}:
+        raise ValueError(f"invalid input-value class side: {side!r}")
+    contract_ref = parse_public_statement_contract_ref(statement_text, n)
+    if not contract_ref:
+        return ""
+    contract_name = contract_ref.rsplit(".", 1)[-1]
+    contract = _definition_from_sources(contract_name, statement_text)
+    store = "initSM" if side == "sm" else "initPM"
+    class_name = f"{side}InputValueClasses"
+    matches = re.findall(
+        rf"InputValueClassesHold\s+([A-Za-z_][A-Za-z0-9_'.]*{class_name}|{class_name})\s+{store}\b",
+        contract,
+    )
+    if len(matches) != 1:
+        raise ValueError(
+            f"{contract_ref} must name exactly one {side.upper()} input-value class list"
+        )
+    ref = matches[0]
+    if "." not in ref:
+        ref = _qualified_definition_name(ref, *sources)
+    return ref
+
+
 def parse_prereqs(goal_text: str, n: int):
     m = re.search(rf'def\s+goal_{n}_prereqs\s*:\s*List LineageGoal\s*:=\s*\[(.*?)\]', goal_text, re.DOTALL)
     if not m:
@@ -398,7 +508,7 @@ def parse_prereqs(goal_text: str, n: int):
     return [int(x) for x in re.findall(r'(?:^|[\s,\[])(?:intermediate)?[Gg]oal_(\d+)', m.group(1))]
 
 # ---------- top-level ----------
-def _public_full_scope(n: int, goal_path: str, goal_text: str, gen_text: str) -> tuple[str, str, str, str, str, str, str, str]:
+def _public_full_scope(n: int, goal_path: str, goal_text: str, gen_text: str) -> tuple[str, str, str, str, str, str, str, str, str]:
     """Resolve graph and shape-list symbols from the exported full proposition."""
     statement_name = f"goal_{n}_stmt_full"
     candidates: list[tuple[str, str]] = []
@@ -414,12 +524,26 @@ def _public_full_scope(n: int, goal_path: str, goal_text: str, gen_text: str) ->
                 text = handle.read()
         if re.search(rf"\bdef\s+{re.escape(statement_name)}\s*:", text):
             candidates.append((path, text))
+    if not candidates and re.search(rf"\bdef\s+goal_{n}_stmt\s*:", gen_text):
+        candidates.append(("<generated>", gen_text))
+        statement_name = f"goal_{n}_stmt"
     if len(candidates) != 1:
         raise ValueError(
             f"expected exactly one exported {statement_name} definition, found {len(candidates)}"
         )
     _statement_path, statement_text = candidates[0]
-    statement_module = MOD_PREFIX + "." + os.path.splitext(os.path.basename(_statement_path))[0]
+    if _statement_path == "<generated>":
+        relative = GEN_DIR.removeprefix("trainverify/").strip("/").replace("/", ".")
+        statement_module = relative + "." + os.path.splitext(GEN_FILE)[0]
+    else:
+        statement_module = MOD_PREFIX + "." + os.path.splitext(os.path.basename(_statement_path))[0]
+    return _public_scope_from_statement(statement_text, statement_module, statement_name)
+
+
+def _public_scope_from_statement(
+    statement_text: str, statement_module: str, statement_name: str
+) -> tuple[str, str, str, str, str, str, str, str, str]:
+    """Resolve graph/shape authority from one already-inventoried statement."""
     statement_block = extract_def_block(statement_text, statement_name)
 
     compact = re.search(
@@ -467,6 +591,7 @@ def _public_full_scope(n: int, goal_path: str, goal_text: str, gen_text: str) ->
         basename(pm_name),
         shape_list_name(sm_env_name),
         shape_list_name(pm_env_name),
+        statement_name,
     )
 
 
@@ -605,10 +730,18 @@ def parse_input_value_classes(
 def load_goal_ir(n: int, root: str) -> GoalIR:
     goal_path = os.path.join(root, DENOTE_DIR, f"Goal_{n}.lean")
     gen_path = os.path.join(root, GEN_DIR, GEN_FILE)
-    with open(goal_path) as handle:
-        goal_text = handle.read()
     with open(gen_path) as handle:
         gen_text = handle.read()
+    if os.path.isfile(goal_path):
+        with open(goal_path) as handle:
+            goal_text = handle.read()
+    elif re.search(rf"\bdef\s+goal_{n}_stmt\s*:", gen_text):
+        # A generated-only whole-graph authority needs no redundant Goal_N
+        # wrapper. Treat the generated module as the exact public scope.
+        goal_path = gen_path
+        goal_text = gen_text
+    else:
+        raise FileNotFoundError(goal_path)
     nodes_path = os.path.join(os.path.dirname(gen_path), "GeneratedGraphNodes.lean")
     nodes_text = ""
     if os.path.exists(nodes_path):
@@ -617,7 +750,7 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
 
     (
         statement_text, public_statement_module, sm_graph_ref, pm_graph_ref,
-        sm_name, pm_name, sm_shapes_name, pm_shapes_name,
+        sm_name, pm_name, sm_shapes_name, pm_shapes_name, statement_name,
     ) = _public_full_scope(n, goal_path, goal_text, gen_text)
     sources = (goal_text, statement_text, gen_text, nodes_text)
     sm_block = _definition_from_sources(sm_name, *sources)
@@ -676,15 +809,21 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         pm_graph_ref=_qualified_definition_name(pm_graph_ref, *sources),
         public_statement_module=public_statement_module,
         public_statement_ref=_qualified_definition_name(
-            f"goal_{n}_stmt_full", statement_text
+            statement_name, statement_text
         ),
         public_statement_uses_contract_wrapper=(
             "CoarseLineageHoldsWithInitDistributedFaithfulWithContract"
-            in extract_def_block(statement_text, f"goal_{n}_stmt_full")
+            in extract_def_block(statement_text, statement_name)
         ),
-        public_statement_uses_faithful_evaluator=(
-            "CoarseLineageHoldsWithInitDistributedFaithful"
-            in extract_def_block(statement_text, f"goal_{n}_stmt_full")
+        public_statement_contract_ref=parse_public_statement_contract_ref(
+            statement_text, n
+        ),
+        public_statement_uses_faithful_evaluator=any(
+            marker in extract_def_block(statement_text, statement_name)
+            for marker in (
+                "CoarseLineageHoldsWithInitDistributedFaithful",
+                "denoteGraphDistributedFaithful",
+            )
         ),
         lineage_ref=_qualified_definition_name(f"goal_{n}", *sources),
         init_goals_ref=_qualified_definition_name(
@@ -698,6 +837,12 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         tensor_value_bound_contracts=tensor_value_bound_contracts,
         sm_input_value_classes=sm_input_value_classes,
         pm_input_value_classes=pm_input_value_classes,
+        sm_input_value_classes_ref=parse_input_value_classes_ref(
+            statement_text, n, "sm", *sources
+        ),
+        pm_input_value_classes_ref=parse_input_value_classes_ref(
+            statement_text, n, "pm", *sources
+        ),
         init_lineages=init_lineages,
         full_init_goal_ids=full_init_goal_ids,
     )

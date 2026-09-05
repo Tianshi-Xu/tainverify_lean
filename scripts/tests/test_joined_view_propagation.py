@@ -322,22 +322,31 @@ def test_closed_joined_view_multi_renderer_orients_homogeneous_transitions_by_wr
 
 
 def test_closed_joined_view_multi_renderer_allows_opposite_sm_pm_writer_orders():
-    ir, relation, segment, *_ = _closed_joined_view_multi_fixture(2, 2)
+    ir, relation, segment, _, posts = _closed_joined_view_multi_fixture(2, 2)
     pm_start, pm_end = segment.pm_range
     block = (pm_end - pm_start) // 2
     first = ir.pm_nodes[pm_start:pm_start + block]
     second = ir.pm_nodes[pm_start + block:pm_end]
     ir.pm_nodes[pm_start:pm_end] = second + first
 
-    t0, t1 = relation.transition_specs
-    relation.transition_specs = (
-        replace(t0, pm_node_indices=t1.pm_node_indices),
-        replace(t1, pm_node_indices=t0.pm_node_indices),
-    )
     c0, c1 = relation.certificates
-    relation.certificates = (
-        replace(c0, pm_step_id=c1.pm_step_id),
-        replace(c1, pm_step_id=c0.pm_step_id),
+    c0 = replace(
+        c0,
+        pm_step_id=c1.pm_step_id,
+        output_fact=replace(c0.output_fact, joined_pm_step=c1.pm_step_id),
+    )
+    c1 = replace(
+        c1,
+        pm_step_id=relation.certificates[0].pm_step_id,
+        output_fact=replace(
+            c1.output_fact, joined_pm_step=relation.certificates[0].pm_step_id
+        ),
+    )
+    relation.certificates = (c0, c1)
+    posts[0].source = c0.output_fact
+    posts[1].source = c1.output_fact
+    relation.transition_specs = rc.build_certificate_transition_specs(
+        SimpleNamespace(), relation.certificates
     )
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
     assert source.count("let smFinal := smNodes.foldl") == 1
@@ -383,6 +392,22 @@ def test_closed_joined_view_renderer_reduces_one_sm_and_ordered_dynamic_k_pm_wri
     assert "JoinedRel.fw_view" in source
     assert pre.fact_id in source and post.fact_id in source
     assert "Goal_" not in source and "Tid" not in source
+
+
+def test_closed_joined_view_renderer_preserves_a_publicly_retained_input_fact():
+    ir, relation, segment, pre, post = _closed_joined_view_fixture()
+    after = next(
+        state for state in relation.dependent_chain_plan.states
+        if state.state_id == segment.post_state_id
+    )
+    after.fact_ids = ("anchor", pre.fact_id, post.fact_id)
+
+    source = composer.render_closed_joined_view_segment(
+        ir, relation, segment.segment_id
+    )
+
+    assert f"fresh := {post.fact_id}" in source
+    assert "RelationState.Holds.mono_insert" in source
 
 
 def test_closed_joined_view_renderer_rejects_parameter_mismatch():

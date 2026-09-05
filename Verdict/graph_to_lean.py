@@ -881,6 +881,24 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 		consts = kwargs.get("__consts", [])
 		if consts:
 			return [int(consts[0])]
+	elif "ReduceScatterPrim" in op:
+		ins = G.node_inputs(n)
+		outs = G.node_outputs(n)
+		if not ins or not outs or num_parts <= 0:
+			raise ValueError("ReduceScatterPrim lacks input/output/rank authority")
+		full = list(int(d) for d in G.tensor_shape(ins[0]))
+		shard = list(int(d) for d in G.tensor_shape(outs[0]))
+		candidates = [
+			dim for dim in range(len(full))
+			if len(shard) == len(full)
+			and full[dim] == shard[dim] * num_parts
+			and all(full[index] == shard[index] for index in range(len(full)) if index != dim)
+		]
+		if len(candidates) != 1:
+			raise ValueError(
+				f"ReduceScatterPrim has no unique shard axis: {full} -> {shard}, K={num_parts}"
+			)
+		return candidates
 	elif "AllToAllPrim" in op:
 		kwargs = G.node_kwargs(n)
 		if "idim" in kwargs and "odim" in kwargs:
@@ -1346,7 +1364,20 @@ def pick_one_lineage_for_ts(lineages: Sequence[Any], ts_tid: int) -> Optional[Se
 	return candidates[0]
 
 
-def compress_if_replicated(lineage: SelectedLineage) -> SelectedLineage:
+def final_writer_ranks_by_tid(pm_graph: Any) -> Dict[int, int]:
+	"""Return the rank whose write survives the emitted PM graph's ordered fold."""
+	result: Dict[int, int] = {}
+	for node in pm_graph.nodes():
+		rank = int(_node_rank(node))
+		for output in pm_graph.node_outputs(node):
+			result[int(output.tid)] = rank
+	return result
+
+
+def compress_if_replicated(
+	lineage: SelectedLineage,
+	final_writer_ranks: Optional[Dict[int, int]] = None,
+) -> SelectedLineage:
 	"""If all pieces point to the same PM tid, keep only one piece.
 
 This avoids constructing a meaningless "allGather of identical full tensors" for replicated inputs.
@@ -1355,8 +1386,20 @@ This avoids constructing a meaningless "allGather of identical full tensors" for
 		return lineage
 	tp_tids = {int(t) for (_r, t) in lineage.tps}
 	if len(tp_tids) == 1:
-		(r0, t0) = sorted(lineage.tps)[0]
-		return SelectedLineage(ts=lineage.ts, tps=[(int(r0), int(t0))])
+		t0 = next(iter(tp_tids))
+		ranks = {int(rank) for rank, _tid in lineage.tps}
+		if final_writer_ranks is None:
+			r0 = min(ranks)
+		else:
+			if t0 not in final_writer_ranks:
+				raise ValueError(f"replicated PM tid {t0} has no graph producer")
+			r0 = int(final_writer_ranks[t0])
+			if r0 not in ranks:
+				raise ValueError(
+					f"final writer rank {r0} for replicated PM tid {t0} "
+					f"is absent from lineage ranks {sorted(ranks)}"
+				)
+		return SelectedLineage(ts=lineage.ts, tps=[(r0, t0)])
 	return lineage
 
 
@@ -3709,17 +3752,19 @@ def _validate_generated_authority_tree(root: Path) -> None:
 					f"{path.relative_to(root)} ({size} bytes)"
 				)
 			text = path.read_text(encoding="utf-8")
-			for raw in re.findall(r"set_option\s+maxHeartbeats\s+(\d+)", text):
-				if int(raw) == 0 or int(raw) > GENERATED_LEAN_HEARTBEAT_LIMIT:
+			for raw in re.findall(r"set_option\s+maxHeartbeats\s+(\d[\d_]*)", text):
+				heartbeats = int(raw.replace("_", ""))
+				if heartbeats == 0 or heartbeats > GENERATED_LEAN_HEARTBEAT_LIMIT:
 					raise ValueError(
 						f"generated Lean source violates heartbeat limit 1..500000: {path.relative_to(root)} ({raw})"
 					)
 			for forbidden, pattern in {
+				"sorryAx": r"\bsorryAx\b",
 				"sorry": r"\bsorry\b",
 				"admit": r"\badmit\b",
-				"axiom": r"^\s*axiom\b",
-				"unsafe": r"\bunsafe\b",
-				"False.elim": r"False\.elim",
+				"axiom": r"^\s*(?:(?:private|protected)\s+)*axiom\b",
+				"unsafe": r"^\s*(?:(?:private|protected)\s+)*unsafe\b",
+				"False.elim": r"\bFalse\.elim\b",
 			}.items():
 				if re.search(pattern, text, re.MULTILINE):
 					raise ValueError(
@@ -3887,6 +3932,7 @@ def _generate(args: argparse.Namespace) -> None:
 		obs_tids = obs_tids[: int(args.max_goals)]
 
 	normalize_pm_lineage = make_collective_lineage_normalizer(GpE)
+	final_writer_ranks = final_writer_ranks_by_tid(GpE)
 
 	t0 = time.perf_counter()
 	selected: List[SelectedLineage] = []
@@ -3894,7 +3940,7 @@ def _generate(args: argparse.Namespace) -> None:
 		chosen = pick_one_lineage_for_ts(by_ts.get(int(ts), []), ts)
 		if chosen is not None:
 			chosen = normalize_pm_lineage(chosen)
-			chosen = compress_if_replicated(chosen)
+			chosen = compress_if_replicated(chosen, final_writer_ranks)
 			selected.append(chosen)
 
 	selected.sort(key=lambda g: g.ts)

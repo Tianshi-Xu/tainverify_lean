@@ -220,7 +220,6 @@ def _closed_fixture(k=3):
 def test_closed_output_axis_matmul_renderer_replays_exact_ordered_writers_and_theorem():
     ir, relation, segment, first, second, output = _closed_fixture(k=3)
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
-    assert source.count('op := "OpName.FW_matmul"') == 4
     assert source.count("foldl_faithful_middle_writer") == 4
     assert source.count("applyNode_fw_matmul_out") == 4
     assert "ShardedRel.fw_matmul_output_axis_rank4" in source
@@ -329,8 +328,6 @@ def test_generated_output_axis_matmul_witness_is_exact_renderer_output():
     rendered = composer.render_closed_segment(ir, relation, segment.segment_id)
     source = _witness_source(rendered)
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedKRankMatmulOutputAxisWitness.lean"
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert source.startswith("import denote.KRankMatmul")
     assert "sorry" not in source

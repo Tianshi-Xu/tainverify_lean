@@ -67,7 +67,9 @@ private def segment_000000 :
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
               (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_sum_out SyntheticKRank.smGraph t 0 10 11
             · decide
             · decide
@@ -88,7 +90,9 @@ private def segment_000000 :
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
               (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_sum_out SyntheticKRank.pmGraph t 0 20 30
             · decide
             · decide
@@ -112,7 +116,9 @@ private def segment_000000 :
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
               (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_sum_out SyntheticKRank.pmGraph t 1 21 31
             · decide
             · decide
@@ -136,7 +142,9 @@ private def segment_000000 :
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
               (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_sum_out SyntheticKRank.pmGraph t 2 22 32
             · decide
             · decide
@@ -160,7 +168,9 @@ private def segment_000000 :
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
               (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), if_neg (by decide),
+              if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_sum_out SyntheticKRank.pmGraph t 3 23 33
             · decide
             · decide

@@ -274,7 +274,7 @@ def test_closed_k_rank_allgather_renderer_rejects_nonexact_writer_footprint():
         **{**relation.__dict__, "transition_specs": (broken_transition,)}
     )
 
-    with pytest.raises(ValueError, match="exact PM AllGather writer"):
+    with pytest.raises(ValueError, match="one PM AllGather writer inside its frame"):
         render_closed_k_rank_allgather_segment(ir, broken, segment.segment_id)
 
 

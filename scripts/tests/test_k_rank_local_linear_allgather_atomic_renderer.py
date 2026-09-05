@@ -141,12 +141,24 @@ def test_positive_local_linear_tuple_then_allgather_is_one_ordered_fold_per_axis
     for count in (1, 2):
         ir, relation, segment = _fixture(k=3, count=count)
         source = render_closed_segment(ir, relation, segment.segment_id)
-        assert source.count("let smFinal :=") == 1
-        assert source.count("let pmFinal :=") == 1
+        if count == 1:
+            assert source.count("let smFinal :=") == 1
+            assert source.count("let pmFinal :=") == 1
+        else:
+            assert source.count(
+                "@[irreducible] private def segment_generic_smFinal"
+            ) == 1
+            assert source.count(
+                "@[irreducible] private def segment_generic_pmFinal"
+            ) == 1
         assert source.count(LOCAL_THEOREM) == count
         assert source.count(GATHER_THEOREM) == 1
         assert "rankCount = 3" not in source
-        assert "K := [pmStore 200, pmStore 201, pmStore 202].length" in source
+        expected_store = "pmStore" if count == 1 else "pmFinal"
+        assert (
+            f"K := [{expected_store} 200, {expected_store} 201, "
+            f"{expected_store} 202].length"
+        ) in source
         assert "joined.Holds" in source
         assert all(f"output_{group}.Holds" in source for group in range(1, count))
         assert source.index("outs := [301]") < source.index("outs := [300]") if count == 2 else True
@@ -225,6 +237,5 @@ def test_generated_local_linear_allgather_witness_is_exact_renderer_output():
     witness = Path(__file__).resolve().parents[2] / (
         "trainverify/denote/GeneratedKRankLocalLinearAllGatherAtomicWitness.lean"
     )
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert "sorry" not in source and "False.elim" not in source

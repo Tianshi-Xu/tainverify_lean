@@ -203,7 +203,7 @@ def render_closed_mixed_reduction_output_linear_segment(ir, relation, segment_id
             "          · intro t",
             "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
             "            unfold applyNodeDistributed",
-            "            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]",
+            "            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]",
             f"            · exact applyNode_fw_linear_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
             "            · decide", "            · decide", "          · native_decide", "          · native_decide",
             f"        _ = fw_linear ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",

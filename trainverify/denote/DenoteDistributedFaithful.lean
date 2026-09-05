@@ -8,8 +8,8 @@ import denote.ZigzagCollective
 /-!
 # Graph-aware faithful distributed denotation
 
-This evaluator composes the existing distributed evaluator (including its faithful
-full-expert MoE and graph-aware ring-attention branches) with the value-faithful
+This evaluator composes the distributed evaluator (including faithful full-expert
+MoE and graph-aware backward shuffle/unshuffle/attention) with value-faithful
 cross-rank semantics for forward `maybe_shuffle`, `maybe_unshuffle`, and zigzag
 attention.
 
@@ -81,6 +81,27 @@ noncomputable def applyNodeFaithfulZigzagAttnValue
       (n.params.getD 2 0) (n.params.getD 3 0)
       (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)
       g.numRanks n.rank
+
+/-- Lower replicated-K/V zigzag attention without reducing the graph declaration.
+Callers supply separately proved graph facts so large generated graphs stay opaque. -/
+theorem applyNodeFaithfulZigzagAttnValue_of_replicatedKV
+    (g : GraphDecl) (s : Store) (n : NodeDecl) (buddies : List NodeDecl)
+    (numRanks : Nat)
+    (hBuddies : g.replicaBuddies n = buddies)
+    (hReplicated : zigzagAttnUsesReplicatedKV g n = true)
+    (hNumRanks : g.numRanks = numRanks) :
+    applyNodeFaithfulZigzagAttnValue g s n =
+      fw_attn_zigzag_collective
+        (buddies.map (fun m => s (m.ins.getD 0 0)))
+        (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+        (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+        (n.params.getD 0 0) (n.params.getD 1 0)
+        (n.params.getD 2 0) (n.params.getD 3 0)
+        (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)
+        numRanks n.rank := by
+  unfold applyNodeFaithfulZigzagAttnValue
+  rw [hBuddies, hReplicated, hNumRanks]
+  rfl
 
 /-- Store one collective value at every output declared by the node. -/
 noncomputable def storeCollectiveOutputs
@@ -226,20 +247,7 @@ theorem applyNodeDistributedFaithful_eq_of_not_mem_outs
         apply storeSet_eq_of_not_mem_fst
         simpa using h
       · rw [if_neg hattn]
-        unfold applyNodeDistributed
-        by_cases hmoe : n.op = "OpName.FW_all2all_moe_gmm"
-        · rw [if_pos hmoe]
-          have hmem : n.outs.getD 0 0 ∈ n.outs := by
-            cases hout : n.outs with
-            | nil => exact absurd hout hnil
-            | cons a rest => rw [List.getD_cons_zero]; exact List.mem_cons_self
-          have hneq : tid ≠ n.outs.getD 0 0 := by
-            intro heq
-            exact h (heq ▸ hmem)
-          apply storeSet_eq_of_not_mem_fst
-          simpa using hneq
-        · rw [if_neg hmoe]
-          exact applyNodeRingAttn_skip g s n tid hnil h
+        exact applyNodeDistributed_skip g s n tid hnil h
 
 /-- Folding faithful steps preserves an id that no remaining node writes. -/
 theorem foldl_applyNodeDistributedFaithful_at_not_written
@@ -270,21 +278,8 @@ theorem foldl_applyNodeDistributed_at_not_written
   | cons a rest ih =>
     simp only [List.foldl]
     rw [ih]
-    · unfold applyNodeDistributed
-      by_cases hmoe : a.op = "OpName.FW_all2all_moe_gmm"
-      · rw [if_pos hmoe]
-        have hmem : a.outs.getD 0 0 ∈ a.outs := by
-          cases hout : a.outs with
-          | nil => exact absurd hout (hnil a List.mem_cons_self)
-          | cons x xs => rw [List.getD_cons_zero]; exact List.mem_cons_self
-        have hneq : tid ≠ a.outs.getD 0 0 := by
-          intro heq
-          exact hwrite a List.mem_cons_self (heq ▸ hmem)
-        apply storeSet_eq_of_not_mem_fst
-        simpa using hneq
-      · rw [if_neg hmoe]
-        exact applyNodeRingAttn_skip g s a tid
-          (hnil a List.mem_cons_self) (hwrite a List.mem_cons_self)
+    · exact applyNodeDistributed_skip g s a tid
+        (hnil a List.mem_cons_self) (hwrite a List.mem_cons_self)
     · intro n hn
       exact hnil n (List.mem_cons_of_mem a hn)
     · intro n hn

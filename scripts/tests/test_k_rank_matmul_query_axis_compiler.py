@@ -286,8 +286,6 @@ def test_generated_query_axis_witness_is_direct_renderer_output():
     rendered = composer.render_closed_segment(ir, relation, segment.segment_id)
     source = _witness_source(rendered)
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedKRankMatmulQueryAxisCompilerWitness.lean"
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert source.startswith("import denote.KRankMatmulQueryAxis")
     assert source.count("import denote.KRankMatmulQueryAxis") == 1

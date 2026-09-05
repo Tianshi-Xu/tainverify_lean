@@ -4,7 +4,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from trainverify.bridge_emitter.composer import render_closed_segment
+from trainverify.bridge_emitter.composer import (
+    _typed_certificate_digest,
+    render_closed_segment,
+)
 from trainverify.bridge_emitter.parser import Node
 from trainverify.bridge_emitter.relation_compiler import (
     KRankAllGatherReconstructionCertificate,
@@ -152,6 +155,8 @@ def _fixture(*, k=3, alltoall_count=2):
     )
     transitions[-1].post_facts = (new_gather_post,)
     records[-1].source = new_gather_post
+    for transition, certificate in zip(transitions, certificates):
+        transition.certificate_digest = _typed_certificate_digest(certificate)
 
     pre_ids = tuple(f"pre_{group}" for group in range(alltoall_count)) + ("gather_pre",)
     post_ids = tuple(f"post_{group}" for group in range(alltoall_count)) + ("gather_post",)
@@ -249,8 +254,6 @@ def test_generated_atomic_collective_witness_is_exact_renderer_output():
     witness = Path(__file__).resolve().parents[2] / (
         "trainverify/denote/GeneratedKRankAllToAllAllGatherAtomicWitness.lean"
     )
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert "sorry" not in source and "False.elim" not in source
 
@@ -278,6 +281,7 @@ def _alltoall_only_fixture(*, k=3, alltoall_count=2):
             *relation.certificates[cert_index + 1:],
         )
         transition.post_facts = (new_post,)
+        transition.certificate_digest = _typed_certificate_digest(new_cert)
         relation.dependent_chain_plan.relation_facts[2 * cert_index + 1].source = new_post
     relation.dependent_chain_plan.relation_facts = relation.dependent_chain_plan.relation_facts[:-2]
     relation.dependent_chain_plan.states[0].fact_ids = tuple(
@@ -366,7 +370,5 @@ def test_generated_alltoall_tuple_witness_is_exact_renderer_output():
     witness = Path(__file__).resolve().parents[2] / (
         "trainverify/denote/GeneratedKRankAllToAllTupleAtomicWitness.lean"
     )
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert "sorry" not in source and "False.elim" not in source

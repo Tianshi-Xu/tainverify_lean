@@ -11,8 +11,19 @@ import pytest
 import trainverify.bridge_emitter.composer as composer_module
 import trainverify.bridge_emitter.emit2 as emit2_module
 import trainverify.bridge_emitter.parser as parser_module
+import trainverify.bridge_emitter.proof_compiler as proof_compiler_module
 import trainverify.bridge_emitter.relation_compiler as relation_compiler_module
 import trainverify.bridge_emitter.plan as plan_module
+from scripts.tests.real_goal_cache import compiled_goal, planned_goal
+
+
+def _bind_certificate_digest(transition, certificate):
+    return replace(
+        transition,
+        certificate_digest=composer_module._typed_certificate_digest(certificate),
+    )
+
+
 from trainverify.bridge_emitter.composer import (
     CompositionCode,
     compose_closed_dependent_bundle,
@@ -40,6 +51,7 @@ from trainverify.bridge_emitter.composer import (
     render_closed_unshuffle_segment,
 )
 from trainverify.bridge_emitter.emit2 import (
+    _compile_closed_bundle_sources,
     _publish_closed_bundle,
     _publish_composed_source,
 )
@@ -780,6 +792,180 @@ def test_compile_proof_plan_rejects_future_producer_without_reordering():
     assert "no earlier producer" in plan.diagnostics[0].message
 
 
+def test_multirank_backward_attention_ops_have_graph_aware_rules():
+    registry = build_default_registry()
+    expected = {
+        "BW_attn_sliding_window": "applyNodeRingAttn_bw_sliding_window",
+        "BW_attn_zigzag": "applyNodeRingAttn_bw_zigzag",
+    }
+    for op, denote_fn in expected.items():
+        assert op not in proof_compiler_module.MULTIRANK_VALUE_LOSSY_OPERATORS
+        rule = registry.get(op)
+        assert rule is not None
+        assert rule.denote_fn == denote_fn
+        assert rule.apply_lemmas
+
+
+@pytest.mark.parametrize("op", ("BW_attn_sliding_window", "BW_attn_zigzag"))
+def test_multirank_backward_attention_ops_accept_complete_buddy_authority(op):
+    rank1_inputs = [11, 13, 15, 17, 18, 19]
+    if op == "BW_attn_zigzag":
+        rank1_inputs[2:4] = [14, 16]
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "FW_gelu", [1], [30])],
+        pm_nodes=[
+            Node(0, op, [10, 12, 14, 16, 18, 19], [70, 71, 72], [1, 1, 4, 4, 1, 0]),
+            Node(1, op, rank1_inputs, [73, 74, 75], [1, 1, 4, 4, 1, 0]),
+        ],
+        tps=[(0, 70), (1, 73)],
+    )
+    ir.pm_shapes.extend((tid, [4, 4]) for tid in range(12, 18))
+    ir.pm_shapes.extend(((18, [2]), (19, [2])))
+    ir.pm_replica_groups = (
+        parser_module.ReplicaGroup(
+            cid=2,
+            mb=0,
+            irname=op,
+            members=(
+                parser_module.ReplicaNodeRef(0, 70),
+                parser_module.ReplicaNodeRef(1, 73),
+            ),
+        ),
+    )
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported is True, plan.diagnostics
+
+
+@pytest.mark.parametrize(
+    "op",
+    (
+        "BW_attn_sliding_window",
+        "BW_attn_zigzag",
+    ),
+)
+def test_multirank_backward_attention_ops_reject_incomplete_buddy_authority(op):
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "FW_gelu", [1], [30])],
+        pm_nodes=[Node(0, op, [10], [40])],
+        tps=[(0, 40)],
+    )
+    ir.pm_num_ranks = 2
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported is False
+    assert plan.diagnostics[0].code is DiagnosticCode.INVALID_SIGNATURE
+    assert "complete ordered replica buddies" in plan.diagnostics[0].message
+
+
+@pytest.mark.parametrize("shared_input", (2, 3, None))
+def test_multirank_backward_zigzag_attention_rejects_unauthorized_kv_ownership(shared_input):
+    rank0 = [10, 12, 14, 16, 18, 19]
+    rank1 = [11, 13, 15, 17, 18, 19]
+    if shared_input is not None:
+        rank1[shared_input] = rank0[shared_input]
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "FW_gelu", [1], [30])],
+        pm_nodes=[
+            Node(0, "BW_attn_zigzag", rank0, [70, 71, 72], [1, 1, 4, 4, 1, 0]),
+            Node(1, "BW_attn_zigzag", rank1, [73, 74, 75], [1, 1, 4, 4, 1, 0]),
+        ],
+        tps=[(0, 70), (1, 73)],
+    )
+    ir.pm_shapes.extend((tid, [4, 4]) for tid in range(12, 18))
+    ir.pm_shapes.extend(((18, [2]), (19, [2])))
+    ir.pm_replica_groups = (
+        parser_module.ReplicaGroup(
+            cid=3,
+            mb=0,
+            irname="BW_attn_zigzag",
+            members=(
+                parser_module.ReplicaNodeRef(0, 70),
+                parser_module.ReplicaNodeRef(1, 73),
+            ),
+        ),
+    )
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported is False
+    assert "coherent Q/K/V ownership" in plan.diagnostics[0].message
+
+
+@pytest.mark.parametrize("op", ("BW_maybe_shuffle", "BW_maybe_unshuffle"))
+def test_multirank_backward_permutation_ops_use_graph_aware_semantics(op):
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "FW_gelu", [1], [30])],
+        pm_nodes=[
+            Node(0, op, [10, 12], [40], [2, 0]),
+            Node(1, op, [11, 12], [41], [2, 1]),
+        ],
+        tps=[(0, 40), (1, 41)],
+    )
+    ir.pm_shapes.append((12, [2]))
+    ir.pm_num_ranks = 2
+    ir.pm_replica_groups = (
+        parser_module.ReplicaGroup(
+            cid=1,
+            mb=0,
+            irname=op,
+            members=(
+                parser_module.ReplicaNodeRef(0, 40),
+                parser_module.ReplicaNodeRef(1, 41),
+            ),
+        ),
+    )
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported is True, plan.diagnostics
+    pm_step = next(step for step in plan.steps if step.side == "pm")
+    expected_effect = (
+        RelationEffect.ZIGZAG_TO_ORDINARY
+        if op == "BW_maybe_shuffle"
+        else RelationEffect.ORDINARY_TO_ZIGZAG
+    )
+    assert pm_step.relation_effect is expected_effect
+
+
+@pytest.mark.parametrize("op", ("BW_maybe_shuffle", "BW_maybe_unshuffle"))
+def test_multirank_backward_permutation_ops_reject_incomplete_buddy_authority(op):
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "FW_gelu", [1], [30])],
+        pm_nodes=[Node(0, op, [10, 11], [40], [2, 0])],
+        tps=[(0, 40)],
+    )
+    ir.pm_num_ranks = 2
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported is False
+    assert plan.diagnostics[0].code is DiagnosticCode.INVALID_SIGNATURE
+    assert "complete ordered replica buddies" in plan.diagnostics[0].message
+
+
+@pytest.mark.parametrize("op", ("BW_maybe_shuffle", "BW_maybe_unshuffle"))
+def test_multirank_backward_permutation_uniform_bad_arity_reaches_signature_diagnostic(op):
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "FW_gelu", [1], [30])],
+        pm_nodes=[
+            Node(0, op, [10], [40], [2, 0]),
+            Node(1, op, [11], [41], [2, 1]),
+        ],
+        tps=[(0, 40), (1, 41)],
+    )
+    ir.pm_num_ranks = 2
+    ir.pm_replica_groups = (
+        parser_module.ReplicaGroup(
+            cid=1,
+            mb=0,
+            irname=op,
+            members=(
+                parser_module.ReplicaNodeRef(0, 40),
+                parser_module.ReplicaNodeRef(1, 41),
+            ),
+        ),
+    )
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported is False
+    assert plan.diagnostics[0].code is DiagnosticCode.INVALID_SIGNATURE
+    assert plan.diagnostics[0].message == (
+        f"operator {op} has no signature variant: expected 2 inputs, got 1"
+    )
+
+
 def test_duplicate_writer_accepts_only_structurally_equal_ancestry():
     registry = build_default_registry()
     ir = _goal_ir(
@@ -795,6 +981,12 @@ def test_duplicate_writer_accepts_only_structurally_equal_ancestry():
     ir.pm_num_ranks = 2
     assert compile_proof_plan(ir, registry).supported is True
 
+    ir.lineage.tps = [(0, 40)]
+    plan = compile_proof_plan(ir, registry)
+    assert plan.supported is False
+    assert plan.diagnostics[0].code is DiagnosticCode.INVALID_LINEAGE
+
+    ir.lineage.tps = [(1, 40)]
     ir.pm_shapes.append((12, [4, 4]))
     ir.pm_nodes[1].ins = [12]
     plan = compile_proof_plan(ir, registry)
@@ -830,15 +1022,964 @@ def test_real_goals_compile_fail_closed_relation_plans(monkeypatch):
         assert relation.unresolved_side_conditions == ()
 
 
+def test_gpt_goal3_matches_dynamic_k_sequence_sharded_embedding(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir, proof = planned_goal(3, str(root))
+
+    cert = relation_compiler_module.match_k_rank_sharded_ids_embedding_terminal(
+        ir, proof
+    )
+
+    assert cert.rule_id == "embedding-sharded-ids-k-rank"
+    assert cert.rank_count == 4
+    assert cert.shard_dim == 1
+    assert cert.sm_embedding_step == "sm:1:0"
+    assert cert.pm_chunk_steps == ("pm:1:0", "pm:3:0", "pm:5:0", "pm:7:0")
+    assert cert.pm_embedding_steps == ("pm:8:0", "pm:9:0", "pm:10:0", "pm:12:0")
+    assert cert.ids_tid == 716 and cert.weight_tid == 565
+    assert cert.output_fact == RelationFactSpec(
+        "sharded", tuple(proof.target_steps), gather_dim=1
+    )
+
+
+def test_gpt_goal3_renders_sparse_dynamic_k_sequence_embedding(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir, proof, relation = compiled_goal(3, str(root))
+    segment = relation.dependent_chain_plan.segments[0]
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert segment.sm_range == (0, 236) and segment.pm_range == (0, 1565)
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("foldl_faithful_middle_writer") == 9
+    assert "private theorem segment_000000_hSmEmbedding" in source
+    assert "private theorem segment_000000_hChunk0" in source
+    assert "private theorem segment_000000_hPmEmbedding3" in source
+    assert "ShardedRel.fw_embedding_shared_weight_dim1" in source
+    assert "ChunkedRel (smFinal 716) idsShards 1" in source
+    assert "hIds.toShardedRel hWeightEq hWeightLast" in source
+    assert "allGatherPrimDimN_chunks_ofFn" in source
+    assert "rankCount = 4" not in source
+    assert "Goal_3" not in source and "sorry" not in source
+
+
+def test_gpt_goal3_publication_accepts_ordered_sharded_terminal(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir, proof, relation = compiled_goal(3, str(root))
+
+    source = render_closed_public_theorem(ir, relation, "ClosedGPT2Goal3")
+
+    assert "htarget.shard_shapes" in source
+    assert source.count("have hPmPlain") == 4
+    assert "reconstructForGoal_of_not_replicated" in source
+    assert "joined terminal" not in source
+
+
+def test_gpt_goal4_uses_generic_direct_gather_fixed_point(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(4, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+
+    relation = compile_relation_plan(ir, proof)
+
+    rules = tuple(item.rule_id for item in relation.transition_specs)
+    assert relation.family == "direct-gather-k-rank"
+    assert relation.unresolved_frontiers == ()
+    assert relation.unresolved_layouts == ()
+    assert sum(slot.kind == "semantic" for slot in relation.coverage_plan.sm_nodes) == 3
+    assert sum(slot.kind == "semantic" for slot in relation.coverage_plan.pm_nodes) == 25
+    assert "add-sharded-k-rank" in rules
+    assert "embedding-sharded-ids-k-rank" in rules
+    assert "embedding-vocab-sharded-reduction-k-rank" in rules
+    assert "allreduce-reconstruction-k-rank" in rules
+    assert "alltoall-k-rank-layout-transport" in rules
+    assert "full-producer-chunks-k-rank" in rules
+
+
+def test_gpt_goal4_renders_interleaved_initial_embedding_scc(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(4, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+
+    source = render_closed_segment(ir, relation, "segment_000000")
+
+    assert "embedding-vocab-sharded-reduction-k-rank" not in source
+    assert "segment_000000_sequence_out" in source
+    assert "segment_000000_vocab_out" in source
+    assert "segment_000000_joined_out" in source
+    assert source.count("foldl (applyNodeDistributedFaithful") >= 2
+    assert "rankCount = 4" not in source and "Goal_4" not in source
+
+
+def test_gpt_goal5_renders_sparse_full_frame_layernorm(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(5, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(x for x in relation.dependent_chain_plan.segments
+                   if x.segment_id == "segment_000006")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert segment.sm_range == (4, 236) and segment.pm_range == (33, 1565)
+    assert source.count("@[irreducible] private def segment_000006_smFinal") == 1
+    assert source.count("@[irreducible] private def segment_000006_pmFinal") == 1
+    assert "private theorem segment_000006_smWriter" in source
+    assert "private theorem segment_000006_pmWriter3" in source
+    assert "smNodes.take 0" in source
+    assert "pmNodes.take 0" in source
+    assert "rankCount = 4" not in source
+
+
+def test_gpt_goal16_renders_interleaved_local_linear_tuple_once(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(16, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000008")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert segment.sm_range == (6, 8) and segment.pm_range == (41, 50)
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    assert "pmNodes.take 7" in source
+    assert "pmNodes.take 8" in source
+    assert "hLocalOut0" in source and "hLocalOut1" in source
+
+
+def test_gpt_goal16_renders_sparse_contraction_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(16, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000019")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert segment.sm_range == (16, 236) and segment.pm_range == (101, 105)
+    assert "smNodes.take 0" in source
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+
+
+def test_gpt_goal17_renders_sparse_div_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(17, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000022")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    transition = next(t for t in relation.transition_specs
+                      if t.transition_id in segment.transition_ids)
+    assert all(f"pmNodes.take {index - segment.pm_range[0]}" in source
+               for index in transition.pm_node_indices)
+
+
+def test_gpt_goal18_renders_sparse_softmax_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(18, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000024")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    transition = next(t for t in relation.transition_specs
+                      if t.transition_id in segment.transition_ids)
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    assert all(f"pmNodes.take {index - segment.pm_range[0]}" in source
+               for index in transition.pm_node_indices)
+
+
+def test_gpt_goal19_renders_sparse_output_axis_matmul_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(19, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000031")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    transition = next(t for t in relation.transition_specs
+                      if t.transition_id in segment.transition_ids)
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    assert all(f"pmNodes.take {index - segment.pm_range[0]}" in source
+               for index in transition.pm_node_indices)
+
+
+def test_gpt_goal21_renders_sparse_contiguous_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(21, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000034")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    transition = next(t for t in relation.transition_specs
+                      if t.transition_id in segment.transition_ids)
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    assert all(f"pmNodes.take {index - segment.pm_range[0]}" in source
+               for index in transition.pm_node_indices)
+
+
+def test_gpt_goal23_splits_large_sparse_output_linear_proof(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(23, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000037")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert "@[irreducible] private def segment_000037_smFinal" in source
+    assert "@[irreducible] private def segment_000037_pmFinal" in source
+    assert "private theorem segment_000037_smWriter" in source
+    assert "private theorem segment_000037_pmWriter3" in source
+    assert "private theorem segment_000037_out" in source
+    assert "private theorem segment_000037_sound" in source
+
+
+def test_gpt_goal27_renders_sparse_gelu_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(27, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000044")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    transition = next(t for t in relation.transition_specs
+                      if t.transition_id in segment.transition_ids)
+    frame_only = next(index for index in range(*segment.pm_range)
+                      if index not in transition.pm_node_indices)
+    assert composer_module._node_text(ir.pm_nodes[frame_only]) in source
+    assert "@[irreducible] private def segment_000044_smFinal" in source
+    assert "@[irreducible] private def segment_000044_pmFinal" in source
+    assert "private theorem segment_000044_smWriter" in source
+    assert "private theorem segment_000044_pmWriter3" in source
+    assert "private theorem segment_000044_out" in source
+    assert "private theorem segment_000044_sound" in source
+
+
+def test_gpt_goal28_splits_large_sparse_local_linear_proof(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(28, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000046")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert "@[irreducible] private def segment_000046_smFinal" in source
+    assert "@[irreducible] private def segment_000046_pmFinal" in source
+    assert "private theorem segment_000046_smWriter" in source
+    assert "private theorem segment_000046_pmWriter3" in source
+    assert "private theorem segment_000046_out" in source
+    assert "private theorem segment_000046_sound" in source
+
+
+def test_gpt_goal31_renders_sparse_reduction_linear_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(31, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000054")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    transition = next(t for t in relation.transition_specs
+                      if t.transition_id in segment.transition_ids)
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    assert all(f"pmNodes.take {index - segment.pm_range[0]}" in source
+               for index in transition.pm_node_indices)
+
+
+def test_gpt_goal41_renders_sparse_mixed_linear_sequence_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(41, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000053")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert "@[irreducible] private def segment_000053_smFinal" in source
+    assert "@[irreducible] private def segment_000053_pmFinal" in source
+    frame_transition_indices = {
+        index for tid in segment.transition_ids
+        for transition in relation.transition_specs if transition.transition_id == tid
+        for index in transition.pm_node_indices
+    }
+    frame_only = next(index for index in range(*segment.pm_range)
+                      if index not in frame_transition_indices)
+    assert composer_module._node_text(ir.pm_nodes[frame_only]) in source
+
+
+def test_gpt_goal41_renders_sparse_head_axis_matmul_full_frame(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(41, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000064")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    transition = next(t for t in relation.transition_specs
+                      if t.transition_id in segment.transition_ids)
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    assert all(f"pmNodes.take {index - segment.pm_range[0]}" in source
+               for index in transition.pm_node_indices)
+
+
+def test_gpt_goal44_renders_joined_views_and_allreduce_atomically(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(44, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000055")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert "@[irreducible] private def segment_000055_smFinal" in source
+    assert "@[irreducible] private def segment_000055_pmFinal" in source
+    assert "private theorem segment_000055_viewOut0" in source
+    assert "private theorem segment_000055_viewOut1" in source
+    assert "private theorem segment_000055_allReduceOut" in source
+    assert "private theorem segment_000055_publish" in source
+
+
+def test_gpt_goal44_renders_transpose_tuple_and_chunks_atomically(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(44, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000059")
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert "@[irreducible] private def segment_000059_smFinal" in source
+    assert "@[irreducible] private def segment_000059_pmFinal" in source
+    assert "private theorem segment_000059_transposeOut0" in source
+    assert "private theorem segment_000059_transposeOut1" in source
+    assert "private theorem segment_000059_chunksOut" in source
+    assert "show 4 = TrainVerify.Denote.Generated.pm.numRanks by rfl" in source
+    assert "private theorem segment_000059_publish" in source
+
+
+def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(107, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000097")
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+
+    assert tuple(transitions[item].rule_id for item in segment.transition_ids) == (
+        "linear-sharded-k-rank-dim1",
+        "allgather-reconstruction-k-rank",
+        "linear-output-sharded-k-rank",
+        "allgather-reconstruction-k-rank",
+        "linear-output-sharded-k-rank",
+    )
+    assert segment.sm_range == (62, 65)
+    assert segment.pm_range == (400, 414)
+    source = render_closed_segment(ir, relation, segment.segment_id)
+    assert source.count(
+        "@[irreducible] private def segment_000097_smFinal"
+    ) == 1
+    assert source.count(
+        "@[irreducible] private def segment_000097_pmFinal"
+    ) == 1
+    assert source.count("fw_linear_3d_allGatherPrimDimN_dim1_comm") == 1
+    assert source.count("RelationCompiler.ShardedRel.to_joined_allGather") == 2
+    assert source.count("fw_linear_3d_weight_allGatherPrimDimN_dim0_comm") == 2
+    assert "private theorem segment_000097_publish_state" in source
+
+    bw_sum = next(s for s in relation.dependent_chain_plan.segments
+                  if s.segment_id == "segment_000188")
+    assert tuple(transitions[item].rule_id for item in bw_sum.transition_ids) == (
+        "bw-sum-scalar-broadcast-dim2-k-rank",
+    )
+    bw_sum_source = render_closed_segment(ir, relation, bw_sum.segment_id)
+    assert "private def segment_000188" in bw_sum_source
+    assert "bw_sum_allGatherPrimDimN_dim2_rank3" in bw_sum_source
+    assert "have hcomm : bw_sum" in bw_sum_source
+    assert "simpa only [List.length_cons, List.length_nil, List.map] using" in bw_sum_source
+
+    bw_linear_dx = next(s for s in relation.dependent_chain_plan.segments
+                        if s.segment_id == "segment_000189")
+    assert tuple(transitions[item].rule_id for item in bw_linear_dx.transition_ids) == (
+        "bw-linear-dx-row-reduction-rank4",
+    )
+    assert bw_linear_dx.sm_range == (119, 120)
+    assert bw_linear_dx.pm_range == (779, 784)
+    bw_linear_dx_source = render_closed_segment(ir, relation, bw_linear_dx.segment_id)
+    assert "private def segment_000189" in bw_linear_dx_source
+    assert "bw_linear_dx_tp_split_dim2_4_g175" in bw_linear_dx_source
+    assert "bw_linear_dx_tp_split_dim2_4_g134" not in bw_linear_dx_source
+
+    bw_layernorm_dx = next(s for s in relation.dependent_chain_plan.segments
+                           if s.segment_id == "segment_000192")
+    assert tuple(transitions[item].rule_id for item in bw_layernorm_dx.transition_ids) == (
+        "bw-layernorm-dx-dim1-rank4-1-2-32",
+    )
+    bw_layernorm_dx_source = render_closed_segment(
+        ir, relation, bw_layernorm_dx.segment_id
+    )
+    assert "private def segment_000192" in bw_layernorm_dx_source
+    assert "bw_layernorm_dx_dp_split_dim1_4_1_2_32" in bw_layernorm_dx_source
+
+    bw_add = next(s for s in relation.dependent_chain_plan.segments
+                  if s.segment_id == "segment_000193")
+    assert tuple(transitions[item].rule_id for item in bw_add.transition_ids) == (
+        "bw-add-identity-sharded-k-rank",
+        "bw-add-identity-sharded-k-rank",
+    )
+    bw_add_source = render_closed_segment(ir, relation, bw_add.segment_id)
+    assert "private def segment_000193" in bw_add_source
+    assert "bw_add2_fst_same_shape" in bw_add_source
+    assert "bw_add2_snd_same_shape" in bw_add_source
+
+    bw_linear_column = next(s for s in relation.dependent_chain_plan.segments
+                            if s.segment_id == "segment_000195")
+    assert tuple(transitions[item].rule_id for item in bw_linear_column.transition_ids) == (
+        "bw-linear-dx-column-sharded-rank4",
+    )
+    bw_linear_column_source = render_closed_segment(
+        ir, relation, bw_linear_column.segment_id
+    )
+    assert "private def segment_000195" in bw_linear_column_source
+    assert "bw_linear_dx_wsplit_dim1_4_g213" in bw_linear_column_source
+
+    bw_gelu = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000197")
+    assert tuple(transitions[item].rule_id for item in bw_gelu.transition_ids) == (
+        "bw-gelu-pointwise-sharded-k-rank",
+    )
+    bw_gelu_source = render_closed_segment(ir, relation, bw_gelu.segment_id)
+    assert "private def segment_000197" in bw_gelu_source
+    assert "bw_gelu_allGatherPrimDimN_eq" in bw_gelu_source
+
+    bw_multiref = next(s for s in relation.dependent_chain_plan.segments
+                       if s.segment_id == "segment_000202")
+    assert tuple(transitions[item].rule_id for item in bw_multiref.transition_ids) == (
+        "bw-multiref-sum-sharded-k-rank",
+    )
+    bw_multiref_source = render_closed_segment(ir, relation, bw_multiref.segment_id)
+    assert "private def segment_000202" in bw_multiref_source
+    assert transitions[bw_multiref.transition_ids[0]].lean_theorem in bw_multiref_source
+
+    bw_view = next(s for s in relation.dependent_chain_plan.segments
+                   if s.segment_id == "segment_000207")
+    assert tuple(transitions[item].rule_id for item in bw_view.transition_ids) == (
+        "bw-view-joined",
+    )
+    bw_view_source = render_closed_segment(ir, relation, bw_view.segment_id)
+    assert "private def segment_000207" in bw_view_source
+    assert "JoinedRel.fw_view" in bw_view_source
+
+    bw_contiguous = next(s for s in relation.dependent_chain_plan.segments
+                         if s.segment_id == "segment_000209")
+    assert tuple(transitions[item].rule_id for item in bw_contiguous.transition_ids) == (
+        "contiguous-sharded-k-rank",
+    )
+    bw_contiguous_source = render_closed_segment(
+        ir, relation, bw_contiguous.segment_id
+    )
+    assert "private def segment_000209" in bw_contiguous_source
+    assert "applyNode_bw_contiguous_out" in bw_contiguous_source
+
+    bw_transpose = next(s for s in relation.dependent_chain_plan.segments
+                        if s.segment_id == "segment_000211")
+    assert tuple(transitions[item].rule_id for item in bw_transpose.transition_ids) == (
+        "transpose-sharded-k-rank",
+    )
+    bw_transpose_source = render_closed_segment(
+        ir, relation, bw_transpose.segment_id
+    )
+    assert "private def segment_000211" in bw_transpose_source
+    assert "applyNode_bw_transposeAxes_out" in bw_transpose_source
+
+    bw_matmul = next(s for s in relation.dependent_chain_plan.segments
+                     if s.segment_id == "segment_000213")
+    assert tuple(transitions[item].rule_id for item in bw_matmul.transition_ids) == (
+        "bw-matmul-snd-g-sharded-rank4",
+        "bw-matmul-fst-contraction-reduction-rank4",
+    )
+    bw_matmul_source = render_closed_segment(ir, relation, bw_matmul.segment_id)
+    assert "private def segment_000213" in bw_matmul_source
+    assert all(transitions[item].lean_theorem in bw_matmul_source
+               for item in bw_matmul.transition_ids)
+
+    bw_softmax = next(s for s in relation.dependent_chain_plan.segments
+                      if s.segment_id == "segment_000217")
+    assert tuple(transitions[item].rule_id for item in bw_softmax.transition_ids) == (
+        "transpose-sharded-k-rank",
+        "bw-softmax-sharded-dim1-rank4",
+    )
+    bw_softmax_source = render_closed_segment(ir, relation, bw_softmax.segment_id)
+    assert "private def segment_000217" in bw_softmax_source
+
+    bw_div = next(s for s in relation.dependent_chain_plan.segments
+                  if s.segment_id == "segment_000220")
+    assert tuple(transitions[item].rule_id for item in bw_div.transition_ids) == (
+        "bw-view-joined",
+        "div-sharded-k-rank-dim2",
+    )
+    bw_div_source = render_closed_segment(ir, relation, bw_div.segment_id)
+    assert "private def segment_000220" in bw_div_source
+
+    bw_attention = next(s for s in relation.dependent_chain_plan.segments
+                        if s.segment_id == "segment_000223")
+    assert tuple(transitions[item].rule_id for item in bw_attention.transition_ids) == (
+        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-matmul-batch-sharded-rank4",
+        "bw-matmul-batch-sharded-rank4",
+    )
+    bw_attention_source = render_closed_segment(
+        ir, relation, bw_attention.segment_id
+    )
+    assert "private def segment_000223" in bw_attention_source
+
+    transpose_alltoall = next(s for s in relation.dependent_chain_plan.segments
+                              if s.segment_id == "segment_000224")
+    assert tuple(transitions[item].rule_id for item in transpose_alltoall.transition_ids) == (
+        "transpose-sharded-k-rank",
+        "alltoall-k-rank-layout-transport",
+        "transpose-sharded-k-rank",
+    )
+    transpose_alltoall_source = render_closed_segment(
+        ir, relation, transpose_alltoall.segment_id
+    )
+    assert "private def segment_000224" in transpose_alltoall_source
+
+    view_transpose = next(s for s in relation.dependent_chain_plan.segments
+                          if s.segment_id == "segment_000227")
+    assert tuple(transitions[item].rule_id for item in view_transpose.transition_ids) == (
+        "bw-view-joined",
+        "transpose-sharded-k-rank",
+    )
+    view_transpose_source = render_closed_segment(
+        ir, relation, view_transpose.segment_id
+    )
+    assert "private def segment_000227" in view_transpose_source
+
+    mixed_backward = next(s for s in relation.dependent_chain_plan.segments
+                          if s.segment_id == "segment_000228")
+    assert tuple(transitions[item].rule_id for item in mixed_backward.transition_ids) == (
+        "bw-linear-dx-column-sharded-rank4",
+        "allgather-reconstruction-k-rank",
+        "bw-view-joined",
+        "alltoall-k-rank-layout-transport",
+    )
+    mixed_backward_source = render_closed_segment(
+        ir, relation, mixed_backward.segment_id
+    )
+    assert "private def segment_000228" in mixed_backward_source
+
+    triple_multiref = next(s for s in relation.dependent_chain_plan.segments
+                           if s.segment_id == "segment_000231")
+    assert tuple(transitions[item].rule_id for item in triple_multiref.transition_ids) == (
+        "bw-multiref-sum-sharded-k-rank",
+    )
+    triple_multiref_source = render_closed_segment(
+        ir, relation, triple_multiref.segment_id
+    )
+    assert "private def segment_000231" in triple_multiref_source
+
+    paired_batch_matmul = next(s for s in relation.dependent_chain_plan.segments
+                               if s.segment_id == "segment_000254")
+    assert tuple(transitions[item].rule_id for item in paired_batch_matmul.transition_ids) == (
+        "bw-matmul-batch-sharded-rank4",
+        "bw-matmul-batch-sharded-rank4",
+    )
+    paired_batch_matmul_source = render_closed_segment(
+        ir, relation, paired_batch_matmul.segment_id
+    )
+    assert "private def segment_000254" in paired_batch_matmul_source
+
+    softmax_transpose = next(s for s in relation.dependent_chain_plan.segments
+                             if s.segment_id == "segment_000256")
+    assert tuple(transitions[item].rule_id for item in softmax_transpose.transition_ids) == (
+        "bw-softmax-sharded-dim2-rank4",
+        "transpose-sharded-k-rank",
+    )
+    softmax_transpose_source = render_closed_segment(
+        ir, relation, softmax_transpose.segment_id
+    )
+    assert "private def segment_000256" in softmax_transpose_source
+
+    backward_div = next(s for s in relation.dependent_chain_plan.segments
+                        if s.segment_id == "segment_000257")
+    assert tuple(transitions[item].rule_id for item in backward_div.transition_ids) == (
+        "div-sharded-k-rank-dim2",
+    )
+    backward_div_source = render_closed_segment(
+        ir, relation, backward_div.segment_id
+    )
+    assert "private def segment_000257" in backward_div_source
+
+    matmul_view = next(s for s in relation.dependent_chain_plan.segments
+                       if s.segment_id == "segment_000259")
+    assert tuple(transitions[item].rule_id for item in matmul_view.transition_ids) == (
+        "bw-matmul-fst-query-sharded-rank4",
+        "bw-matmul-snd-contraction-reduction-rank4",
+        "bw-view-joined",
+    )
+    matmul_view_source = render_closed_segment(ir, relation, matmul_view.segment_id)
+    assert "private def segment_000259" in matmul_view_source
+
+    transpose_linear_transpose = next(s for s in relation.dependent_chain_plan.segments
+                                      if s.segment_id == "segment_000264")
+    assert tuple(transitions[item].rule_id for item in transpose_linear_transpose.transition_ids) == (
+        "transpose-sharded-k-rank",
+        "bw-linear-dx-sequence-sharded-rank4",
+        "transpose-sharded-k-rank",
+    )
+    transpose_linear_transpose_source = render_closed_segment(
+        ir, relation, transpose_linear_transpose.segment_id
+    )
+    assert "private def segment_000264" in transpose_linear_transpose_source
+
+    row_linear_view = next(s for s in relation.dependent_chain_plan.segments
+                           if s.segment_id == "segment_000270")
+    assert tuple(transitions[item].rule_id for item in row_linear_view.transition_ids) == (
+        "bw-linear-dx-row-reduction-rank4",
+        "bw-view-joined",
+    )
+    row_linear_view_source = render_closed_segment(
+        ir, relation, row_linear_view.segment_id
+    )
+    assert "private def segment_000270" in row_linear_view_source
+
+    wide_row_linear = next(s for s in relation.dependent_chain_plan.segments
+                           if s.segment_id == "segment_000282")
+    assert tuple(transitions[item].rule_id for item in wide_row_linear.transition_ids) == (
+        "bw-linear-dx-row-reduction-rank4",
+    )
+    assert transitions[wide_row_linear.transition_ids[0]].lean_theorem == (
+        "TrainVerify.Denote.bw_linear_dx_tp_split_dim2_4_g178"
+    )
+    wide_row_linear_source = render_closed_segment(
+        ir, relation, wide_row_linear.segment_id
+    )
+    assert "private def segment_000282" in wide_row_linear_source
+
+    dim2_pair_sum = next(s for s in relation.dependent_chain_plan.segments
+                         if s.segment_id == "segment_000292")
+    assert tuple(transitions[item].rule_id for item in dim2_pair_sum.transition_ids) == (
+        "bw-multiref-sum-sharded-k-rank",
+    )
+    assert transitions[dim2_pair_sum.transition_ids[0]].lean_theorem == (
+        "TrainVerify.Denote.tensorSum_pair_split_dim2_4_1_8_32"
+    )
+    dim2_pair_sum_source = render_closed_segment(
+        ir, relation, dim2_pair_sum.segment_id
+    )
+    assert "private def segment_000292" in dim2_pair_sum_source
+
+    sequence_linear = next(s for s in relation.dependent_chain_plan.segments
+                           if s.segment_id == "segment_000295")
+    assert tuple(transitions[item].rule_id for item in sequence_linear.transition_ids) == (
+        "bw-linear-dx-sequence-sharded-rank4",
+    )
+    sequence_linear_source = render_closed_segment(
+        ir, relation, sequence_linear.segment_id
+    )
+    assert "private def segment_000295" in sequence_linear_source
+
+    dual_axis_matmul = next(s for s in relation.dependent_chain_plan.segments
+                            if s.segment_id == "segment_000303")
+    assert tuple(transitions[item].rule_id for item in dual_axis_matmul.transition_ids) == (
+        "bw-matmul-snd-x-sharded-rank4",
+        "bw-matmul-fst-y-sharded-rank4",
+    )
+    dual_axis_matmul_source = render_closed_segment(
+        ir, relation, dual_axis_matmul.segment_id
+    )
+    assert "private def segment_000303" in dual_axis_matmul_source
+
+    dim3_transpose_softmax = next(s for s in relation.dependent_chain_plan.segments
+                                  if s.segment_id == "segment_000305")
+    assert tuple(transitions[item].rule_id for item in dim3_transpose_softmax.transition_ids) == (
+        "bw-softmax-sharded-dim2-rank4",
+        "transpose-sharded-k-rank",
+    )
+    dim3_transpose_softmax_source = render_closed_segment(
+        ir, relation, dim3_transpose_softmax.segment_id
+    )
+    assert "private def segment_000305" in dim3_transpose_softmax_source
+
+    interleaved_alltoall = next(s for s in relation.dependent_chain_plan.segments
+                                if s.segment_id == "segment_000312")
+    assert tuple(transitions[item].rule_id for item in interleaved_alltoall.transition_ids) == (
+        "alltoall-k-rank-layout-transport",
+        "alltoall-k-rank-layout-transport",
+    )
+    interleaved_alltoall_source = render_closed_segment(
+        ir, relation, interleaved_alltoall.segment_id
+    )
+    assert "private def segment_000312" in interleaved_alltoall_source
+
+    column_linear_view = next(s for s in relation.dependent_chain_plan.segments
+                              if s.segment_id == "segment_000320")
+    assert tuple(transitions[item].rule_id for item in column_linear_view.transition_ids) == (
+        "bw-linear-dx-column-sharded-rank4",
+        "bw-view-joined",
+    )
+    column_linear_view_source = render_closed_segment(
+        ir, relation, column_linear_view.segment_id
+    )
+    assert "private def segment_000320" in column_linear_view_source
+
+    wide_sequence_linear = next(s for s in relation.dependent_chain_plan.segments
+                                if s.segment_id == "segment_000330")
+    assert tuple(transitions[item].rule_id for item in wide_sequence_linear.transition_ids) == (
+        "bw-linear-dx-sequence-sharded-rank4",
+    )
+    assert transitions[wide_sequence_linear.transition_ids[0]].lean_theorem == (
+        "TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g143"
+    )
+    wide_sequence_linear_source = render_closed_segment(
+        ir, relation, wide_sequence_linear.segment_id
+    )
+    assert "private def segment_000330" in wide_sequence_linear_source
+
+    reconstruction_softmax = next(s for s in relation.dependent_chain_plan.segments
+                                   if s.segment_id == "segment_000348")
+    assert tuple(transitions[item].rule_id for item in reconstruction_softmax.transition_ids) == (
+        "transpose-sharded-k-rank",
+        "allreduce-reconstruction-k-rank",
+        "full-producer-chunks-k-rank",
+        "bw-softmax-sharded-dim2-rank4",
+        "allgather-reconstruction-k-rank",
+    )
+    reconstruction_softmax_source = render_closed_segment(
+        ir, relation, reconstruction_softmax.segment_id
+    )
+    assert "private def segment_000348" in reconstruction_softmax_source
+
+    view_alltoall_div_chunks = next(s for s in relation.dependent_chain_plan.segments
+                                    if s.segment_id == "segment_000349")
+    assert tuple(transitions[item].rule_id for item in view_alltoall_div_chunks.transition_ids) == (
+        "bw-view-joined",
+        "alltoall-k-rank-layout-transport",
+        "div-sharded-k-rank-dim1",
+        "full-producer-chunks-k-rank",
+    )
+    view_alltoall_div_chunks_source = render_closed_segment(
+        ir, relation, view_alltoall_div_chunks.segment_id
+    )
+    assert "private def segment_000349" in view_alltoall_div_chunks_source
+
+    linear_matmul_reconstruction = next(s for s in relation.dependent_chain_plan.segments
+                                        if s.segment_id == "segment_000350")
+    assert tuple(transitions[item].rule_id for item in linear_matmul_reconstruction.transition_ids) == (
+        "bw-linear-dx-row-reduction-rank4",
+        "allgather-reconstruction-k-rank",
+        "bw-matmul-fst-y-sharded-rank4",
+        "bw-matmul-snd-x-sharded-rank4",
+        "allreduce-reconstruction-k-rank",
+    )
+    linear_matmul_reconstruction_source = render_closed_segment(
+        ir, relation, linear_matmul_reconstruction.segment_id
+    )
+    assert "private def segment_000350" in linear_matmul_reconstruction_source
+
+    framed_sequence_linear = next(s for s in relation.dependent_chain_plan.segments
+                                  if s.segment_id == "segment_000362")
+    assert tuple(transitions[item].rule_id for item in framed_sequence_linear.transition_ids) == (
+        "bw-linear-dx-sequence-sharded-rank4",
+    )
+    framed_sequence_linear_source = render_closed_segment(
+        ir, relation, framed_sequence_linear.segment_id
+    )
+    assert "private def segment_000362" in framed_sequence_linear_source
+
+    singleton_bw_add_projection = next(s for s in relation.dependent_chain_plan.segments
+                                       if s.segment_id == "segment_000367")
+    assert tuple(transitions[item].rule_id for item in singleton_bw_add_projection.transition_ids) == (
+        "bw-add-identity-sharded-k-rank",
+    )
+    singleton_bw_add_projection_source = render_closed_segment(
+        ir, relation, singleton_bw_add_projection.segment_id
+    )
+    assert "private def segment_000367" in singleton_bw_add_projection_source
+
+    sparse_vocab_embedding = next(s for s in relation.dependent_chain_plan.segments
+                                  if s.segment_id == "segment_000369")
+    assert tuple(transitions[item].rule_id for item in sparse_vocab_embedding.transition_ids) == (
+        "bw-embedding-vocab-sharded-k-rank",
+    )
+    sparse_vocab_embedding_source = render_closed_segment(
+        ir, relation, sparse_vocab_embedding.segment_id
+    )
+    assert "private def segment_000369" in sparse_vocab_embedding_source
+
+    public_source = render_closed_public_theorem(ir, relation, "Goal107ClosedProbe")
+    assert "Goal107ClosedProbe_sharded_target_publication" in public_source
+
+    bundle = compose_closed_dependent_bundle(
+        ir, relation, "Goal107ClosedProbe", "denote.gpt_ly4_regen.Goal107ClosedProbe"
+    )
+    assert b"import denote.KRankTranspose23Extra" in bundle["Segment000224.lean"]
+    assert b"import denote.KRankMatmulQueryAxis" in bundle["Segment000259.lean"]
+    assert b"have hvalueExact : initSM 568 = initPM 568" in bundle["Public.lean"]
+    assert b"shape_contract := by simp only [List.length_cons, List.length_nil]; native_decide" in bundle["Public.lean"]
+    assert b"simpa only [List.length_cons, List.length_nil, allReducePrim_singleton_eq] using hp" in bundle["Public.lean"]
+
+
+def test_yoco3b_ce_projection_gather_reports_missing_public_contract_before_generic_fallback(
+    monkeypatch,
+):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCO3B.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote")
+    root = Path(__file__).resolve().parents[2]
+    ir, proof = planned_goal(1, str(root))
+
+    with pytest.raises(
+        RelationCompositionError,
+        match="CE .fst labels lack the exact public value-bound contract",
+    ):
+        compile_relation_plan(ir, proof)
+
+
+def test_gpt_goal9_duplicate_tid_lineage_names_cross_rank_final_writer(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote/gpt_ly4_regen")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedData.lean")
+    monkeypatch.setattr(parser_module, "MOD_PREFIX", "denote.gpt_ly4_regen")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(9, str(root))
+
+    proof = compile_proof_plan(ir, build_default_registry())
+
+    assert ir.lineage.tps == [(3, 577)]
+    assert proof.supported is True
+    assert all(item.code is not DiagnosticCode.INVALID_LINEAGE for item in proof.diagnostics)
+
+
 
 def test_ce_terminal_relation_plan_normalizes_the_backbone(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     by_id = {step.step_id: step for step in proof.steps}
     assert len(relation.certificates) > 1
     assert not any(
@@ -852,9 +1993,7 @@ def test_ce_terminal_unshuffle_discharges_cu_obligation_from_public_contract(mon
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     cert = next(item for item in relation.certificates if getattr(item, "rule_id", "") == "zigzag-to-ordinary-unshuffle-two-rank")
     assert cert.metadata_binding == "init:6252"
     assert cert.lean_theorem == "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.to_gather2_unshuffle"
@@ -925,9 +2064,7 @@ def test_goal1_ce_fst_retains_truthful_label_chunks_through_terminal(monkeypatch
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     terminal = next(item for item in relation.transition_specs
                     if item.rule_id == "inner-chunk-ce-projection-gather-two-rank")
     chunk_source = RelationFactSpec(
@@ -966,9 +2103,9 @@ def test_generic_linear_frontier_pass_checks_replicated_weight_and_layout(monkey
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof, peel_aliases=False, deduplicate_frontiers=False)
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
+    )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
         relation.unresolved_frontiers,
@@ -994,10 +2131,8 @@ def test_ordinary_moe_uses_full_expert_semantics_without_disjoint_assumptions(mo
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(
-        ir, proof, peel_aliases=False, deduplicate_frontiers=False
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
     )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
@@ -1043,10 +2178,8 @@ def test_generic_pointwise_sigmoid_and_swiglu_are_layout_typed(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(
-        ir, proof, peel_aliases=False, deduplicate_frontiers=False
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
     )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
@@ -1075,10 +2208,8 @@ def test_generic_broadcast_mul_expands_two_layout_typed_inputs(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(
-        ir, proof, peel_aliases=False, deduplicate_frontiers=False
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
     )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
@@ -1107,10 +2238,8 @@ def test_generic_to_and_per_head_linear_frontier_rules_are_shape_checked(monkeyp
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(
-        ir, proof, peel_aliases=False, deduplicate_frontiers=False
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
     )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
@@ -1142,10 +2271,8 @@ def test_generic_rotary_frontier_pass_groups_both_semantic_outputs(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(
-        ir, proof, peel_aliases=False, deduplicate_frontiers=False
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
     )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
@@ -1177,9 +2304,9 @@ def test_generic_topk_routing_groups_scores_and_map_outputs(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof, peel_aliases=False, deduplicate_frontiers=False)
+    ir, proof, relation = compiled_goal(
+        1, str(root), peel_aliases=False, deduplicate_frontiers=False
+    )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
         relation.unresolved_frontiers,
@@ -1220,9 +2347,7 @@ def test_zigzag_full_expert_moe_closes_with_two_weight_lineages(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(3, str(root))
     assert relation.unresolved_frontiers == ()
     assert relation.unresolved_side_conditions == ()
     certs = [
@@ -1246,9 +2371,7 @@ def test_zigzag_full_producer_chunks_preserve_input_relation_and_weight_lineage(
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     by_id = {step.step_id: step for step in proof.steps}
     assert all(
         by_id[frontier[0]].op != "FW_per_head_mix_precision_linear"
@@ -1274,9 +2397,7 @@ def test_zigzag_certificate_dag_resolves_aliases_to_public_metadata_region(monke
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     regions, authority_by_frontier = resolve_zigzag_metadata_regions(
         ir, relation.certificates, relation.unresolved_frontiers, relation.unresolved_layouts
     )
@@ -1295,9 +2416,7 @@ def test_hidden_sharded_embedding_alltoall_closes_from_explicit_init_lineage(mon
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     certs = [item for item in relation.certificates if getattr(item, "rule_id", "") == "hidden-sharded-embedding-alltoall-ordinary-two-rank"]
     frontiers = relation.unresolved_frontiers
     layouts = relation.unresolved_layouts
@@ -1321,9 +2440,7 @@ def test_faithful_shuffle_certificate_uses_public_metadata_alias_authority(monke
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     certs = [item for item in relation.certificates if getattr(item, "rule_id", "") == "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank"]
     frontiers = relation.unresolved_frontiers
     layouts = relation.unresolved_layouts
@@ -1350,9 +2467,7 @@ def test_ordinary_full_producer_chunks_reduce_to_true_allgather_sources(monkeypa
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     certs = [
         item for item in relation.certificates
         if getattr(item, "rule_id", "").endswith("full-producer-chunks-ordinary-two-rank")
@@ -1377,9 +2492,7 @@ def test_init_full_tensor_chunk_boundaries_close_from_explicit_lineage(monkeypat
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     certs = [item for item in relation.certificates if getattr(item, "rule_id", "") == "init-lineage-full-to-two-chunks"]
     assert certs
     assert len({item.sm_tid for item in certs}) == len(certs)
@@ -1413,8 +2526,7 @@ def test_relation_plan_retains_deterministic_frontier_certificates(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
+    ir, proof = planned_goal(3, str(root))
     first = compile_relation_plan(ir, proof)
     second = compile_relation_plan(ir, proof)
     assert first.certificates
@@ -1447,10 +2559,8 @@ def test_generic_attention_frontier_pass_expands_layout_typed_qkv(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(
-        ir, proof, peel_aliases=False, deduplicate_frontiers=False
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
     )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
@@ -1485,10 +2595,8 @@ def test_generic_flatten_3d_frontier_pass_checks_shape_product(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(
-        ir, proof, peel_aliases=False, deduplicate_frontiers=False
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
     )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
@@ -1513,9 +2621,9 @@ def test_generic_identity_reshape_uses_same_shape_gated_rule(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof, peel_aliases=False, deduplicate_frontiers=False)
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
+    )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
         relation.unresolved_frontiers,
@@ -1541,9 +2649,9 @@ def test_generic_identity_view_frontier_pass_is_shape_gated(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof, peel_aliases=False, deduplicate_frontiers=False)
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
+    )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
         relation.unresolved_frontiers,
@@ -1572,9 +2680,9 @@ def test_generic_float_frontier_pass_preserves_explicit_layout(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof, peel_aliases=False, deduplicate_frontiers=False)
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
+    )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
         relation.unresolved_frontiers,
@@ -1599,9 +2707,9 @@ def test_generic_add_frontier_pass_expands_binary_relation_dag(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof, peel_aliases=False, deduplicate_frontiers=False)
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
+    )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
         relation.unresolved_frontiers,
@@ -1628,9 +2736,9 @@ def test_generic_rms_norm_frontier_pass_preserves_explicit_layout(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof, peel_aliases=False, deduplicate_frontiers=False)
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
+    )
     staged_frontiers, staged_layouts = normalize_relation_frontiers(
         proof,
         relation.unresolved_frontiers,
@@ -1658,9 +2766,9 @@ def test_generic_multiref_frontier_pass_peels_all_aliases(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof, peel_aliases=False, deduplicate_frontiers=False)
+    ir, proof, relation = compiled_goal(
+        3, str(root), peel_aliases=False, deduplicate_frontiers=False
+    )
     aliases, frontiers = peel_multiref_relation_frontiers(
         proof, relation.unresolved_frontiers, relation.unresolved_layouts
     )
@@ -1679,8 +2787,7 @@ def test_zigzag_attention_q_reduces_gather_linear_chunk_to_zigzag_input(monkeypa
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
+    ir, proof = planned_goal(3, str(root))
     terminal = match_indexed_stack_gather_two_rank(ir, proof)
     layers = build_indexed_stack_layer_relations(proof, terminal)
     chunks = build_chunk_reconstruction_relations(proof, terminal, layers)
@@ -1702,8 +2809,7 @@ def test_zigzag_attention_kv_remains_ordinary_through_to_alias_and_linear(monkey
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
+    ir, proof = planned_goal(3, str(root))
     terminal = match_indexed_stack_gather_two_rank(ir, proof)
     layers = build_indexed_stack_layer_relations(proof, terminal)
     chunks = build_chunk_reconstruction_relations(proof, terminal, layers)
@@ -1728,8 +2834,7 @@ def test_ordinary_attention_qkv_builds_joint_rotary_and_v_linear_certificates(mo
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
+    ir, proof = planned_goal(3, str(root))
     terminal = match_indexed_stack_gather_two_rank(ir, proof)
     layers = build_indexed_stack_layer_relations(proof, terminal)
     chunks = build_chunk_reconstruction_relations(proof, terminal, layers)
@@ -1755,8 +2860,7 @@ def test_attention_frontiers_build_layout_specific_qkv_certificates(monkeypatch)
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
+    ir, proof = planned_goal(3, str(root))
     terminal = match_indexed_stack_gather_two_rank(ir, proof)
     layers = build_indexed_stack_layer_relations(proof, terminal)
     chunks = build_chunk_reconstruction_relations(proof, terminal, layers)
@@ -1781,9 +2885,7 @@ def test_relation_plan_advances_right_frontiers_to_attention_nodes(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(3, str(root))
     assert relation.unresolved_frontiers == ()
     assert relation.unresolved_layouts == ()
     attention = [
@@ -2063,8 +3165,7 @@ def test_faithful_moe_certificate_uses_buddy_expanded_full_semantics(monkeypatch
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
+    ir, proof = planned_goal(3, str(root))
     sm = next(step for step in proof.steps if step.side == "sm" and step.op == "FW_all2all_moe_gmm")
     pm = [step for step in proof.steps if step.side == "pm" and step.op == "FW_all2all_moe_gmm"][:2]
     assert sm.declared_input_tids == (7780, 4963, 4964, 4966, 4967)
@@ -2975,9 +4076,7 @@ def test_certificate_transition_adapters_are_closed_and_extract_exact_node_footp
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     transitions = build_certificate_transition_specs(proof, relation.certificates)
     assert transitions
     assert len({item.transition_id for item in transitions}) == len(transitions)
@@ -2996,9 +4095,7 @@ def test_exact_node_coverage_plan_accounts_for_every_authority_node_once(monkeyp
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(3, str(root))
     transitions = build_certificate_transition_specs(proof, relation.certificates)
     coverage = build_exact_node_coverage_plan(ir, transitions)
     assert tuple(item.node_index for item in coverage.sm_nodes) == tuple(range(len(ir.sm_nodes)))
@@ -3020,9 +4117,7 @@ def test_indexed_terminal_chunks_use_layout_typed_full_producer_certificates(mon
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(3, str(root))
     mixed = {
         item.output_step_triple: item for item in relation.certificates
         if getattr(item, "rule_id", "").endswith("full-producer-chunks-zigzag-two-rank")
@@ -3044,9 +4139,7 @@ def test_indexed_stack_terminal_refuses_false_ordinary_dim0_publication(monkeypa
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(3, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(3, str(root))
 
     terminal = next(
         transition for transition in relation.transition_specs
@@ -3098,7 +4191,15 @@ def test_transition_dependency_plan_is_forward_unique_and_cycle_free(monkeypatch
             build_certificate_transition_specs(proof, relation.certificates)
             + build_synchronized_transition_specs(relation.synchronized_steps)
         )
-        dependencies = build_transition_dependency_plan(transitions)
+        external = frozenset(
+            fact
+            for transition in transitions
+            for fact in transition.pre_facts
+            if relation_compiler_module._is_external_relation_fact(fact)
+        )
+        dependencies = build_transition_dependency_plan(
+            transitions, external_pre_facts=external
+        )
         assert len(dependencies.order) == len(transitions)
         position = {transition_id: index for index, transition_id in enumerate(dependencies.order)}
         assert len(position) == len(transitions)
@@ -3115,6 +4216,22 @@ def test_transition_dependency_plan_is_forward_unique_and_cycle_free(monkeypatch
     with pytest.raises(RelationCompositionError, match="has no producer"):
         build_transition_dependency_plan((*transitions[:-1], dangling))
 
+    non_init_external = replace(
+        transitions[-1].pre_facts[0],
+        step_triple=("sm:999:0", "pm:999:0", "pm:1000:0"),
+    )
+    invalid_externalized = replace(
+        transitions[-1], pre_facts=(non_init_external,)
+    )
+    with pytest.raises(
+        RelationCompositionError,
+        match="external pre-fact is not pure init authority",
+    ):
+        build_transition_dependency_plan(
+            (*transitions[:-1], invalid_externalized),
+            external_pre_facts=external | frozenset({non_init_external}),
+        )
+
 
 def test_atomic_schedule_freezes_shared_owners_and_is_deterministic(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
@@ -3129,8 +4246,18 @@ def test_atomic_schedule_freezes_shared_owners_and_is_deterministic(monkeypatch)
             build_certificate_transition_specs(proof, relation.certificates)
             + build_synchronized_transition_specs(relation.synchronized_steps)
         )
-        schedule = build_atomic_schedule(ir, transitions)
-        rerun = build_atomic_schedule(ir, tuple(reversed(transitions)))
+        external = frozenset(
+            fact
+            for transition in transitions
+            for fact in transition.pre_facts
+            if relation_compiler_module._is_external_relation_fact(fact)
+        )
+        schedule = build_atomic_schedule(
+            ir, transitions, external_pre_facts=external
+        )
+        rerun = build_atomic_schedule(
+            ir, tuple(reversed(transitions)), external_pre_facts=external
+        )
         assert schedule.complete is True
         assert schedule.digest == rerun.digest
         assert schedule.order == rerun.order
@@ -3140,7 +4267,9 @@ def test_atomic_schedule_freezes_shared_owners_and_is_deterministic(monkeypatch)
         assert all(component.transition_ids for component in schedule.components)
         assert all(component.sm_range[1] >= component.sm_range[0] for component in schedule.components)
         changed_rule = replace(transitions[0], rule_id=transitions[0].rule_id + "-mutated")
-        mutated = build_atomic_schedule(ir, (changed_rule, *transitions[1:]))
+        mutated = build_atomic_schedule(
+            ir, (changed_rule, *transitions[1:]), external_pre_facts=external
+        )
         assert mutated.transition_digest != schedule.transition_digest
         assert mutated.digest != schedule.digest
         assert all(component.pm_range[1] >= component.pm_range[0] for component in schedule.components)
@@ -3150,7 +4279,11 @@ def test_atomic_schedule_freezes_shared_owners_and_is_deterministic(monkeypatch)
             assert all(schedule.pm_node_components[index] == component_id for index in transition.pm_node_indices)
     broken = replace(transitions[-1], pm_node_indices=(len(ir.pm_nodes),))
     with pytest.raises(RelationCompositionError, match="out of bounds"):
-        build_atomic_schedule(ir, (*transitions[:-1], broken))
+        build_atomic_schedule(
+            ir,
+            (*transitions[:-1], broken),
+            external_pre_facts=external,
+        )
 
 
 def test_k_rank_sum_allreduce_terminal_is_topology_and_shape_derived():
@@ -3432,6 +4565,34 @@ def test_k_rank_hidden_sharded_embedding_uses_ordered_init_weight_authority():
     )
 
 
+def test_k_rank_hidden_sharded_embedding_supports_vector_ids_rank2_outputs():
+    sm = SimpleNamespace(
+        step_id="sm:1:0", side="sm", op="FW_embedding", rank=0,
+        input_bindings=("init:40", "init:50"),
+        input_shapes=((4096,), (100, 16)), parameters=(), output_shape=(4096, 16),
+    )
+    pm = tuple(
+        SimpleNamespace(
+            step_id=f"pm:{rank}:0", side="pm", op="FW_embedding", rank=rank,
+            input_bindings=("init:40", f"init:{60 + rank}"),
+            input_shapes=((4096,), (100, 8)), parameters=(), output_shape=(4096, 8),
+        )
+        for rank in range(2)
+    )
+    lineage = SimpleNamespace(
+        ts=50, tsShape=[100, 16], tps=[(rank, 60 + rank) for rank in range(2)],
+        tpShapes=[[100, 8] for _ in range(2)], gatherDim=1, replicated=False,
+    )
+    frontier = (sm.step_id, *(step.step_id for step in pm))
+    certs, _, _ = relation_compiler_module.advance_k_rank_hidden_sharded_embedding(
+        SimpleNamespace(steps=(sm, *pm)), SimpleNamespace(init_lineages={50: lineage}),
+        (frontier,), ("sharded",),
+    )
+    assert len(certs) == 1
+    assert certs[0].output_fact == RelationFactSpec("sharded", frontier, gather_dim=1)
+    assert certs[0].lean_theorem == "TrainVerify.Denote.fw_embedding_hidden_shards_two"
+
+
 def test_k_rank_hidden_sharded_embedding_rejects_distinct_ids_authority():
     sm = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_embedding", rank=0,
                          input_bindings=("init:40", "init:50"), output_shape=(1, 8, 16))
@@ -3613,6 +4774,7 @@ def test_k_rank_output_sharded_linear_uses_joined_activation_and_init_weight_aut
     pm_out = tuple(
         SimpleNamespace(step_id=f"pm:{rank + 1}:0", side="pm", op="FW_linear", rank=rank,
                         input_bindings=(pm_activation.step_id, f"init:{60 + rank}"),
+                        input_shapes=((1, 8, 12), (4, 12)),
                         output_shape=(1, 8, 4))
         for rank in range(4)
     )
@@ -4010,9 +5172,12 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4, fram
             pm_chunk_steps=tuple(f"pm:{rank + 1}:0" for rank in range(rank_count)),
             lean_theorem="TrainVerify.Denote.allGatherPrimDimN_chunks_ofFn",
         )
-        transition = relation_compiler_module.CertificateTransitionSpec(
-            "transition", certificate.rule_id, (pre_spec,), (post_spec,), (),
-            tuple(range(1, rank_count + 1)), certificate.lean_theorem,
+        transition = _bind_certificate_digest(
+            relation_compiler_module.CertificateTransitionSpec(
+                "transition", certificate.rule_id, (pre_spec,), (post_spec,), (),
+                tuple(range(1, rank_count + 1)), certificate.lean_theorem,
+            ),
+            certificate,
         )
         sm_nodes = [Node(0, "FW_identity", [1], [10], [])]
         pm_nodes = [
@@ -4052,9 +5217,12 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4, fram
             pm_sum_steps=tuple(f"pm:{index}:0" for index in pm_writer_indices),
             lean_theorem="TrainVerify.Denote.fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum",
         )
-        transition = relation_compiler_module.CertificateTransitionSpec(
-            "transition", certificate.rule_id, (pre_spec,), (post_spec,), (sm_writer_index,),
-            pm_writer_indices, certificate.lean_theorem,
+        transition = _bind_certificate_digest(
+            relation_compiler_module.CertificateTransitionSpec(
+                "transition", certificate.rule_id, (pre_spec,), (post_spec,),
+                (sm_writer_index,), pm_writer_indices, certificate.lean_theorem,
+            ),
+            certificate,
         )
         sm_nodes = [Node(0, "FW_identity", [1], [10], [])]
         pm_nodes = [Node(rank, "FW_identity", [2 + rank], [20 + rank], [])
@@ -4102,9 +5270,12 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4, fram
             pm_step_ids=tuple(f"pm:{rank}:0" for rank in range(rank_count)),
             lean_theorem="TrainVerify.Denote.allGatherPrimDimN_allToAllPrimWithDims_ofFn",
         )
-        transition = relation_compiler_module.CertificateTransitionSpec(
-            "transition", certificate.rule_id, (pre_spec,), (post_spec,), (),
-            tuple(range(rank_count)), certificate.lean_theorem,
+        transition = _bind_certificate_digest(
+            relation_compiler_module.CertificateTransitionSpec(
+                "transition", certificate.rule_id, (pre_spec,), (post_spec,), (),
+                tuple(range(rank_count)), certificate.lean_theorem,
+            ),
+            certificate,
         )
         inputs = [20 + rank for rank in range(rank_count)]
         sm_nodes = []
@@ -4176,7 +5347,8 @@ def _synthetic_k_rank_multiref_relation(component_count, rank_count=4):
     certificates = tuple(
         relation_compiler_module.KRankMultirefRelationCertificate(
             rule_id="multiref-sharded-k-rank", rank_count=rank_count, gather_dim=1,
-            projection=projection, arity=component_count,
+            projection=projection, pm_projections=(projection,) * rank_count,
+            arity=component_count,
             input_fact=input_spec, output_fact=output_specs[projection],
             sm_step_id=f"sm:{sm_index}:{projection}",
             pm_step_ids=tuple(
@@ -4187,10 +5359,13 @@ def _synthetic_k_rank_multiref_relation(component_count, rank_count=4):
         for projection in range(component_count)
     )
     transitions = tuple(
-        relation_compiler_module.CertificateTransitionSpec(
-            f"transition_{projection}", certificate.rule_id,
-            (input_spec,), (output_specs[projection],), (sm_index,),
-            tuple(range(pm_start, pm_start + rank_count)), certificate.lean_theorem,
+        _bind_certificate_digest(
+            relation_compiler_module.CertificateTransitionSpec(
+                f"transition_{projection}", certificate.rule_id,
+                (input_spec,), (output_specs[projection],), (sm_index,),
+                tuple(range(pm_start, pm_start + rank_count)), certificate.lean_theorem,
+            ),
+            certificate,
         )
         for projection, certificate in enumerate(certificates)
     )
@@ -4237,13 +5412,15 @@ def _synthetic_k_rank_multiref_relation(component_count, rank_count=4):
     return ir, relation
 
 
-def _synthetic_vocab_embedding_reduction_relation(rank_count=3):
+def _synthetic_vocab_embedding_reduction_relation(rank_count=3, *, framed=False):
     shard_rows, hidden = 7, 12
+    sm_writer_index = 1 if framed else 0
+    pm_writer_indices = tuple(2 * rank for rank in range(rank_count)) if framed else tuple(range(rank_count))
     weight_spec = RelationFactSpec(
         "sharded", ("init:50", *(f"init:{60 + rank}" for rank in range(rank_count))), gather_dim=0,
     )
     reduction_spec = RelationFactSpec(
-        "reduction", ("sm:0:0", *(f"pm:{rank}:0" for rank in range(rank_count))),
+        "reduction", (f"sm:{sm_writer_index}:0", *(f"pm:{index}:0" for index in pm_writer_indices)),
     )
     weight = relation_compiler_module.ClosedRelationFactRecord(
         "fact_weight", weight_spec, "sharded", 50, tuple(60 + r for r in range(rank_count)),
@@ -4263,19 +5440,23 @@ def _synthetic_vocab_embedding_reduction_relation(rank_count=3):
         rule_id="embedding-vocab-sharded-reduction-k-rank", rank_count=rank_count,
         ids_tid=40, shard_rows=shard_rows, hidden_size=hidden, ids_shape=(1, 8),
         full_weight_shape=(rank_count * shard_rows, hidden), shard_weight_shape=(shard_rows, hidden),
-        weight_fact=weight_spec, output_fact=reduction_spec, sm_step_id="sm:0:0",
-        pm_step_ids=tuple(f"pm:{rank}:0" for rank in range(rank_count)),
+        weight_fact=weight_spec, output_fact=reduction_spec,
+        sm_step_id=f"sm:{sm_writer_index}:0",
+        pm_step_ids=tuple(f"pm:{index}:0" for index in pm_writer_indices),
         lean_theorem="TrainVerify.Denote.fw_embedding_eq_allReduce_offset_shards",
     )
-    transition = relation_compiler_module.CertificateTransitionSpec(
-        "transition", certificate.rule_id, (weight_spec,), (reduction_spec,), (0,),
-        tuple(range(rank_count)), certificate.lean_theorem,
-        (
-            relation_compiler_module.TransitionAuthorityRequirement(
-                "tensor_eq", ("sm", "pm"), (40, 40)),
-            relation_compiler_module.TransitionAuthorityRequirement(
-                "tensor_shape", ("pm",), (40,), (1, 8)),
+    transition = _bind_certificate_digest(
+        relation_compiler_module.CertificateTransitionSpec(
+            "transition", certificate.rule_id, (weight_spec,), (reduction_spec,),
+            (sm_writer_index,), pm_writer_indices, certificate.lean_theorem,
+            (
+                relation_compiler_module.TransitionAuthorityRequirement(
+                    "tensor_eq", ("sm", "pm"), (40, 40)),
+                relation_compiler_module.TransitionAuthorityRequirement(
+                    "tensor_shape", ("pm",), (40,), (1, 8)),
+            ),
         ),
+        certificate,
     )
     ids_shape = relation_compiler_module.ClosedTensorShapeFactRecord(
         "authority_ids_shape_40", "pm", 40, (1, 8), 40,
@@ -4288,9 +5469,24 @@ def _synthetic_vocab_embedding_reduction_relation(rank_count=3):
             "state_post", ("anchor", "authority_ids_eq_40", "authority_ids_shape_40", "fact_reduction")
         ),
     )
+    sm_writer = Node(0, "FW_embedding", [40, 50], [100], [])
+    pm_writers = [
+        Node(rank, "FW_embedding", [40, 60 + rank], [200 + rank], [rank * shard_rows])
+        for rank in range(rank_count)
+    ]
+    if framed:
+        sm_nodes = [Node(0, "FW_identity", [9000], [9001]), sm_writer,
+                    Node(0, "FW_identity", [9002], [9003])]
+        pm_nodes = []
+        for rank, writer in enumerate(pm_writers):
+            pm_nodes.append(writer)
+            if rank + 1 < rank_count:
+                pm_nodes.append(Node(rank, "FW_identity", [9100 + rank], [9200 + rank]))
+    else:
+        sm_nodes, pm_nodes = [sm_writer], pm_writers
     segment = relation_compiler_module.ClosedDependentSegmentRecord(
         "segment_000000", "component", "state_pre", "state_post", ("transition",),
-        (0, 1), (0, rank_count),
+        (0, len(sm_nodes)), (0, len(pm_nodes)),
     )
     chain = SimpleNamespace(
         complete=True, relation_facts=(weight, reduction), authority_facts=(ids_eq, ids_shape),
@@ -4300,9 +5496,8 @@ def _synthetic_vocab_embedding_reduction_relation(rank_count=3):
         dependent_chain_plan=chain, transition_specs=(transition,), certificates=(certificate,),
     )
     ir = SimpleNamespace(
-        sm_nodes=[Node(0, "FW_embedding", [40, 50], [100], [])],
-        pm_nodes=[Node(rank, "FW_embedding", [40, 60 + rank], [200 + rank], [rank * shard_rows])
-                  for rank in range(rank_count)],
+        sm_nodes=sm_nodes,
+        pm_nodes=pm_nodes,
         sm_num_ranks=1, pm_num_ranks=rank_count,
         sm_graph_ref="SyntheticEmbedding.smGraph", pm_graph_ref="SyntheticEmbedding.pmGraph",
     )
@@ -4447,8 +5642,20 @@ def _synthetic_mixed_embedding_relation(rank_count=3):
     req = lambda tid: (
         relation_compiler_module.TransitionAuthorityRequirement("tensor_eq", ("sm", "pm"), (tid, tid)),
         relation_compiler_module.TransitionAuthorityRequirement("tensor_shape", ("pm",), (tid,), (1, 8)))
-    ht = relation_compiler_module.CertificateTransitionSpec("hidden", hc.rule_id, (hs,), (ho,), (0,), tuple(2*r for r in range(rank_count)), hc.lean_theorem, req(hidden_ids))
-    vt = relation_compiler_module.CertificateTransitionSpec("vocab", vc.rule_id, (vs,), (vo,), (1,), tuple(2*r+1 for r in range(rank_count)), vc.lean_theorem, req(vocab_ids))
+    ht = _bind_certificate_digest(
+        relation_compiler_module.CertificateTransitionSpec(
+            "hidden", hc.rule_id, (hs,), (ho,), (0,),
+            tuple(2*r for r in range(rank_count)), hc.lean_theorem, req(hidden_ids)
+        ),
+        hc,
+    )
+    vt = _bind_certificate_digest(
+        relation_compiler_module.CertificateTransitionSpec(
+            "vocab", vc.rule_id, (vs,), (vo,), (1,),
+            tuple(2*r+1 for r in range(rank_count)), vc.lean_theorem, req(vocab_ids)
+        ),
+        vc,
+    )
     pre_ids = ("anchor", "hidden_eq", "hidden_shape", "vocab_eq", "vocab_shape", "fact_hidden_weight", "fact_vocab_weight")
     states = (relation_compiler_module.ClosedRelationStateRecord("state_pre", pre_ids), relation_compiler_module.ClosedRelationStateRecord("state_post", pre_ids[:-2] + ("fact_hidden_output", "fact_reduction")))
     segment = relation_compiler_module.ClosedDependentSegmentRecord("segment_000000", "component", "state_pre", "state_post", ("hidden", "vocab"), (0, 2), (0, 2*rank_count))
@@ -4521,6 +5728,20 @@ def test_closed_vocab_embedding_reduction_segment_is_dynamic_exact_and_offset_aw
     witness = tmp_path / "GeneratedVocabEmbeddingReductionWitness.lean"
     witness.write_text(witness_source)
     assert witness.read_text() == witness_source
+
+
+def test_closed_vocab_embedding_reduction_accepts_sparse_writers_in_full_frame():
+    ir, relation = _synthetic_vocab_embedding_reduction_relation(rank_count=3, framed=True)
+
+    source = render_closed_segment(ir, relation, "segment_000000")
+
+    assert source.count('op := "OpName.FW_identity"') >= 4
+    assert "smNodes.take 1" in source
+    assert "pmNodes.take 0" in source
+    assert "pmNodes.take 2" in source
+    assert "pmNodes.take 4" in source
+    assert source.count("foldl_faithful_middle_writer") >= 4
+    assert "sorry" not in source and "False.elim" not in source
 
 
 def test_closed_k_rank_full_producer_chunks_segment_is_generic_and_exact():
@@ -4794,7 +6015,7 @@ def test_closed_k_rank_segment_rejects_wrong_writer_footprint_and_embedding_exac
     ir, relation = _synthetic_k_rank_segment_relation(family="chunks")
     bad_transition = replace(relation.transition_specs[0], pm_node_indices=(0, 1, 2, 3, 4))
     bad = SimpleNamespace(**{**relation.__dict__, "transition_specs": (bad_transition,)})
-    with pytest.raises(ValueError, match="exactly the ordered ChunkPrim writers"):
+    with pytest.raises(ValueError, match="writers must lie inside the complete PM frame"):
         render_closed_segment(ir, bad, "segment_000000")
 
     embedding = replace(
@@ -4805,8 +6026,7 @@ def test_closed_k_rank_segment_rejects_wrong_writer_footprint_and_embedding_exac
     unsupported = SimpleNamespace(**{**relation.__dict__, "transition_specs": (embedding,)})
     with pytest.raises(
         ValueError,
-        match=("K-rank hidden-sharded embedding remains unsupported: checked semantic "
-               "declaration TrainVerify.Denote.fw_embedding_hidden_shards_k_rank does not exist"),
+        match="embedding-hidden-sharded-k-rank lacks one exact typed certificate",
     ):
         render_closed_segment(ir, unsupported, "segment_000000")
 
@@ -5095,7 +6315,12 @@ def test_closed_relation_facts_materialize_exact_tids_shapes_and_metadata(monkey
             assert fact.shard_shape
             if fact.source.step_triple in shuffle_outputs:
                 assert fact.metadata_tid == shuffle_outputs[fact.source.step_triple]
-            assert fact.sm_tid >= 0 and fact.pm_rank0_tid >= 0 and fact.pm_rank1_tid >= 0
+            assert fact.sm_tid >= 0
+            if fact.kind == "joined":
+                assert fact.joined_pm_tid is not None and fact.joined_pm_tid >= 0
+                assert fact.pm_tids == ()
+            else:
+                assert fact.pm_tids and all(tid >= 0 for tid in fact.pm_tids)
             if fact.kind == "zigzag":
                 assert fact.metadata_tid is not None
                 assert fact.metadata_region_id is not None
@@ -5147,9 +6372,7 @@ def test_closed_relation_declarations_are_deterministic_and_closed(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     chain = relation.dependent_chain_plan
     source = render_closed_relation_declarations(chain, "GeneratedClosedStateFixture")
     assert source == render_closed_relation_declarations(chain, "GeneratedClosedStateFixture")
@@ -5167,9 +6390,7 @@ def test_closed_float_segment_renderer_is_graph_derived(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     chain = relation.dependent_chain_plan
     segment = next(
         item for item in chain.segments
@@ -5192,9 +6413,7 @@ def test_closed_multiref_segment_renderer_is_graph_derived(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     by_id = {item.transition_id: item for item in relation.transition_specs}
     segment = next(
         item for item in relation.dependent_chain_plan.segments
@@ -5217,15 +6436,14 @@ def test_closed_rms_norm_segment_renderer_is_graph_derived(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     by_id = {item.transition_id: item for item in relation.transition_specs}
     segment = next(item for item in relation.dependent_chain_plan.segments
         if len(item.transition_ids) == 1 and by_id[item.transition_ids[0]].lean_theorem.endswith("fw_rms_norm_allGather0_commute_2_core"))
     source = render_closed_rms_norm_segment(ir, relation, segment.segment_id)
     assert "Ordinary2Rel.rms_norm_2d" in source
-    assert "authority_replicated_eq_" in source
+    assert "have hWeightFact" in source
+    assert "have hweight : smStore" in source
     assert "applyNode_fw_rms_norm_out_1p" in source
 
 
@@ -5274,7 +6492,8 @@ def test_closed_atomic_rms_shuffle_renderer_is_single_fold_and_dispatched(monkey
     assert "RelationCompiler.Ordinary2Rel.to_zigzag_shuffle" in source
     assert "GeneratedPatterns.Ordinary2Rel.rms_norm_2d" in source
     assert "ZigzagCollective.PackedCuSeqlensWF" in source
-    assert "authority_replicated_eq_5596" in source
+    assert "have hWeightRel" in source
+    assert "have hWeight : smStore 5596 = pmStore 5596 := hWeightRel.1" in source
     assert "authority_packed_cu_000000" in source
     assert "authority_pm_metadata_eq_000000_5602" in source
     assert source.count("let smFinal := smNodes.foldl") == 1
@@ -5303,9 +6522,7 @@ def test_closed_multiref_renderer_handles_mixed_atomic_groups(monkeypatch):
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
-    ir = load_goal_ir(1, str(root))
-    proof = compile_proof_plan(ir, build_default_registry())
-    relation = compile_relation_plan(ir, proof)
+    ir, proof, relation = compiled_goal(1, str(root))
     segment = relation.dependent_chain_plan.segments[256]
     source = render_closed_multiref_segment(ir, relation, segment.segment_id)
     assert segment.sm_range == (473, 475) and segment.pm_range == (1046, 1050)
@@ -5398,7 +6615,8 @@ def test_closed_linear_renderer_supports_ordinary_mix_precision_singleton(monkey
     relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
     source = render_closed_linear_segment(ir, relation, "segment_000010")
     assert "Ordinary2Rel.mix_precision_linear" in source
-    assert "authority_replicated_eq_4953" in source
+    assert "have hw0 : fact_" in source
+    assert "change smStore 4953 = pmStore 4953 ∧" in source
     assert source.count("let smFinal :=") == 1 and source.count("let pmFinal :=") == 1
 
 
@@ -5846,6 +7064,8 @@ def test_closed_mixed_moe_renderer_materializes_each_exact_node_list_once(monkey
     assert len(source.encode()) < 2_500_000
     assert "[pmFinal 7848, pmFinal 7849]" in source
     assert "[pmFinal 7850, pmFinal 7851]" in source
+    for prerequisite in ("hFact1", "hFact2", "hFact3", "hFact14"):
+        assert f" at {prerequisite}" in source
     assert "[pmStore 7848, pmFinal 7849]" not in source
     assert "[pmFinal 7848, pmStore 7849]" not in source
     assert "_inputs" not in source
@@ -5933,7 +7153,7 @@ def test_closed_atomic_per_head_zigzag_rms_renderer_is_exact_single_fold(monkeyp
     assert "pmNodes := [{ rank := 0, op := \"OpName.FW_per_head_mix_precision_linear\", ins := [15838, 5598]" in source
     assert "authority_replicated_eq_5598.Holds" in source
     assert "authority_replicated_eq_5600.Holds" in source
-    assert "authority_replicated_eq_5604.Holds" in source
+    assert "have hwEq2 : smStore 5604 = pmStore 5604 := hwRel2.1" in source
     assert "pmFinal 5602 = pmStore 5602" in source
     assert "metadata_region_id" not in source
 
@@ -6126,6 +7346,34 @@ def test_closed_exit_unshuffle_renderer_is_generic_exact_single_fold(monkeypatch
     assert "authority_pm_metadata_eq_000000_5602.Holds" in source
     assert "PackedCuSeqlensWF.decoded_single" in source
     assert "Goal_1" not in source
+
+
+def test_closed_bw_shuffle_reuses_exact_unshuffle_relation_and_renderer(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    selected = []
+    for nodes in (ir.sm_nodes, ir.pm_nodes):
+        for node in nodes:
+            if node.op == "FW_maybe_unshuffle" and node.ins[1] == 6252:
+                node.op = "BW_maybe_shuffle"
+                selected.append(node)
+    assert len(selected) == 3
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    transition = next(
+        item for item in relation.transition_specs
+        if item.rule_id == "bw-maybe-shuffle-zigzag-to-ordinary-two-rank"
+    )
+    segment = next(
+        item for item in relation.dependent_chain_plan.segments
+        if transition.transition_id in item.transition_ids
+    )
+    source = render_closed_unshuffle_segment(ir, relation, segment.segment_id)
+    assert source == render_closed_segment(ir, relation, segment.segment_id)
+    assert source.count("applyNodeDistributed_bw_maybe_shuffle_out") == 3
+    assert "bw_maybe_shuffle_collective_eq_fw_unshuffle" in source
 
 
 def test_goals34_closed_indexed_stack_renderer_is_truthful_generic_and_one_fold(monkeypatch):
@@ -6517,7 +7765,117 @@ def test_closed_bundle_publisher_replaces_tree_without_stale_files(tmp_path):
     assert sorted(path.name for path in destination.iterdir()) == ["Facts000.lean", "Public.lean"]
     assert (destination / "Facts000.lean").read_bytes() == b"facts\n"
     assert not list(tmp_path.glob(".Goal17Closed.staged-*"))
+
+
+def test_closed_bundle_kernel_check_emits_importable_olean_tree(tmp_path, monkeypatch):
+    project = tmp_path / "trainverify"
+    source_root = project / "denote" / "fixture" / "Goal1Closed"
+    source_root.mkdir(parents=True)
+    bundle = {
+        "Facts000.lean": b"def fact := True\n",
+        "States000.lean": b"import denote.fixture.Goal1Closed.Facts000\n",
+    }
+    for relative, payload in bundle.items():
+        (source_root / relative).write_bytes(payload)
+
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        output = Path(argv[argv.index("-o") + 1])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"olean")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(emit2_module.subprocess, "run", fake_run)
+    failure = _compile_closed_bundle_sources(
+        bundle,
+        source_root,
+        "denote.fixture.Goal1Closed",
+        project_dir=project,
+    )
+
+    assert failure is None
+    assert len(calls) == 2
+    expected_root = project / ".lake/build/lib/lean/denote/fixture/Goal1Closed"
+    assert calls[0][0][-3:] == [
+        "-o",
+        str(expected_root / "Facts000.olean"),
+        str(source_root / "Facts000.lean"),
+    ]
+    assert calls[1][0][-3:] == [
+        "-o",
+        str(expected_root / "States000.olean"),
+        str(source_root / "States000.lean"),
+    ]
+    assert (expected_root / "Facts000.olean").stat().st_mode & 0o777 == 0o400
     assert not list(tmp_path.glob(".Goal17Closed.previous-*"))
+
+
+def test_closed_bundle_kernel_check_builds_missing_project_import_first(tmp_path, monkeypatch):
+    project = tmp_path / "trainverify"
+    authority = project / "denote" / "fixture" / "Authority.lean"
+    authority.parent.mkdir(parents=True)
+    authority.write_text("def authority := True\n")
+    source_root = project / "denote" / "fixture" / "Goal1Closed"
+    source_root.mkdir()
+    bundle = {
+        "Facts000.lean": b"import denote.fixture.Authority\ndef fact := authority\n",
+    }
+    (source_root / "Facts000.lean").write_bytes(bundle["Facts000.lean"])
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        output = Path(argv[argv.index("-o") + 1])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"olean")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(emit2_module.subprocess, "run", fake_run)
+    failure = _compile_closed_bundle_sources(
+        bundle, source_root, "denote.fixture.Goal1Closed", project_dir=project
+    )
+
+    assert failure is None
+    assert [Path(call[-1]).name for call in calls] == ["Authority.lean", "Facts000.lean"]
+    assert calls[0][calls[0].index("-o") + 1] == str(
+        project / ".lake/build/lib/lean/denote/fixture/Authority.olean"
+    )
+
+
+def test_closed_bundle_kernel_check_does_not_trust_newer_project_olean(tmp_path, monkeypatch):
+    project = tmp_path / "trainverify"
+    authority = project / "denote" / "fixture" / "Authority.lean"
+    authority.parent.mkdir(parents=True)
+    authority.write_text("def authority := True\n")
+    source_root = project / "denote" / "fixture" / "Goal1Closed"
+    source_root.mkdir()
+    bundle = {
+        "Facts000.lean": b"import denote.fixture.Authority\ndef fact := authority\n",
+    }
+    (source_root / "Facts000.lean").write_bytes(bundle["Facts000.lean"])
+    object_path = project / ".lake/build/lib/lean/denote/fixture/Authority.olean"
+    object_path.parent.mkdir(parents=True)
+    object_path.write_bytes(b"stale-but-newer")
+    os.utime(object_path, ns=(authority.stat().st_atime_ns, authority.stat().st_mtime_ns + 1))
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        output = Path(argv[argv.index("-o") + 1])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"fresh-olean")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(emit2_module.subprocess, "run", fake_run)
+    failure = _compile_closed_bundle_sources(
+        bundle, source_root, "denote.fixture.Goal1Closed", project_dir=project
+    )
+
+    assert failure is None
+    assert [Path(call[-1]).name for call in calls] == ["Authority.lean", "Facts000.lean"]
+    assert object_path.read_bytes() == b"fresh-olean"
 
 
 def test_closed_rotary_renderer_is_two_output_and_uses_1d_generic_theorem(monkeypatch):
@@ -6597,6 +7955,10 @@ def test_closed_zigzag_attention_renderer_is_faithful_and_generic(monkeypatch):
             assert source.count("let smFinal := smNodes.foldl (applyNodeDistributedFaithful") == 1
             assert source.count("let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful") == 1
             assert ir.sm_graph_ref in source and ir.pm_graph_ref in source
+            assert (
+                f"change GeneratedPatterns.Zigzag2Rel "
+                f"({segment_id}_smFinal smStore" in source
+            )
 
 
 def test_closed_zigzag_attention_roles_and_metadata_fail_closed(monkeypatch):
@@ -6745,6 +8107,8 @@ def _synthetic_external_ir(*, tps=((0, 901), (1, 902))):
         sm_num_ranks=1, pm_num_ranks=2,
         sm_input_value_classes=(SimpleNamespace(source="sm-alias", tids=(10, 11)),),
         pm_input_value_classes=(SimpleNamespace(source="pm-alias", tids=(20, 21)),),
+        sm_input_value_classes_ref="Synthetic.Generated.smInputValueClasses",
+        pm_input_value_classes_ref="Synthetic.Generated.pmInputValueClasses",
         packed_cu_contracts=(SimpleNamespace(
             side="pm", tid=30, total_tokens=8, num_ranks=2
         ),),
@@ -6778,7 +8142,20 @@ def test_parser_recovers_exact_public_init_goals_reference(monkeypatch):
         "TrainVerify.Denote.GeneratedGoals.goal_3_stmt_full"
     )
     assert not goal3.public_statement_uses_contract_wrapper
+    assert goal3.public_statement_contract_ref == (
+        "TrainVerify.Denote.GeneratedGoals.Goal3FullExternalInputs"
+    )
+    assert goal3.public_statement_uses_faithful_evaluator
     assert goal4.public_statement_uses_contract_wrapper
+    assert goal4.public_statement_contract_ref == (
+        "TrainVerify.Denote.GeneratedGoals.Goal4ExternalInputContract"
+    )
+    assert goal4.sm_input_value_classes_ref == (
+        "TrainVerify.Denote.Generated.smInputValueClasses"
+    )
+    assert goal4.pm_input_value_classes_ref == (
+        "TrainVerify.Denote.Generated.pmInputValueClasses"
+    )
     assert goal4.public_statement_ref == (
         "TrainVerify.Denote.GeneratedGoals.goal_4_stmt_full"
     )
@@ -6786,6 +8163,23 @@ def test_parser_recovers_exact_public_init_goals_reference(monkeypatch):
     assert goal4.init_goals_ref == (
         "TrainVerify.Denote.GeneratedGoals.goal_4_full_initGoals"
     )
+
+
+def test_external_initial_state_renderer_chunks_large_fact_dispatchers():
+    facts = tuple(
+        SimpleNamespace(
+            fact_id=f"shape_{tid}", kind="tensor_shape", side="sm",
+            tid=tid, shape=(4,),
+        )
+        for tid in range(100, 165)
+    )
+    source = render_closed_external_initial_state(
+        _synthetic_external_ir(), _synthetic_external_chain(facts), "SyntheticClosed"
+    )
+    assert source.count("private theorem SyntheticClosed_initial_chunk_") == 3
+    assert "rcases List.mem_append.mp covered with hfact0 | covered" in source
+    state_body = source.split("private theorem SyntheticClosed_initial_state", 1)[1]
+    assert "rcases hfact with rfl | hfact" not in state_body
 
 
 def test_external_initial_state_renderer_derives_every_authority_contract_exactly():
@@ -6797,16 +8191,20 @@ def test_external_initial_state_renderer_derives_every_authority_contract_exactl
         SimpleNamespace(fact_id="packed_pm", kind="packed_cu", side="pm", tid=30, total_tokens=8, num_ranks=2),
         SimpleNamespace(fact_id="bound_pm", kind="label_bound", side="pm", tid=40, length=8, upper_bound=16),
     )
+    ir = _synthetic_external_ir()
+    ir.init_goals_ref = "Synthetic.Graphs.goal_17_full_initGoals"
     source = render_closed_external_initial_state(
-        _synthetic_external_ir(), _synthetic_external_chain(facts), "SyntheticClosed"
+        ir, _synthetic_external_chain(facts), "SyntheticClosed"
     )
     assert "StoreShapesHold initSM Synthetic.Graphs.sm_goal_17InitEnv" in source
     assert "InitGoalsHold Synthetic.Graphs.pm_goal_17.numRanks" in source
-    assert "InputValueClassesHold TrainVerify.Denote.Generated.smInputValueClasses" in source
-    assert "InputValueClassesHold TrainVerify.Denote.Generated.pmInputValueClasses" in source
+    assert "InputValueClassesHold Synthetic.Generated.smInputValueClasses" in source
+    assert "InputValueClassesHold Synthetic.Generated.pmInputValueClasses" in source
     assert "InputValueClassesHold.eq_of_mem" in source
     assert "InitGoalHolds.singleton_value_eq" in source
     assert "InitGoalHolds.gather2_dim" in source
+    assert "Synthetic.Generated.initGoal_50" in source
+    assert "Synthetic.Graphs.initGoal_50" not in source
     assert "hPacked_0" in source and "exact hPacked_0" in source
     assert "hBound_0" in source and "exact hBound_0" in source
     assert ": state_000000.Holds initSM initPM" in source
@@ -6828,6 +8226,7 @@ def test_external_initial_state_renderer_fails_closed_on_unsupported_orientation
 
 def test_public_theorem_renderer_consumes_kernel_joined_target_for_singleton_public_lineage():
     ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.public_statement_uses_faithful_evaluator = True
     ir.lineage.tsShape = [4, 4]
     ir.lineage.tpShapes = [[4, 4]]
     target = SimpleNamespace(
@@ -6874,8 +8273,9 @@ def test_public_theorem_renderer_accepts_canonical_joined_target():
     assert "= [[1]]" in source
     assert "hContract" not in source
     assert "hFaithfulContract" in source
-    assert "have hSMValues : InputValueClassesHold" in source
-    assert "have hPMValues : InputValueClassesHold" in source
+    assert "InputValueClassesHold" not in source
+    assert "public_from_shapes" not in source
+    assert "SyntheticClosed_public_body_proof initSM initPM hSM hPM hInit" in source
     assert "rcases htarget with ⟨hvalue, hsmShape, hpmShape⟩" in source
     assert "htarget.full_shape" not in source
     assert "@[irreducible] private def SyntheticClosed_public_statement" in source
@@ -6887,7 +8287,94 @@ def test_public_theorem_renderer_accepts_canonical_joined_target():
     assert "simpa only [SyntheticClosed_public_statement]" in source
 
 
-def test_public_theorem_renderer_rejects_uncontracted_nonempty_input_classes():
+def test_public_theorem_renderer_bridges_faithful_certificate_to_plain_statement():
+    ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.public_statement_uses_contract_wrapper = False
+    ir.public_statement_uses_faithful_evaluator = False
+    ir.sm_input_value_classes = ()
+    ir.pm_input_value_classes = ()
+    ir.packed_cu_contracts = ()
+    ir.tensor_value_bound_contracts = ()
+    ir.lineage.tsShape = [1]
+    ir.lineage.tpShapes = [[1]]
+    ir.sm_nodes = [Node(0, "FW_identity", [10], [900])]
+    ir.pm_nodes = [Node(0, "FW_identity", [20], [901])]
+    target = SimpleNamespace(
+        fact_id="terminal_relation", kind="joined", sm_tid=900,
+        joined_pm_tid=901, full_shape=(1,),
+    )
+    anchor = SimpleNamespace(
+        fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
+    )
+
+    source = render_closed_public_theorem(
+        ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
+    )
+
+    assert "denote_faithful_eq_plain_of_prefix" in source
+    assert "(tid := 900) (k := 1)" in source
+    assert "(tid := 901) (k := 1)" in source
+    assert "unfold CoarseLineageHoldsWithInit" in source
+    assert "simp only [Synthetic.Generated.goal_17, List.map] at hBody ⊢" in source
+    assert "rw [← hSmPlain, ← hPmPlain]" in source
+
+
+def test_faithful_plain_bridge_is_model_neutral():
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/denote/FaithfulPlainBridge.lean"
+    ).read_text()
+
+    assert "import denote.yoco_goals" not in source
+    assert "GeneratedPatterns." not in source
+    assert "foldl_faithful_eq_plain_of_no_special" in source
+
+
+def test_sequence_sharded_embedding_theorem_is_dynamic_k_and_model_neutral():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/denote/EmbeddingSequenceShard.lean"
+    )
+    assert path.is_file()
+    source = path.read_text()
+    relation_source = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/denote/RelationCompiler.lean"
+    ).read_text()
+    assert "theorem fw_embedding_allGatherPrimDimN_dim1_shared_weight" in source
+    assert "theorem ShardedRel.fw_embedding_shared_weight_dim1" in relation_source
+    assert "(K b s hidden : Nat)" in source
+    assert "Goal_3" not in source and "716" not in source and "565" not in source
+    assert "sorry" not in source and "axiom" not in source and "False.elim" not in source
+
+
+def test_public_theorem_renderer_accepts_explicit_named_contract_bundle():
+    ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.public_statement_uses_contract_wrapper = False
+    ir.public_statement_contract_ref = "Synthetic.Generated.ExternalInputs"
+    ir.public_statement_uses_faithful_evaluator = True
+    ir.lineage.tsShape = [1]
+    ir.lineage.tpShapes = [[1]]
+    target = SimpleNamespace(
+        fact_id="terminal_relation", kind="joined", sm_tid=900,
+        joined_pm_tid=901, full_shape=(1,),
+    )
+    anchor = SimpleNamespace(
+        fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
+    )
+
+    source = render_closed_public_theorem(
+        ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
+    )
+
+    assert "intro initSM initPM hSM hPM hInit hContract" in source
+    assert "rcases hContract with ⟨hSMValues, hPMValues, hPacked_0, hBound_0⟩" in source
+    assert "unfold CoarseLineageHoldsWithInitDistributedFaithfulWithContract" not in source
+    assert "simpa only [SyntheticClosed_public_body_statement, InitGoalHolds] using" in source
+    assert "SyntheticClosed_public_body_proof initSM initPM hSM hPM hInit hSMValues hPMValues hPacked_0 hBound_0" in source
+
+
+def test_public_theorem_renderer_ignores_unneeded_uncontracted_input_classes():
     ir = _synthetic_external_ir(tps=((0, 901),))
     ir.public_statement_uses_contract_wrapper = False
     ir.pm_input_value_classes = ()
@@ -6903,14 +8390,41 @@ def test_public_theorem_renderer_rejects_uncontracted_nonempty_input_classes():
     anchor = SimpleNamespace(
         fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
     )
+    source = render_closed_external_initial_state(
+        ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
+    )
+    assert "hSMValues" not in source
+
+
+def test_public_theorem_renderer_rejects_required_uncontracted_input_class():
+    ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.public_statement_uses_contract_wrapper = False
+    ir.pm_input_value_classes = ()
+    ir.packed_cu_contracts = ()
+    ir.tensor_value_bound_contracts = ()
+    ir.lineage.tsShape = [1]
+    ir.lineage.tpShapes = [[1]]
+    ir.sm_input_value_classes = (SimpleNamespace(source="x", tids=(1, 2)),)
+    target = SimpleNamespace(
+        fact_id="terminal_relation", kind="joined", sm_tid=900,
+        joined_pm_tid=901, full_shape=(1,),
+    )
+    anchor = SimpleNamespace(
+        fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
+    )
+    required_eq = SimpleNamespace(
+        fact_id="eq_sm", kind="tensor_eq", left_side="sm", left_tid=1,
+        right_side="sm", right_tid=2,
+    )
     with pytest.raises(ValueError, match="contract-free public statement"):
-        render_closed_public_theorem(
-            ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
+        render_closed_external_initial_state(
+            ir, _synthetic_external_chain((anchor, required_eq), target), "SyntheticClosed"
         )
 
 
 def test_public_theorem_renderer_accepts_joined_indexed_stack_target():
     ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.public_statement_uses_faithful_evaluator = True
     ir.lineage.tsShape = [24, 4, 4]
     ir.lineage.tpShapes = [[24, 4, 4]]
     target = SimpleNamespace(
@@ -6940,7 +8454,7 @@ def test_public_theorem_renderer_rejects_unjoined_or_nonpublic_target():
         pm_rank0_tid=901, pm_rank1_tid=999,
         full_shape=(4, 4), shard_shape=(2, 4),
     )
-    with pytest.raises(ValueError, match="joined terminal fact"):
+    with pytest.raises(ValueError, match="joined or ordered-sharded terminal fact"):
         render_closed_public_theorem(
             ir, _synthetic_external_chain((anchor,), unjoined), "SyntheticClosed"
         )
@@ -6969,6 +8483,29 @@ def test_external_initial_state_renderer_treats_omitted_init_gather_dim_as_zero(
     assert "InitGoalHolds.gather2_dim" in source
 
 
+def test_shape_authority_parser_rejects_partial_or_duplicate_entries():
+    with pytest.raises(ValueError, match="duplicate.*TID"):
+        parser_module.parse_shapes(
+            "def shapes : List (Tid × Shape) := [(1, [2]), (1, [2])]"
+        )
+    with pytest.raises(ValueError, match="unparsed shape authority"):
+        parser_module.parse_shapes(
+            "def shapes : List (Tid × Shape) := [(1, [2]), malformed]"
+        )
+
+
+def test_lineage_authority_parser_rejects_missing_or_misaligned_rank_metadata():
+    missing = "def goal : LineageGoal := { ts := 1, tsShape := [2], tpShapes := [[2]] }"
+    with pytest.raises(ValueError, match="tps"):
+        parser_module.parse_lineage_block(missing, "goal")
+    misaligned = (
+        "def goal : LineageGoal := { ts := 1, tsShape := [2], "
+        "tps := [{ rank := 0, tid := 2 }], tpShapes := [] }"
+    )
+    with pytest.raises(ValueError, match="cardinality"):
+        parser_module.parse_lineage_block(misaligned, "goal")
+
+
 def test_definition_resolution_accepts_noncomputable_graph_authority():
     source = """namespace Example.Authority
 noncomputable def sm : GraphDecl := by
@@ -6989,3 +8526,177 @@ def test_input_value_classes_are_optional_only_when_public_statement_does_not_re
         parser_module.parse_input_value_classes(
             "def unrelated := 1", name="smInputValueClasses", required=True
         )
+
+
+@pytest.mark.parametrize(
+    "forbidden",
+    (
+        "axiom forged : False",
+        "private axiom forged : False",
+        "theorem forged : False := sorryAx False true",
+        "unsafe def forged : Nat := 0",
+        "theorem forged (h : False) : True := False.elim h",
+    ),
+)
+def test_closed_bundle_validation_rejects_forbidden_trust_constructs(forbidden):
+    bundle = {
+        "Chain.lean": (forbidden + "\n").encode(),
+        "Public.lean": b"theorem public_ok : True := by trivial\n",
+    }
+    with pytest.raises(ValueError, match="forbidden"):
+        composer_module._validate_closed_bundle(
+            bundle, "denote.audit.Forbidden", 2_500_000, 0
+        )
+
+
+@pytest.mark.parametrize("heartbeats", (0, 500_001))
+def test_closed_bundle_validation_rejects_unbounded_heartbeat_budget(heartbeats):
+    bundle = {
+        "Chain.lean": f"set_option maxHeartbeats {heartbeats}\n".encode(),
+        "Public.lean": b"theorem public_ok : True := by trivial\n",
+    }
+    with pytest.raises(ValueError, match="heartbeat"):
+        composer_module._validate_closed_bundle(
+            bundle, "denote.audit.Heartbeat", 2_500_000, 0
+        )
+
+
+def test_closed_bundle_kernel_failure_preserves_public_snapshot(tmp_path, monkeypatch):
+    public = tmp_path / "GoalClosed"
+    public.mkdir()
+    (public / "sentinel.lean").write_text("old authority\n")
+    bundle = {
+        "Chain.lean": b"theorem chain_ok : True := by trivial\n",
+        "Public.lean": b"theorem public_ok : True := by trivial\n",
+    }
+
+    def reject(compiled_bundle, candidate, *args, **kwargs):
+        assert compiled_bundle is bundle
+        assert candidate != public
+        assert (candidate / "Chain.lean").read_bytes() == bundle["Chain.lean"]
+        object_path = (
+            tmp_path / ".lake/build/lib/lean/denote/audit/GoalClosed/Chain.olean"
+        )
+        object_path.parent.mkdir(parents=True)
+        object_path.write_bytes(b"candidate object")
+        return "Chain.lean", 1, "kernel rejected candidate"
+
+    monkeypatch.setattr(emit2_module, "_compile_closed_bundle_sources", reject)
+    failure = emit2_module._compile_and_publish_closed_bundle(
+        bundle, public, "denote.audit.GoalClosed", project_dir=tmp_path
+    )
+
+    assert failure == ("Chain.lean", 1, "kernel rejected candidate")
+    assert {path.name: path.read_text() for path in public.iterdir()} == {
+        "sentinel.lean": "old authority\n"
+    }
+    assert not list(tmp_path.glob(".GoalClosed.staged-*"))
+    assert not (
+        tmp_path / ".lake/build/lib/lean/denote/audit/GoalClosed/Chain.olean"
+    ).exists()
+
+
+def test_axiom_audit_rejects_project_axioms_and_missing_receipts():
+    target = "TrainVerify.Denote.Whole.prove_all"
+    emit2_module._validate_print_axioms_output(
+        f"'{target}' depends on axioms: [propext, Classical.choice, Quot.sound]",
+        (target,),
+    )
+    with pytest.raises(ValueError, match="untrusted axioms"):
+        emit2_module._validate_print_axioms_output(
+            f"'{target}' depends on axioms: [TrainVerify.injected]", (target,)
+        )
+    with pytest.raises(ValueError, match="missing #print axioms result"):
+        emit2_module._validate_print_axioms_output("", (target,))
+    private_native = (
+        "_private.denote.Bundle.0.Helper._native.native_decide.ax_1_2"
+    )
+    emit2_module._validate_print_axioms_output(
+        f"'{target}' depends on axioms: [{private_native}]", (target,)
+    )
+
+
+def test_chunked_aggregate_axiom_receipt_is_complete_and_fail_closed():
+    target = "TrainVerify.Denote.Whole.prove_all"
+    valid = "\n".join([
+        f"AXIOM_RECEIPT_BEGIN {target} 2",
+        "AXIOM propext",
+        "AXIOM _private.denote.Bundle.0.Helper._native.native_decide.ax_1_2",
+        f"AXIOM_RECEIPT_END {target} 2",
+    ])
+    emit2_module._validate_chunked_axioms_output(valid, target)
+    with pytest.raises(ValueError, match="incomplete chunked axiom receipt"):
+        emit2_module._validate_chunked_axioms_output(
+            valid.replace("AXIOM propext\n", ""), target
+        )
+    with pytest.raises(ValueError, match="untrusted axioms"):
+        emit2_module._validate_chunked_axioms_output(
+            valid.replace("AXIOM propext", "AXIOM TrainVerify.injected"), target
+        )
+
+
+def test_axiom_audit_falls_back_to_same_aggregate_collector_on_printer_overflow(
+    tmp_path, monkeypatch
+):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    (staged / "Main.lean").write_text("theorem marker : True := by trivial\n")
+    target = "TrainVerify.Denote.Whole.prove_all"
+    calls = []
+
+    def run(*args, **kwargs):
+        source = (staged / ".AxiomAudit.lean").read_text()
+        calls.append(source)
+        if len(calls) == 1:
+            return SimpleNamespace(
+                returncode=134, stdout="", stderr="Stack overflow detected. Aborting.\n"
+            )
+        assert f"#trainverify_print_axioms_chunked {target}" in source
+        return SimpleNamespace(
+            returncode=0,
+            stdout="\n".join([
+                f"AXIOM_RECEIPT_BEGIN {target} 1",
+                "AXIOM propext",
+                f"AXIOM_RECEIPT_END {target} 1",
+            ]),
+            stderr="",
+        )
+
+    monkeypatch.setattr(emit2_module.subprocess, "run", run)
+    assert emit2_module._audit_closed_bundle_axioms(
+        staged, "denote.Whole", (target,), project_dir=tmp_path
+    ) is None
+    assert len(calls) == 2
+    assert f"#print axioms {target}" in calls[0]
+    assert not (staged / ".AxiomAudit.lean").exists()
+
+
+def test_closed_bundle_axiom_audit_precedes_publication(tmp_path, monkeypatch):
+    public = tmp_path / "Whole"
+    bundle = {"Main.lean": b"theorem prove_all : True := by trivial\n"}
+    events = []
+
+    monkeypatch.setattr(
+        emit2_module, "_compile_closed_bundle_sources",
+        lambda *args, **kwargs: events.append("kernel") or None,
+    )
+    monkeypatch.setattr(
+        emit2_module, "_audit_closed_bundle_axioms",
+        lambda *args, **kwargs: events.append("axioms") or None,
+        raising=False,
+    )
+
+    def publish(*args, **kwargs):
+        assert events == ["kernel", "axioms"]
+        events.append("publish")
+
+    monkeypatch.setattr(emit2_module, "_publish_staged_closed_bundle", publish)
+    failure = emit2_module._compile_and_publish_closed_bundle(
+        bundle,
+        public,
+        "denote.Whole",
+        project_dir=tmp_path,
+        axiom_targets=("TrainVerify.Denote.Whole.prove_all",),
+    )
+    assert failure is None
+    assert events == ["kernel", "axioms", "publish"]

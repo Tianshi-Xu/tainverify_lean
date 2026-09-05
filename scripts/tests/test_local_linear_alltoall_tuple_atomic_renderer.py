@@ -181,6 +181,5 @@ def test_generated_local_linear_alltoall_witness_is_exact_renderer_output():
         f"end TrainVerify.Denote.{namespace}", "",
     ))
     witness = Path(__file__).resolve().parents[2] / "trainverify/denote/GeneratedLocalLinearAllToAllTupleAtomicWitness.lean"
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert "sorry" not in source and "False.elim" not in source

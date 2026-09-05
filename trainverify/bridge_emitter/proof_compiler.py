@@ -198,6 +198,7 @@ def build_default_registry() -> RuleRegistry:
         "FW_sum": 1,
         "FW_sigmoid": 1,
         "FW_swiglu": 2,
+        "FW_glu": 2,
         "FW_add": 2,
         "FW_mul": 2,
         "FW_view": 1,
@@ -312,6 +313,57 @@ def build_default_registry() -> RuleRegistry:
             relation_effect=RelationEffect.PARAMETRIC,
         )
     )
+    for op, denote_fn, lemma in (
+        (
+            "BW_maybe_shuffle",
+            "applyNodeBWMaybeShuffleValue",
+            "applyNodeDistributed_bw_maybe_shuffle_out",
+        ),
+        (
+            "BW_maybe_unshuffle",
+            "applyNodeBWMaybeUnshuffleValue",
+            "applyNodeDistributed_bw_maybe_unshuffle_out",
+        ),
+    ):
+        rules.append(
+            RuleSpec(
+                op=op,
+                kind=RuleKind.SPECIAL,
+                output_count=1,
+                input_count=2,
+                parameter_count=2,
+                rank_sensitive=True,
+                denote_fn=denote_fn,
+                apply_lemmas=(lemma,),
+                relation_effect=RelationEffect.PARAMETRIC,
+            )
+        )
+    for op, denote_fn, lemma_prefix in (
+        (
+            "BW_attn_sliding_window",
+            "applyNodeRingAttn_bw_sliding_window",
+            "applyNodeDistributed_bw_attn_sliding_window",
+        ),
+        (
+            "BW_attn_zigzag",
+            "applyNodeRingAttn_bw_zigzag",
+            "applyNodeDistributed_bw_attn_zigzag",
+        ),
+    ):
+        rules.append(
+            RuleSpec(
+                op=op,
+                kind=RuleKind.MULTI_OUTPUT,
+                output_count=3,
+                input_count=6,
+                parameter_count=6,
+                rank_sensitive=True,
+                denote_fn=denote_fn,
+                apply_lemmas=tuple(f"{lemma_prefix}_out_{index}" for index in range(3)),
+                output_projections=(".1", ".2.1", ".2.2"),
+                relation_effect=RelationEffect.PROJECT,
+            )
+        )
     rules.append(
         RuleSpec(
             op="FW_all2all_moe_gmm_full",
@@ -745,7 +797,14 @@ def _collective_shape_issue(
                 input_shape = input_shapes[0]
                 if input_shape is not None:
                     per_output_shapes = [list(input_shape) for _ in node.outs]
-            elif node.op in {"FW_maybe_shuffle", "FW_maybe_unshuffle"} and len(input_shapes) == 2:
+            elif node.op in {"BW_attn_sliding_window", "BW_attn_zigzag"} and len(input_shapes) == 6:
+                _g_shape, q_shape, k_shape, v_shape, _cuq_shape, _cuk_shape = input_shapes
+                if q_shape is not None and k_shape is not None and v_shape is not None:
+                    per_output_shapes = [list(q_shape), list(k_shape), list(v_shape)]
+            elif node.op in {
+                "FW_maybe_shuffle", "FW_maybe_unshuffle",
+                "BW_maybe_shuffle", "BW_maybe_unshuffle",
+            } and len(input_shapes) == 2:
                 cp_size, cp_rank = (int(value) for value in (node.params or []))
                 if cp_size not in {1, 2} or cp_rank < 0 or cp_rank >= cp_size:
                     return Diagnostic(
@@ -994,19 +1053,23 @@ def _collective_shape_issue(
                     output_shape = list(ids_shape) + [weight_shape[1]]
             elif node.op in shape_preserving and input_shapes and input_shapes[0] is not None:
                 output_shape = list(input_shapes[0])
-            elif node.op == "FW_swiglu" and len(input_shapes) == 2:
-                gate_shape, up_shape = input_shapes
-                if gate_shape is not None and up_shape is not None:
-                    if gate_shape != up_shape:
+            elif node.op in {"FW_swiglu", "FW_glu"} and len(input_shapes) == 2:
+                first_shape, second_shape = input_shapes
+                if first_shape is not None and second_shape is not None:
+                    if first_shape != second_shape:
                         return Diagnostic(
                             DiagnosticCode.INVALID_SIGNATURE,
-                            f"operator {node.op}: gate/up shapes differ",
+                            (f"operator {node.op}: gate/up shapes differ"
+                             if node.op == "FW_swiglu"
+                             else f"operator {node.op}: binary input shapes differ"),
                             side=side,
                             node_index=node_index,
                             op=node.op,
                             output_tid=int(node.outs[0]) if node.outs else None,
                         )
-                    output_shape = list(up_shape)
+                    output_shape = list(
+                        second_shape if node.op == "FW_swiglu" else first_shape
+                    )
             elif node.op == "FW_rms_norm" and len(input_shapes) == 2:
                 value_shape, weight_shape = input_shapes
                 if value_shape is not None and weight_shape is not None:
@@ -1164,6 +1227,32 @@ def _collective_shape_issue(
                         output_tid=int(node.outs[0]) if node.outs else None,
                     )
                 output_shape = list(known_shapes[0])
+            elif node.op == "ReduceScatterPrim" and known_shapes:
+                if any(shape != known_shapes[0] for shape in known_shapes[1:]):
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: input shapes differ",
+                        side=side, node_index=node_index, op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                if len(node.params or []) != 1:
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: expected one shard dimension",
+                        side=side, node_index=node_index, op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                dimension = int(node.params[0])
+                if (dimension >= len(known_shapes[0]) or num_ranks <= 0
+                        or known_shapes[0][dimension] % num_ranks != 0):
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: shard dimension is not divisible by rank count",
+                        side=side, node_index=node_index, op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                output_shape = list(known_shapes[0])
+                output_shape[dimension] //= num_ranks
             elif node.op == "AllGatherPrim" and known_shapes:
                 if any(shape != known_shapes[0] for shape in known_shapes[1:]):
                     return Diagnostic(
@@ -1281,6 +1370,9 @@ def _collective_shape_issue(
     return None
 
 
+MULTIRANK_VALUE_LOSSY_OPERATORS = frozenset()
+
+
 def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
     """Build a deterministic certificate dependency DAG for one GoalIR.
 
@@ -1343,6 +1435,136 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
         for node_index, node in enumerate(side_nodes[side]):
             output_tid = int(node.outs[0]) if node.outs else None
             num_ranks = ir.sm_num_ranks if side == "sm" else ir.pm_num_ranks
+            if (
+                side == "pm"
+                and num_ranks > 1
+                and node.op in {"BW_maybe_shuffle", "BW_maybe_unshuffle"}
+            ):
+                params = tuple(int(value) for value in (node.params or ()))
+                cp_size = params[0] if len(params) == 2 else 0
+                buddies = replica_buddies(side, node_index)
+                try:
+                    from .ordered_buddy_authority_policy import (
+                        OrderedBuddyFailure,
+                        OrderedBuddyRow,
+                        check_ordered_cp_buddy_authority,
+                    )
+                except ImportError:
+                    from ordered_buddy_authority_policy import (
+                        OrderedBuddyFailure,
+                        OrderedBuddyRow,
+                        check_ordered_cp_buddy_authority,
+                    )
+                decision = check_ordered_cp_buddy_authority(
+                    tuple(
+                        OrderedBuddyRow(
+                            buddy_index,
+                            candidate.op,
+                            tuple(int(value) for value in (candidate.params or ())),
+                            tuple(int(tid) for tid in candidate.ins),
+                        )
+                        for buddy_index, candidate in buddies
+                    ),
+                    cp_size=cp_size,
+                    expected_op=node.op,
+                    current_node_key=node_index,
+                )
+                if decision.failure not in {
+                    None,
+                    OrderedBuddyFailure.UNIFORM_SIGNATURE_MISMATCH,
+                }:
+                    issue = Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op} requires complete ordered replica buddies",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=output_tid,
+                    )
+                    return ProofPlan(ir.n, relation, (), (), (issue,))
+            if (
+                side == "pm"
+                and num_ranks > 1
+                and node.op in {"BW_attn_sliding_window", "BW_attn_zigzag"}
+            ):
+                buddies = replica_buddies(side, node_index)
+                buddy_nodes = tuple(candidate for _index, candidate in buddies)
+                buddy_ranks = tuple(int(candidate.rank) for candidate in buddy_nodes)
+                params = tuple(int(value) for value in (node.params or ()))
+                metadata_tids = tuple(
+                    tuple(int(value) for value in candidate.ins[4:6])
+                    if len(candidate.ins) == 6 else (-1, -1)
+                    for candidate in buddy_nodes
+                )
+                current = tuple(
+                    offset for offset, (index, _candidate) in enumerate(buddies)
+                    if index == node_index
+                )
+                if (
+                    len(buddy_nodes) <= 1
+                    or len(buddy_ranks) != len(set(buddy_ranks))
+                    or current != ((buddy_ranks.index(int(node.rank)))
+                                   if int(node.rank) in buddy_ranks else -1,)
+                    or any(candidate.op != node.op for candidate in buddy_nodes)
+                    or any(len(candidate.ins) != 6 or len(candidate.outs) != 3
+                           for candidate in buddy_nodes)
+                    or any(tuple(int(value) for value in (candidate.params or ())) != params
+                           for candidate in buddy_nodes)
+                    or len(set(metadata_tids)) != 1
+                ):
+                    issue = Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op} requires complete ordered replica buddies",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=output_tid,
+                    )
+                    return ProofPlan(ir.n, relation, (), (), (issue,))
+                g_tids = tuple(int(candidate.ins[0]) for candidate in buddy_nodes)
+                q_tids = tuple(int(candidate.ins[1]) for candidate in buddy_nodes)
+                k_tids = tuple(int(candidate.ins[2]) for candidate in buddy_nodes)
+                v_tids = tuple(int(candidate.ins[3]) for candidate in buddy_nodes)
+                k_replicated = len(set(k_tids)) == 1
+                v_replicated = len(set(v_tids)) == 1
+                kv_coherent = (
+                    k_replicated == v_replicated
+                    and (
+                        k_replicated
+                        or (len(set(k_tids)) == len(buddy_nodes)
+                            and len(set(v_tids)) == len(buddy_nodes))
+                    )
+                )
+                if (
+                    len(set(g_tids)) != len(buddy_nodes)
+                    or len(set(q_tids)) != len(buddy_nodes)
+                    or not kv_coherent
+                    or (node.op == "BW_attn_sliding_window" and k_replicated)
+                    or (node.op == "BW_attn_zigzag" and not k_replicated)
+                ):
+                    issue = Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op} requires coherent Q/K/V ownership with explicit K/V layout authority",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=output_tid,
+                    )
+                    return ProofPlan(ir.n, relation, (), (), (issue,))
+            if (
+                side == "pm"
+                and num_ranks > 1
+                and node.op in MULTIRANK_VALUE_LOSSY_OPERATORS
+            ):
+                issue = Diagnostic(
+                    DiagnosticCode.UNSUPPORTED_OPERATOR,
+                    f"operator {node.op} lacks value-faithful distributed semantics",
+                    side=side,
+                    node_index=node_index,
+                    op=node.op,
+                    output_tid=output_tid,
+                )
+                return ProofPlan(ir.n, relation, (), (), (issue,))
             rule, resolution_error = registry.resolve(node, num_ranks)
             if rule is None:
                 issue = Diagnostic(
@@ -1627,11 +1849,14 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
 
         relation_effect = rule.relation_effect
         if relation_effect is RelationEffect.PARAMETRIC:
-            if node.op in {"FW_maybe_shuffle", "FW_maybe_unshuffle"}:
+            if node.op in {
+                "FW_maybe_shuffle", "FW_maybe_unshuffle",
+                "BW_maybe_shuffle", "BW_maybe_unshuffle",
+            }:
                 cp_size = int((node.params or [0])[0])
                 if cp_size == 1:
                     relation_effect = RelationEffect.PRESERVE
-                elif node.op == "FW_maybe_shuffle":
+                elif node.op in {"FW_maybe_shuffle", "BW_maybe_unshuffle"}:
                     relation_effect = RelationEffect.ORDINARY_TO_ZIGZAG
                 else:
                     relation_effect = RelationEffect.ZIGZAG_TO_ORDINARY

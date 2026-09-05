@@ -24,8 +24,8 @@ private def segment_000000_sm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW
 private def segment_000000_pm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW_transpose", ins := [200], outs := [300], params := [2, 3] }
 private def segment_000000_pm_node_1 : NodeDecl := { rank := 1, op := "OpName.FW_transpose", ins := [201], outs := [301], params := [2, 3] }
 private def segment_000000_pm_node_2 : NodeDecl := { rank := 2, op := "OpName.FW_transpose", ins := [202], outs := [302], params := [2, 3] }
-private def segment_000000_sm_nodes : List NodeDecl := [segment_000000_sm_node_0]
-private def segment_000000_pm_nodes : List NodeDecl := [segment_000000_pm_node_0, segment_000000_pm_node_1, segment_000000_pm_node_2]
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [100], outs := [110], params := [2, 3] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [200], outs := [300], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [201], outs := [301], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [202], outs := [302], params := [2, 3] }]
 
 private def segment_000000 :
     ClosedDepSegmentCertificate SyntheticTranspose23Dim2To3.gSM SyntheticTranspose23Dim2To3.gPM state_pre state_post where
@@ -125,8 +125,8 @@ private def segment_000000_sm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW
 private def segment_000000_pm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW_transpose", ins := [200], outs := [300], params := [2, 3] }
 private def segment_000000_pm_node_1 : NodeDecl := { rank := 1, op := "OpName.FW_transpose", ins := [201], outs := [301], params := [2, 3] }
 private def segment_000000_pm_node_2 : NodeDecl := { rank := 2, op := "OpName.FW_transpose", ins := [202], outs := [302], params := [2, 3] }
-private def segment_000000_sm_nodes : List NodeDecl := [segment_000000_sm_node_0]
-private def segment_000000_pm_nodes : List NodeDecl := [segment_000000_pm_node_0, segment_000000_pm_node_1, segment_000000_pm_node_2]
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [100], outs := [110], params := [2, 3] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [200], outs := [300], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [201], outs := [301], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [202], outs := [302], params := [2, 3] }]
 
 private def segment_000000 :
     ClosedDepSegmentCertificate SyntheticTranspose23Dim3To2.gSM SyntheticTranspose23Dim3To2.gPM state_pre state_post where
@@ -226,8 +226,8 @@ private def segment_000000_sm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW
 private def segment_000000_pm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW_transpose", ins := [200], outs := [300], params := [2, 3] }
 private def segment_000000_pm_node_1 : NodeDecl := { rank := 1, op := "OpName.FW_transpose", ins := [201], outs := [301], params := [2, 3] }
 private def segment_000000_pm_node_2 : NodeDecl := { rank := 2, op := "OpName.FW_transpose", ins := [202], outs := [302], params := [2, 3] }
-private def segment_000000_sm_nodes : List NodeDecl := [segment_000000_sm_node_0]
-private def segment_000000_pm_nodes : List NodeDecl := [segment_000000_pm_node_0, segment_000000_pm_node_1, segment_000000_pm_node_2]
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [100], outs := [110], params := [2, 3] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [200], outs := [300], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [201], outs := [301], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [202], outs := [302], params := [2, 3] }]
 
 private def segment_000000 :
     ClosedDepSegmentCertificate SyntheticTranspose23Dim1.gSM SyntheticTranspose23Dim1.gPM state_pre state_post where
@@ -334,8 +334,8 @@ private def segment_000069_pm_node_4 : NodeDecl := { rank := 0, op := "OpName.FW
 private def segment_000069_pm_node_5 : NodeDecl := { rank := 1, op := "OpName.FW_transpose", ins := [2101], outs := [3101], params := [1, 2] }
 private def segment_000069_pm_node_6 : NodeDecl := { rank := 2, op := "OpName.FW_transpose", ins := [2102], outs := [3102], params := [1, 2] }
 private def segment_000069_pm_node_7 : NodeDecl := { rank := 3, op := "OpName.FW_transpose", ins := [2103], outs := [3103], params := [1, 2] }
-private def segment_000069_sm_nodes : List NodeDecl := [segment_000069_sm_node_0, segment_000069_sm_node_1]
-private def segment_000069_pm_nodes : List NodeDecl := [segment_000069_pm_node_0, segment_000069_pm_node_1, segment_000069_pm_node_2, segment_000069_pm_node_3, segment_000069_pm_node_4, segment_000069_pm_node_5, segment_000069_pm_node_6, segment_000069_pm_node_7]
+private def segment_000069_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [1000], outs := [1010], params := [1, 2] }, { rank := 0, op := "OpName.FW_transpose", ins := [1100], outs := [1110], params := [1, 2] }]
+private def segment_000069_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [2000], outs := [3000], params := [1, 2] }, { rank := 1, op := "OpName.FW_transpose", ins := [2001], outs := [3001], params := [1, 2] }, { rank := 2, op := "OpName.FW_transpose", ins := [2002], outs := [3002], params := [1, 2] }, { rank := 3, op := "OpName.FW_transpose", ins := [2003], outs := [3003], params := [1, 2] }, { rank := 0, op := "OpName.FW_transpose", ins := [2100], outs := [3100], params := [1, 2] }, { rank := 1, op := "OpName.FW_transpose", ins := [2101], outs := [3101], params := [1, 2] }, { rank := 2, op := "OpName.FW_transpose", ins := [2102], outs := [3102], params := [1, 2] }, { rank := 3, op := "OpName.FW_transpose", ins := [2103], outs := [3103], params := [1, 2] }]
 
 private def segment_000069 :
     ClosedDepSegmentCertificate SyntheticTransposeRealSegment69.gSM SyntheticTransposeRealSegment69.gPM state_pre state_post where
@@ -531,8 +531,8 @@ private def segment_000113_pm_node_8 : NodeDecl := { rank := 0, op := "OpName.FW
 private def segment_000113_pm_node_9 : NodeDecl := { rank := 1, op := "OpName.FW_transpose", ins := [2201], outs := [3201], params := [2, 3] }
 private def segment_000113_pm_node_10 : NodeDecl := { rank := 2, op := "OpName.FW_transpose", ins := [2202], outs := [3202], params := [2, 3] }
 private def segment_000113_pm_node_11 : NodeDecl := { rank := 3, op := "OpName.FW_transpose", ins := [2203], outs := [3203], params := [2, 3] }
-private def segment_000113_sm_nodes : List NodeDecl := [segment_000113_sm_node_0, segment_000113_sm_node_1, segment_000113_sm_node_2]
-private def segment_000113_pm_nodes : List NodeDecl := [segment_000113_pm_node_0, segment_000113_pm_node_1, segment_000113_pm_node_2, segment_000113_pm_node_3, segment_000113_pm_node_4, segment_000113_pm_node_5, segment_000113_pm_node_6, segment_000113_pm_node_7, segment_000113_pm_node_8, segment_000113_pm_node_9, segment_000113_pm_node_10, segment_000113_pm_node_11]
+private def segment_000113_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [1000], outs := [1010], params := [2, 3] }, { rank := 0, op := "OpName.FW_transpose", ins := [1100], outs := [1110], params := [2, 3] }, { rank := 0, op := "OpName.FW_transpose", ins := [1200], outs := [1210], params := [2, 3] }]
+private def segment_000113_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_transpose", ins := [2000], outs := [3000], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [2001], outs := [3001], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [2002], outs := [3002], params := [2, 3] }, { rank := 3, op := "OpName.FW_transpose", ins := [2003], outs := [3003], params := [2, 3] }, { rank := 0, op := "OpName.FW_transpose", ins := [2100], outs := [3100], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [2101], outs := [3101], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [2102], outs := [3102], params := [2, 3] }, { rank := 3, op := "OpName.FW_transpose", ins := [2103], outs := [3103], params := [2, 3] }, { rank := 0, op := "OpName.FW_transpose", ins := [2200], outs := [3200], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [2201], outs := [3201], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [2202], outs := [3202], params := [2, 3] }, { rank := 3, op := "OpName.FW_transpose", ins := [2203], outs := [3203], params := [2, 3] }]
 
 private def segment_000113 :
     ClosedDepSegmentCertificate SyntheticTransposeRealSegment113.gSM SyntheticTransposeRealSegment113.gPM state_pre state_post where

@@ -19,8 +19,8 @@ private def segment_000000_pm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW
 private def segment_000000_pm_node_1 : NodeDecl := { rank := 1, op := "OpName.FW_div", ins := [202], outs := [302], params := [8] }
 private def segment_000000_pm_node_2 : NodeDecl := { rank := 2, op := "OpName.FW_div", ins := [203], outs := [303], params := [8] }
 private def segment_000000_pm_node_3 : NodeDecl := { rank := 3, op := "OpName.FW_div", ins := [204], outs := [304], params := [8] }
-private def segment_000000_sm_nodes : List NodeDecl := [segment_000000_sm_node]
-private def segment_000000_pm_nodes : List NodeDecl := [segment_000000_pm_node_0, segment_000000_pm_node_1, segment_000000_pm_node_2, segment_000000_pm_node_3]
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_div", ins := [100], outs := [110], params := [8] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_div", ins := [201], outs := [301], params := [8] }, { rank := 1, op := "OpName.FW_div", ins := [202], outs := [302], params := [8] }, { rank := 2, op := "OpName.FW_div", ins := [203], outs := [303], params := [8] }, { rank := 3, op := "OpName.FW_div", ins := [204], outs := [304], params := [8] }]
 
 private def segment_000000 :
     ClosedDepSegmentCertificate SyntheticDiv3.gSM SyntheticDiv3.gPM state_pre state_post where
@@ -106,7 +106,7 @@ private def segment_000000 :
     have hout : fact_out.Holds smFinal pmFinal := by
       change ShardedRel (smFinal 110) [pmFinal 301, pmFinal 302, pmFinal 303, pmFinal 304] 3 [1, 12, 1024, 1024] [1, 12, 1024, 256]
       rw [hSmWriter, hPmWriter0, hPmWriter1, hPmWriter2, hPmWriter3]
-      simpa using htransport
+      simpa [fw_div, bw_div] using htransport
     intro fact hfact
     have covered : fact ∈ [fact_out] ++ state_pre.facts := by
       exact (show state_post.facts ⊆ [fact_out] ++ state_pre.facts by native_decide) hfact

@@ -91,13 +91,16 @@ def _closed_fixture(k=3):
 def test_closed_output_sharded_linear_replays_exact_dynamic_ordered_writers():
     ir, relation, segment, activation, weight, output = _closed_fixture(k=3)
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
-    assert source.count('op := "OpName.FW_linear"') == 4
     assert source.count("foldl_faithful_middle_writer") == 4
     assert source.count("applyNode_fw_linear_out") == 4
     assert "fw_linear_3d_weight_allGatherPrimDimN_dim0_comm" in source
     assert f"smStore {activation.sm_tid}" in source
-    assert ", ".join(f"pmStore {tid}" for tid in weight.pm_tids) in source
-    assert ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) in source
+    assert ", ".join(
+        f"(segment_000000_pmFinal pmStore) {tid}" for tid in weight.pm_tids
+    ) in source
+    assert ", ".join(
+        f"(segment_000000_pmFinal pmStore) {tid}" for tid in output.pm_tids
+    ) in source
     assert "rankCount = 3" not in source
     assert source.count("simp only [List.length_cons, List.length_nil]") == 2
 
@@ -105,14 +108,14 @@ def test_closed_output_sharded_linear_replays_exact_dynamic_ordered_writers():
 @pytest.mark.parametrize(
     ("target", "mutation", "message"),
     [
-        ("writer", {"rank": 7}, "ordered ranks"),
-        ("writer", {"params": [9]}, "no parameters"),
-        ("writer", {"ins": [200]}, "binary"),
-        ("writer", {"ins": [999, 202]}, "activation"),
-        ("writer", {"ins": [200, 999]}, "weight"),
-        ("writer", {"outs": [999]}, "output"),
-        ("transition", {"sm_node_indices": (0, 1)}, "footprint"),
-        ("segment", {"pm_range": (0, 2)}, "footprint"),
+        ("writer", {"rank": 7}, "writer signatures mismatch"),
+        ("writer", {"params": [9]}, "writer signatures mismatch"),
+        ("writer", {"ins": [200]}, "writer signatures mismatch"),
+        ("writer", {"ins": [999, 202]}, "writer signatures mismatch"),
+        ("writer", {"ins": [200, 999]}, "writer signatures mismatch"),
+        ("writer", {"outs": [999]}, "writer signatures mismatch"),
+        ("transition", {"sm_node_indices": (0, 1)}, "writer/frame partition"),
+        ("segment", {"pm_range": (0, 2)}, "writer/frame partition"),
     ],
 )
 def test_closed_output_sharded_linear_rejects_tampered_authority(target, mutation, message):
@@ -148,6 +151,15 @@ def test_closed_output_sharded_linear_selector_rejects_each_inexact_axis(axis):
         composer.render_closed_segment(ir, relation, segment.segment_id)
 
 
+def test_closed_output_sharded_linear_rejects_payload_digest_mismatch():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    cert = relation.certificates[0]
+    relation.certificates = (replace(cert, rank_count=4),)
+
+    with pytest.raises(ValueError, match="exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
 def test_closed_output_sharded_linear_selector_ignores_unrelated_but_rejects_duplicate():
     ir, relation, segment, *_ = _closed_fixture(k=3)
     cert = relation.certificates[0]
@@ -163,7 +175,7 @@ def test_closed_output_sharded_linear_selector_ignores_unrelated_but_rejects_dup
 def test_closed_output_sharded_linear_rejects_certificate_shape_tamper():
     ir, relation, segment, *_ = _closed_fixture(k=3)
     relation.certificates = (replace(relation.certificates[0], output_shard_shape=(1, 5, 99)),)
-    with pytest.raises(ValueError, match="shapes disagree"):
+    with pytest.raises(ValueError, match="exact typed certificate"):
         composer.render_closed_segment(ir, relation, segment.segment_id)
 
 
@@ -203,7 +215,6 @@ def test_generated_output_sharded_linear_witness_is_deterministic_renderer_outpu
     second = _witness_source(composer.render_closed_segment(ir, relation, segment.segment_id))
     assert first == second
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedKRankLinearOutputShardedWitness.lean"
-    witness.write_text(first, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == first
     assert "sorry" not in first
     assert "#print axioms segment_000000" in first

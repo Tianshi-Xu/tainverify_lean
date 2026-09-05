@@ -185,6 +185,7 @@ def synthetic_closed_reduction_linear(*, rank_count=3, rank3=True):
         "transition", certificate.rule_id,
         tuple(sorted((activation_spec, weight_spec))), (output_spec,),
         (0,), tuple(range(rank_count)), theorem,
+        certificate_digest=composer._typed_certificate_digest(certificate),
     )
     anchor = ClosedTensorShapeFactRecord(
         fact_id="anchor", side="sm", tid=999, shape=(1,), init_goal_id=999,

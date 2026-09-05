@@ -22,8 +22,8 @@ private def segment_000000_sm_node : NodeDecl := { rank := 0, op := "OpName.FW_c
 private def segment_000000_pm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW_contiguous", ins := [200], outs := [300] }
 private def segment_000000_pm_node_1 : NodeDecl := { rank := 1, op := "OpName.FW_contiguous", ins := [201], outs := [301] }
 private def segment_000000_pm_node_2 : NodeDecl := { rank := 2, op := "OpName.FW_contiguous", ins := [202], outs := [302] }
-private def segment_000000_sm_nodes : List NodeDecl := [segment_000000_sm_node]
-private def segment_000000_pm_nodes : List NodeDecl := [segment_000000_pm_node_0, segment_000000_pm_node_1, segment_000000_pm_node_2]
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_contiguous", ins := [100], outs := [110] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_contiguous", ins := [200], outs := [300] }, { rank := 1, op := "OpName.FW_contiguous", ins := [201], outs := [301] }, { rank := 2, op := "OpName.FW_contiguous", ins := [202], outs := [302] }]
 
 private def segment_000000 :
     ClosedDepSegmentCertificate SyntheticContiguous.gSM SyntheticContiguous.gPM state_pre state_post where
@@ -51,7 +51,7 @@ private def segment_000000 :
           intro t
           rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
             (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
-          simp [applyNodeDistributed, applyNodeRingAttn]
+          simp [applyNodeDistributed, applyNodeRingAttn, segment_000000_sm_node]
           exact applyNode_fw_contiguous_out SyntheticContiguous.gSM t 0 100 110
         ) (by native_decide) (by native_decide)]
       rw [foldl_applyNodeDistributedFaithful_at_not_written SyntheticContiguous.gSM (smNodes.take 0) smStore 100 (by native_decide) (by native_decide)]
@@ -63,7 +63,7 @@ private def segment_000000 :
           intro t
           rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
             (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
-          simp [applyNodeDistributed, applyNodeRingAttn]
+          simp [applyNodeDistributed, applyNodeRingAttn, segment_000000_pm_node_0]
           exact applyNode_fw_contiguous_out SyntheticContiguous.gPM t 0 200 300
         ) (by native_decide) (by native_decide)]
       rw [foldl_applyNodeDistributedFaithful_at_not_written SyntheticContiguous.gPM (pmNodes.take 0) pmStore 200 (by native_decide) (by native_decide)]
@@ -75,7 +75,7 @@ private def segment_000000 :
           intro t
           rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
             (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
-          simp [applyNodeDistributed, applyNodeRingAttn]
+          simp [applyNodeDistributed, applyNodeRingAttn, segment_000000_pm_node_1]
           exact applyNode_fw_contiguous_out SyntheticContiguous.gPM t 1 201 301
         ) (by native_decide) (by native_decide)]
       rw [foldl_applyNodeDistributedFaithful_at_not_written SyntheticContiguous.gPM (pmNodes.take 1) pmStore 201 (by native_decide) (by native_decide)]
@@ -87,7 +87,7 @@ private def segment_000000 :
           intro t
           rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
             (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
-          simp [applyNodeDistributed, applyNodeRingAttn]
+          simp [applyNodeDistributed, applyNodeRingAttn, segment_000000_pm_node_2]
           exact applyNode_fw_contiguous_out SyntheticContiguous.gPM t 2 202 302
         ) (by native_decide) (by native_decide)]
       rw [foldl_applyNodeDistributedFaithful_at_not_written SyntheticContiguous.gPM (pmNodes.take 2) pmStore 202 (by native_decide) (by native_decide)]

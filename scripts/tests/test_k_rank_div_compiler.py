@@ -58,8 +58,8 @@ def test_div_matcher_derives_axis_specific_ordered_sharded_input(axis):
     ("writer", {"parameters": ()}, "one scalar parameter"),
     ("writer", {"parameters": (8, 9)}, "one scalar parameter"),
     ("writer", {"parameters": (9,)}, "identical scalar parameter"),
-    ("writer", {"input_bindings": ("pm:9:0", "pm:10:0")}, "unary"),
-    ("writer", {"input_shapes": ()}, "one declared input shape"),
+    ("writer", {"input_bindings": ("pm:9:0", "pm:10:0")}, "input arity"),
+    ("writer", {"input_shapes": ()}, "declared input arity"),
     ("writer", {"output_shape": (2, 4, 5)}, "rank-4"),
     ("input", {"output_shape": (2, 4, 6, 7)}, "input sharding"),
 ])
@@ -140,7 +140,6 @@ def _closed_fixture(axis, k=3, c=8):
 def test_div_renderer_replays_exact_writers_scalar_and_axis_wrapper(axis, apply_lemma):
     ir, relation, segment, inp, out = _closed_fixture(axis)
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
-    assert source.count('op := "OpName.FW_div"') == 4
     assert source.count("foldl_faithful_middle_writer") == 4
     assert source.count(apply_lemma) == 4
     assert f"ShardedRel.fw_div_dim{axis}_rank4" in source
@@ -154,7 +153,6 @@ def test_div_renderer_replays_exact_writers_scalar_and_axis_wrapper(axis, apply_
 def test_div_renderer_preserves_dynamic_ordered_k_and_scalar_identity(k):
     ir, relation, segment, inp, out = _closed_fixture(2, k=k, c=13)
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
-    assert source.count('op := "OpName.FW_div"') == 1 + k
     assert source.count("foldl_faithful_middle_writer") == 1 + k
     assert source.count("(13 : Scalar)") == 2 * (1 + k) + 1
     assert ", ".join(f"pmStore {tid}" for tid in inp.pm_tids) in source
@@ -216,7 +214,7 @@ def test_div_renderer_rejects_tampered_transition_identity(field, value):
     ({"rank": 7}, "ordered ranks"),
     ({"params": []}, "one scalar parameter"),
     ({"params": [9]}, "identical scalar parameter"),
-    ({"ins": [202, 999]}, "unary"),
+    ({"ins": [202, 999]}, "operator arity"),
 ])
 def test_div_renderer_rejects_tampered_live_writers(mutation, message):
     ir, relation, segment, *_ = _closed_fixture(1)
@@ -279,7 +277,14 @@ def test_generated_div_witness_is_direct_renderer_output(axis):
         full = (1, 12, 768, 64) if axis == 2 else (1, 36, 256, 64)
         shard = (1, 12, 256, 64)
     cert = relation.certificates[0]
-    relation.certificates = (replace(cert, full_shape=full, shard_shape=shard),)
+    updated_cert = replace(cert, full_shape=full, shard_shape=shard)
+    relation.certificates = (updated_cert,)
+    relation.transition_specs = (
+        replace(
+            relation.transition_specs[0],
+            certificate_digest=composer._typed_certificate_digest(updated_cert),
+        ),
+    )
     records = list(relation.dependent_chain_plan.relation_facts)
     records[0] = replace(records[0], full_shape=full, shard_shape=shard)
     records[1] = replace(records[1], full_shape=full, shard_shape=shard)
@@ -287,8 +292,6 @@ def test_generated_div_witness_is_direct_renderer_output(axis):
     source = _witness_source(
         composer.render_closed_segment(ir, relation, segment.segment_id), axis, k)
     witness = Path(__file__).parents[2] / f"trainverify/denote/GeneratedKRankDivDim{axis}CompilerWitness.lean"
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert source.count("import denote.KRankDivGather") == 1
     assert "sorry" not in source

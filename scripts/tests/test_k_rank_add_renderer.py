@@ -98,12 +98,11 @@ def _closed_fixture(k=3):
 def test_add_renderer_uses_exact_certificate_ordered_inputs_and_one_plus_k_writers():
     ir, relation, segment, a, b, out = _closed_fixture(k=3)
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
-    assert source.count(": NodeDecl :=") == 4
-    assert source.count("foldl_faithful_binary_middle_writer") == 4
+    assert source.count("foldl_faithful_middle_writer") == 4
     assert source.count("applyNode_fw_add2_out") == 4
     assert "fw_add_allGather_dim_K" in source
-    assert f"[pmStore {a.pm_tids[0]}, pmStore {a.pm_tids[1]}, pmStore {a.pm_tids[2]}]" in source
-    assert f"[pmStore {b.pm_tids[0]}, pmStore {b.pm_tids[1]}, pmStore {b.pm_tids[2]}]" in source
+    assert f"[pmFinal {a.pm_tids[0]}, pmFinal {a.pm_tids[1]}, pmFinal {a.pm_tids[2]}]" in source
+    assert f"[pmFinal {b.pm_tids[0]}, pmFinal {b.pm_tids[1]}, pmFinal {b.pm_tids[2]}]" in source
     assert f"[pmFinal {out.pm_tids[0]}, pmFinal {out.pm_tids[1]}, pmFinal {out.pm_tids[2]}]" in source
     assert "rankCount = 3" not in source
 
@@ -118,8 +117,8 @@ def test_add_renderer_recovers_certificate_roles_when_transition_pre_facts_are_r
 
     source = composer.render_closed_segment(ir, reordered_relation, segment.segment_id)
 
-    assert f"[pmStore {a.pm_tids[0]}, pmStore {a.pm_tids[1]}, pmStore {a.pm_tids[2]}]" in source
-    assert f"[pmStore {b.pm_tids[0]}, pmStore {b.pm_tids[1]}, pmStore {b.pm_tids[2]}]" in source
+    assert f"[pmFinal {a.pm_tids[0]}, pmFinal {a.pm_tids[1]}, pmFinal {a.pm_tids[2]}]" in source
+    assert f"[pmFinal {b.pm_tids[0]}, pmFinal {b.pm_tids[1]}, pmFinal {b.pm_tids[2]}]" in source
 
 
 def test_add_renderer_selects_one_exact_certificate_and_rejects_duplicates():
@@ -195,8 +194,6 @@ def test_generated_add_witness_is_exact_renderer_output():
     ir, relation, segment, *_ = _closed_fixture(k=3)
     source = _witness_source(composer.render_closed_segment(ir, relation, segment.segment_id), 3)
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedKRankAddCompilerWitness.lean"
-    witness.unlink(missing_ok=True)
-    witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert source.count("import denote.KRankAddGather") == 1
     assert "sorry" not in source

@@ -23,8 +23,8 @@ private def segment_000000_sm_node : NodeDecl := { rank := 0, op := "OpName.FW_m
 private def segment_000000_pm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW_matmul", ins := [200, 201], outs := [301] }
 private def segment_000000_pm_node_1 : NodeDecl := { rank := 1, op := "OpName.FW_matmul", ins := [200, 202], outs := [302] }
 private def segment_000000_pm_node_2 : NodeDecl := { rank := 2, op := "OpName.FW_matmul", ins := [200, 203], outs := [303] }
-private def segment_000000_sm_nodes : List NodeDecl := [segment_000000_sm_node]
-private def segment_000000_pm_nodes : List NodeDecl := [segment_000000_pm_node_0, segment_000000_pm_node_1, segment_000000_pm_node_2]
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_matmul", ins := [100, 101], outs := [110] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_matmul", ins := [200, 201], outs := [301] }, { rank := 1, op := "OpName.FW_matmul", ins := [200, 202], outs := [302] }, { rank := 2, op := "OpName.FW_matmul", ins := [200, 203], outs := [303] }]
 
 private def segment_000000 :
     ClosedDepSegmentCertificate SyntheticMatmul.gSM SyntheticMatmul.gPM state_pre state_post where

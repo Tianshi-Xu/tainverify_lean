@@ -1369,6 +1369,40 @@ noncomputable def bw_maybe_shuffle
 noncomputable def bw_maybe_unshuffle
     (grad _cu : Tensor) (_cpSize _cpRank : Nat) : Tensor := grad
 
+/-- Graph-aware backward of NNScaler's zigzag shuffle.  Autograd reverses the
+shuffle A2A, so the gradient is the exact unshuffle permutation over all rank
+gradients. -/
+noncomputable def bw_maybe_shuffle_collective
+    (grads : List Tensor) (cu : List Nat) (cpSize cpRank : Nat) : Tensor :=
+  let localTensor := grads.getD cpRank (zeroTensor [])
+  if cpSize = 1 then localTensor
+  else
+    let chunk := localTensor.shape.getD 0 0
+    let hiddenStride := prodShape localTensor.shape.tail
+    Tensor.mkShape localTensor.shape (fun i =>
+      let token := i.val / hiddenStride
+      let h := i.val % hiddenStride
+      let globalPos := cpRank * chunk + token
+      let srcRank := destRank cu cpSize globalPos
+      let srcOffset := zigzagInvOffset cu cpSize srcRank globalPos
+      valAt (grads.getD srcRank (zeroTensor []))
+        (srcOffset * hiddenStride + h))
+
+/-- Graph-aware backward of NNScaler's zigzag unshuffle.  Autograd reverses
+the unshuffle A2A, hence applies the exact forward shuffle permutation. -/
+noncomputable def bw_maybe_unshuffle_collective
+    (grads : List Tensor) (cu : List Nat) (cpSize cpRank : Nat) : Tensor :=
+  let localTensor := grads.getD cpRank (zeroTensor [])
+  if cpSize = 1 then localTensor
+  else
+    let chunk := localTensor.shape.getD 0 0
+    let hiddenStride := prodShape localTensor.shape.tail
+    Tensor.mkShape localTensor.shape (fun i =>
+      let token := i.val / hiddenStride
+      let h := i.val % hiddenStride
+      gatherFromRank grads chunk hiddenStride
+        (zigzagPos cu cpSize cpRank token) h)
+
 /-! ### Attention (varlen packed, GQA, causal + sliding window)
 
     Models the two nnscaler-registered fused attention kernels used by YOCO-MoE:
@@ -3004,6 +3038,11 @@ def allReducePrim (_numParts _rank : Nat) (xs : List Tensor) : Tensor :=
   let sh := (xs.head?.map (fun t => t.shape)).getD []
   Tensor.mkShape sh (fun idx => xs.foldl (fun acc t => acc + valAt t idx.1) 0)
 
+/-- Reduce-scatter sums the ordered full contributions and publishes the
+rank-local chunk on the declared axis. -/
+def reduceScatterPrimDimN (dim numParts rank : Nat) (xs : List Tensor) : Tensor :=
+  chunkPrimDimN dim numParts rank (allReducePrim numParts rank xs)
+
 /-- allToAllPrim: redistribution across ranks.
     Semantically equivalent to: gather all shards along dimension 0,
     then chunk along the last dimension. This is the default when
@@ -3019,6 +3058,16 @@ theorem allReducePrim_shape (numParts rank : Nat) (xs : List Tensor) (x0 : Tenso
     (hhead : xs.head? = some x0) :
     (allReducePrim numParts rank xs).shape = x0.shape := by
   simp [allReducePrim, Tensor.mkShape, hhead]
+
+/-- A one-element AllReduce is the identity, independently of the declared rank count. -/
+theorem allReducePrim_singleton_eq (numParts rank : Nat) (x : Tensor) :
+    allReducePrim numParts rank [x] = x := by
+  apply Tensor.ext
+  · simp [allReducePrim, Tensor.mkShape]
+  · intro idx hidx
+    by_cases hi : idx < prodShape x.shape
+    · simp [allReducePrim, Tensor.mkShape, valAt, hi]
+    · simp [allReducePrim, Tensor.mkShape, valAt, hi]
 
 /-!
 ## Small value-level lemmas (avoid giant simp)
@@ -3477,6 +3526,18 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       | [] => none
       | sh0 :: _ =>
           if allEqShape sh0 xs then some [sh0] else none
+  | "OpName.ReduceScatterPrim", xs =>
+      match xs, params with
+      | [], _ => none
+      | sh0 :: _, [dim] =>
+          let d := sh0.getD dim 0
+          if decide (xs.length = numParts ∧ 0 < numParts ∧ numParts ≤ d)
+              && allEqShape sh0 xs then
+            let shard := divNat d numParts
+            if decide (0 < shard) then some [sh0.set dim shard] else none
+          else
+            none
+      | _, _ => none
   | "OpName.AllToAllPrim", xs =>
       match xs with
       | [] => none
@@ -3827,6 +3888,10 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       | [dim] => [allGatherPrimDimN dim numParts rank xs]
       | _ => [allGatherPrimDimN ((xs.head?.map (fun t => t.shape.length)).getD 1 - 1) numParts rank xs]
   | "OpName.AllReducePrim", xs => [allReducePrim numParts rank xs]
+  | "OpName.ReduceScatterPrim", xs =>
+      match params with
+      | [dim] => [reduceScatterPrimDimN dim numParts rank xs]
+      | _ => []
   | "OpName.AllToAllPrim", xs =>
       match params with
       | [idim, odim] => [allToAllPrimWithDims numParts rank xs idim odim]
@@ -4469,6 +4534,12 @@ theorem evalOp_allReducePrim (numParts rank : Nat) (params : List Nat) (xs : Lis
       [allReducePrim numParts rank xs] := by
   rfl
 
+/-- Unfolding lemma for faithful reduce-scatter with an explicit shard axis. -/
+theorem evalOp_reduceScatterPrim (numParts rank dim : Nat) (xs : List Tensor) :
+    evalOp numParts rank "OpName.ReduceScatterPrim" [dim] xs =
+      [reduceScatterPrimDimN dim numParts rank xs] := by
+  rfl
+
 /-- Unfolding lemma for binary `FW_add`. -/
 theorem evalOp_fw_add2 (numParts rank : Nat) (x y : Tensor) :
     evalOp numParts rank "OpName.FW_add" [] [x, y] = [elemwiseAdd x y] := by
@@ -4750,6 +4821,18 @@ theorem applyNode_allReducePrim_out
   unfold storeSet
   simp [List.find?]
 
+/-- `applyNode` for reduce-scatter with an explicit shard dimension. -/
+theorem applyNode_reduceScatterPrim_out
+    (g : GraphDecl) (s : Store) (rank dim : Nat) (ins : List Tid) (outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.ReduceScatterPrim", ins := ins, outs := [outTid], params := [dim] } outTid =
+      reduceScatterPrimDimN dim g.numRanks rank (ins.map s) := by
+  unfold applyNode
+  rw [evalOp_reduceScatterPrim]
+  change storeSet s [(outTid,
+    reduceScatterPrimDimN dim g.numRanks rank (ins.map s))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-- `applyNode` for `AllToAllPrim` with explicit split/gather dimensions. -/
 theorem applyNode_allToAllPrimWithDims_out
     (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid)
@@ -4930,6 +5013,16 @@ theorem applyNode_fw_swiglu_out_1p
   unfold applyNode
   rw [show ([gateTid, upTid] : List Tid).map s = [s gateTid, s upTid] from rfl, evalOp_fw_swiglu_iroha]
   change storeSet s [(outTid, fw_swiglu (s gateTid) (s upTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- applyNode for `FW_glu` with singleton output. -/
+theorem applyNode_fw_glu_out_1p
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid gateTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_glu", ins := [xTid, gateTid], outs := [outTid] } outTid =
+      fw_glu (s xTid) (s gateTid) := by
+  unfold applyNode evalOp
+  change storeSet s [(outTid, fw_glu (s xTid) (s gateTid))] outTid = _
   unfold storeSet
   simp [List.find?]
 
@@ -8799,6 +8892,46 @@ theorem allGatherPrimDimN_dim1_4_1_2_128_valAt (xs : List Tensor)
   congr 1
   ring
 
+/-- Chunking a four-way dim-1 gather of `[1,2,128]` shards recovers the selected shard. -/
+theorem chunkPrimDimN_allGatherPrimDimN_dim1_4_1_2_128 (xs : List Tensor) (r : Nat)
+    (hr : r < 4) (hlen : xs.length = 4)
+    (hshape : ∀ x ∈ xs, x.shape = [1, 2, 128]) :
+    chunkPrimDimN 1 4 r (allGatherPrimDimN 1 4 0 xs) =
+      xs.getD r (zeroTensor [1, 2, 128]) := by
+  have hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 128] := by
+    match xs, hlen with
+    | x0 :: _, _ =>
+      simp only [List.head?, Option.map, Option.getD]
+      exact hshape x0 (List.mem_cons_self ..)
+  have hgather_shape : (allGatherPrimDimN 1 4 0 xs).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 1 4 xs [1, 2, 128] hhead]
+    simp [List.set, List.getD]
+  have hchunk_shape : (chunkPrimDimN 1 4 r (allGatherPrimDimN 1 4 0 xs)).shape = [1, 2, 128] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hgather_shape (by omega)]
+    simp [List.set, List.getD]
+  have hrhs_shape : (xs.getD r (zeroTensor [1, 2, 128])).shape = [1, 2, 128] := by
+    have hr_len : r < xs.length := by omega
+    have helem : xs.getD r (zeroTensor [1, 2, 128]) = xs[r] := by
+      simp [List.getD, List.getElem?_eq_getElem hr_len]
+    rw [helem]
+    exact hshape (xs[r]) (List.getElem_mem hr_len)
+  apply Tensor.ext
+  · rw [hchunk_shape, hrhs_shape]
+  · intro idx hidx
+    rw [hchunk_shape] at hidx
+    have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+    set p := idx / 128
+    set j := idx % 128
+    have hp : p < 2 := by
+      have : idx / 128 < 256 / 128 := Nat.div_lt_div_of_lt_of_dvd ⟨2, rfl⟩ hidx256
+      simpa using this
+    have hj : j < 128 := Nat.mod_lt idx (by omega)
+    have hidx_eq : idx = p * 128 + j := by subst p j; omega
+    rw [hidx_eq]
+    rw [chunk_dim1_4_1_8_128_valAt (allGatherPrimDimN 1 4 0 xs) r p j
+        hgather_shape hr hp hj]
+    exact allGatherPrimDimN_dim1_4_1_2_128_valAt xs r hr p hp j hj hhead
+
 set_option maxHeartbeats 800000 in
 set_option maxRecDepth 4096 in
 theorem allGatherPrimDimN_chunkPrimDimN_id_dim1_4_128 (x : Tensor)
@@ -9241,7 +9374,7 @@ theorem bw_layernorm_dx_allGather_valAt_dim1_4_1_2_32
     rw [hVG k hk, hVX k hk]
   rw [hSumDy, hSumDyXhat]
 
-set_option maxHeartbeats 800000 in
+set_option maxHeartbeats 500000 in
 /-- The dx output of `bw_layernorm` on dim-1-gathered tensors (4 parts, shard [1,2,32])
     equals the allGather of the per-shard dx outputs. -/
 theorem bw_layernorm_dx_dp_split_dim1_4_1_2_32
@@ -10259,7 +10392,7 @@ theorem chunk3_gather3_roundtrip_1_4_8_2 (c0 c1 c2 c3 : Tensor)
     omega
   rw [hmod, hdiv]
 
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 theorem chunk1_gather1_roundtrip_1_1_8_8 (c0 c1 c2 c3 : Tensor)
     (hc0 : c0.shape = [1, 1, 8, 8]) (hc1 : c1.shape = [1, 1, 8, 8])
     (hc2 : c2.shape = [1, 1, 8, 8]) (hc3 : c3.shape = [1, 1, 8, 8])
@@ -12193,7 +12326,7 @@ into 4 batch-slices of shape `[1,1,8,8]`; rank `r` computes `xᵀ_r @ G_r` where
 matching batch shard, and the full `dy` is reconstructed by gathering along dim 1. Since
 `transpose2d` and `batchedMatmul` act independently per batch element, batch-chunking commutes
 with the matmul. -/
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 theorem bw_matmul_snd_split_batchdim1_1_4_8_8 (X G0 G1 G2 G3 : Tensor)
     (hX : X.shape = [1, 4, 8, 8])
     (hg0 : G0.shape = [1, 1, 8, 8]) (hg1 : G1.shape = [1, 1, 8, 8])
@@ -12410,7 +12543,7 @@ private theorem bw_split_aux_hKbnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256)
 `y` of shape `[1,4,8,8]` is partitioned along its contraction-free output dimension (dim 2)
 into 4 shards of shape `[1,4,2,8]`; each rank computes `g @ shardᵀ` (shape `[1,4,8,2]`), and
 the full `dx` is reconstructed by gathering along the output's last dimension (dim 3). -/
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 -- heavy flat-index arithmetic across matmul / transpose / gather
 theorem bw_matmul_fst_split_1_4_8_8 (g y0 y1 y2 y3 : Tensor)
     (hg : g.shape = [1, 4, 8, 8])
@@ -12550,7 +12683,7 @@ private theorem snd_split_aux_gloc (idx l : Nat) :
 shape `[1,4,8,2]`; each rank computes `xᵀ @ shard` (shape `[1,4,8,2]`), and the full `dy`
 is reconstructed by gathering along the output's last dimension (dim 3). Here `a = xᵀ` is
 the (shared) transposed input. -/
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 -- heavy flat-index arithmetic across matmul / gather
 theorem bw_matmul_snd_split_1_4_8_8 (a g0 g1 g2 g3 : Tensor)
     (ha : a.shape = [1, 4, 8, 8])
@@ -12721,7 +12854,7 @@ private theorem bw_snd_aux_geq (idx l loc : Nat) (hidx : idx < 256)
 `x` of shape `[1,4,8,8]` is partitioned along its last dimension (dim 3) into 4 shards of
 shape `[1,4,8,2]`; each rank computes `shardᵀ @ g` (shape `[1,4,2,8]`), and the full `dy`
 is reconstructed by gathering along the output's dim 2. -/
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 -- heavy flat-index arithmetic across matmul / transpose / gather
 theorem bw_matmul_snd_split_dX_1_4_8_8 (g x0 x1 x2 x3 : Tensor)
     (hg : g.shape = [1, 4, 8, 8])
@@ -13528,7 +13661,7 @@ theorem bw_linear_fst_valAt_1_2_32_g169 (g x w : Tensor) (o : Nat)
   simp only [show ((2:Nat)*32=0)=False from by simp, show ((32:Nat)=0)=False from by simp,
     if_false, e1, e2, e3, Nat.zero_mul, Nat.zero_add]
 
-set_option maxHeartbeats 2000000 in
+set_option maxHeartbeats 500000 in
 /-- Data-parallel (sequence-dim) split of the dX output of `BW_linear`: the gradient
     `g` (`[1,8,32]`) is dim-1 all-gathered from four `[1,2,32]` shards, the activation
     `x` (`[1,8,32]`) is locally dim-1 chunked per rank, and the weight `w` (`[32,32]`)
@@ -14058,7 +14191,7 @@ theorem allGatherDimN0_4_8128_valAt_g178 (ws : List Tensor)
   congr 1
   omega
 
-set_option maxHeartbeats 2000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 8192 in
 /-- Tensor-parallel dX reduction for `BW_linear`: dim-2 split gradient (`[1,8,8]` shards)
     + dim-0 split weight (`[8,128]` shards), reduced by `allReducePrim` (goal_178). -/
@@ -14939,7 +15072,7 @@ theorem bw_linear_fst_valAt_1_8_8_g276 (g x w : Tensor) (o : Nat)
   simp only [show ((8:Nat)*8=0)=False from by simp, show ((8:Nat)=0)=False from by simp,
     if_false, e1, e2, e3, Nat.zero_mul, Nat.zero_add]
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 500000 in
 /-- Column-parallel (output-feature split) input gradient for `BW_linear`.  The gradient
     `g` (`[1,8,32]`) is shared, the weight `w` (`[32,32]`) is sharded on dim 1 into four
     `[32,8]` shards (reassembled by `allGatherPrimDimN 1`), and the activation `x`
@@ -15264,7 +15397,7 @@ private theorem dw_aux_mod8 (a m l : Nat) (hl : l < 8) :
 private theorem dw_aux_div8 (a m l : Nat) (hl : l < 8) :
     (a * 64 + m * 8 + l) / 8 * 2 + (a * 64 + m * 8 + l) % 8 % 2 = a * 16 + m * 2 + l % 2 := by omega
 
-set_option maxHeartbeats 6400000 in
+set_option maxHeartbeats 500000 in
 -- heavy flat-index arithmetic across matmul / transpose / two gathers
 theorem bw_matmul_fst_split_dW_1_4_8_8 (g0 g1 g2 g3 y0 y1 y2 y3 : Tensor)
     (hg0 : g0.shape = [1, 4, 8, 2]) (hg1 : g1.shape = [1, 4, 8, 2])
@@ -17143,7 +17276,7 @@ theorem allGatherPrimDimN_dim1_4_32_32_valAt_g213 (ws : List Tensor)
   have hmr : (r * 32 + lc) % 32 = lc := by omega
   rw [hd128, hm128, hdr, hmr]
 
-set_option maxHeartbeats 2000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 8192 in
 /-- BW_linear dX with the weight `w` (`[32,128]`) dim-1 split into 4 shards (each `[32,32]`,
     dim-1 all-gathered), and the per-rank gradient `g` (`[1,8,32]`) shared.  The full dX
@@ -17336,7 +17469,7 @@ theorem bw_linear_fst_x_irrelevant_1_8_32_g245 (g x x' w : Tensor)
       bw_linear_fst_valAt_1_8_32_g134 g x w 128 hg hx hw seq hseq col hcol,
       bw_linear_fst_valAt_1_8_32_g134 g x' w 128 hg hx' hw seq hseq col hcol]
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 500000 in
 /-- Column-parallel (output-feature split) input gradient for `BW_linear` with a wide
     gradient (`g : [1,8,128]`).  The gradient `g` is shared, the weight `w` (`[128,32]`)
     is sharded on dim 1 into four `[128,8]` shards (reassembled by `allGatherPrimDimN 1`),
@@ -17446,7 +17579,7 @@ theorem bw_linear_fst_valAt_1_2_128_g143 (g x w : Tensor) (o : Nat)
   simp only [show ((2:Nat)*128=0)=False from by simp, show ((128:Nat)=0)=False from by simp,
     if_false, e1, e2, e3, Nat.zero_mul, Nat.zero_add]
 
-set_option maxHeartbeats 2000000 in
+set_option maxHeartbeats 500000 in
 /-- Data-parallel (sequence-dim) split of the dX output of `BW_linear` matching the
     AllToAll-resharded layout of goal_143: the gradient (`[1,8,32]`) is dim-1 all-gathered
     from four `[1,2,32]` shards `g0..g3`, the activation `x` (`[1,8,128]`) is only used for
@@ -20361,7 +20494,7 @@ theorem bw_softmax_shape_d8_g234 (g y : Tensor) (a b c : Nat)
 
 -- `valAt` of `softmaxBwdFromOutput g y` when the last dimension is `8`:
 -- `dx_i = y_i * (g_i - Σ_j y_j g_j)` summed over the contiguous last-dim block.
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 500000 in
 theorem softmaxBwdFromOutput_valAt_d8_g234 (g y : Tensor) (a b c idx : Nat)
     (hy : y.shape = [a, b, c, 8]) (hidx : idx < prodShape y.shape) :
     valAt (softmaxBwdFromOutput g y) idx =
@@ -20381,7 +20514,7 @@ theorem softmaxBwdFromOutput_valAt_d8_g234 (g y : Tensor) (a b c idx : Nat)
 
 -- `softmaxBwdFromOutput` distributes over an all-gather along dim 1 (the batch axis,
 -- independent of the last softmax axis), for shard shape `[1,1,8,8]`.
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 theorem softmaxBwdFromOutput_split_dim1_4_1_4_8_8_g234 (g y : Tensor)
     (hg : g.shape = [1, 4, 8, 8]) (hy : y.shape = [1, 4, 8, 8]) :
     softmaxBwdFromOutput g y = allGatherPrimDimN 1 4 0
@@ -20455,7 +20588,7 @@ theorem softmaxBwdFromOutput_split_dim1_4_1_4_8_8_g234 (g y : Tensor)
 -- `softmax` distributes over dim-1 chunk for shape `[1,4,8,8]`, chunk factor 4.
 -- The softmax axis (last dim, size 8) is preserved by chunking on dim 1, so
 -- `softmax (chunk r y) = chunk r (softmax y)`.
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 theorem softmax_chunkPrimDimN_dim1_1_4_8_8_g234 (y : Tensor) (r : Nat)
     (hy : y.shape = [1, 4, 8, 8]) (hr : r < 4) :
     softmax (chunkPrimDimN 1 4 r y) = chunkPrimDimN 1 4 r (softmax y) := by
@@ -20801,6 +20934,16 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_4_8_g96 (x : Tensor)
   rw [chunkPrimDimN_2_4_valAt_1_8_4_8_g96 x ((idx % 32) / 8)
     ((idx / 32) * 8 + idx % 8) hsh hr (by omega)]
   rw [hloc]
+
+/-- Generic `applyNode` rule for `BW_contiguous`: the gradient is its first input. -/
+theorem applyNode_bw_contiguous_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_contiguous", ins := [gTid, xTid],
+                    outs := [outTid] } outTid = s gTid := by
+  unfold applyNode
+  change storeSet s [(outTid, s gTid)] outTid = _
+  unfold storeSet
+  simp [List.find?]
 
 /-- `applyNode` for `BW_contiguous` (`ins = [g, x]`, output = first input `g`). -/
 theorem applyNode_bw_contiguous_out_g132
@@ -21589,6 +21732,83 @@ noncomputable def applyNodeRingAttn_sliding_window (g : GraphDecl) (s : Store) (
   -- Chunk on seq dim (dim 0) to get this rank's shard.
   chunkPrimDimN 0 numShards myIdx fullOut
 
+/-- Whether every attention buddy uses this node's K/V tensor identifiers. -/
+def ringAttnUsesReplicatedKV (g : GraphDecl) (n : NodeDecl) : Bool :=
+  let buddies := ringAttnBuddies g n
+  let kTid := n.ins.getD 2 0
+  let vTid := n.ins.getD 3 0
+  buddies.all (fun m => decide (m.ins.getD 2 0 = kTid)) &&
+    buddies.all (fun m => decide (m.ins.getD 3 0 = vTid))
+
+/-- Exact full-sequence backward for context-parallel sliding-window attention. -/
+noncomputable def applyNodeRingAttn_bw_sliding_window
+    (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor × Tensor × Tensor :=
+  let buddies := ringAttnBuddies g n
+  let myIdx := (buddies.findIdx? (fun m => m.rank = n.rank)).getD 0
+  let numShards := buddies.length
+  let fullGO := allGatherPrimDimN 0 numShards 0
+    (buddies.map (fun m => s (m.ins.getD 0 0)))
+  let fullQ := allGatherPrimDimN 0 numShards 0
+    (buddies.map (fun m => s (m.ins.getD 1 0)))
+  let fullK := allGatherPrimDimN 0 numShards 0
+    (buddies.map (fun m => s (m.ins.getD 2 0)))
+  let fullV := allGatherPrimDimN 0 numShards 0
+    (buddies.map (fun m => s (m.ins.getD 3 0)))
+  let (dq, dk, dv) := bw_attn_varlen fullGO fullQ fullK fullV
+    (s (n.ins.getD 4 0)) (s (n.ins.getD 5 0))
+    (n.params.getD 0 1) (n.params.getD 1 1)
+    (n.params.getD 2 1) (n.params.getD 3 1)
+    (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)
+  (chunkPrimDimN 0 numShards myIdx dq,
+   chunkPrimDimN 0 numShards myIdx dk,
+   chunkPrimDimN 0 numShards myIdx dv)
+
+/-- Exact backward for zigzag attention. Q/output gradients are converted between
+zigzag and linear ownership. Replicated K/V receive rank-local contributions;
+the proof compiler rejects non-replicated K/V until graph authority carries an
+explicit contiguous-versus-zigzag ownership contract. -/
+noncomputable def applyNodeRingAttn_bw_zigzag
+    (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor × Tensor × Tensor :=
+  let buddies := ringAttnBuddies g n
+  let myIdx := (buddies.findIdx? (fun m => m.rank = n.rank)).getD 0
+  let numShards := buddies.length
+  let gShards := buddies.map (fun m => s (m.ins.getD 0 0))
+  let qShards := buddies.map (fun m => s (m.ins.getD 1 0))
+  let kShards := buddies.map (fun m => s (m.ins.getD 2 0))
+  let vShards := buddies.map (fun m => s (m.ins.getD 3 0))
+  let cuQTensor := s (n.ins.getD 4 0)
+  let cuKTensor := s (n.ins.getD 5 0)
+  let cuQ := decodeCuSeqlens cuQTensor
+  let replicatedKV := ringAttnUsesReplicatedKV g n
+  -- Replicated K/V receive this rank's local contribution; sharded K/V pass
+  -- through an all-gather whose backward reduce-scatter aggregates every rank.
+  let activeGShards := if replicatedKV then
+    (List.range numShards).map (fun r =>
+      if r = myIdx then gShards.getD r (zeroTensor [])
+      else zeroTensor (gShards.getD myIdx (zeroTensor [])).shape)
+    else gShards
+  let linearG := (List.range numShards).map (fun r =>
+    bw_maybe_shuffle_collective activeGShards cuQ numShards r)
+  let linearQ := (List.range numShards).map (fun r =>
+    bw_maybe_shuffle_collective qShards cuQ numShards r)
+  let fullGO := allGatherPrimDimN 0 numShards 0 linearG
+  let fullQ := allGatherPrimDimN 0 numShards 0 linearQ
+  let fullK := if replicatedKV then s (n.ins.getD 2 0)
+    else allGatherPrimDimN 0 numShards 0 kShards
+  let fullV := if replicatedKV then s (n.ins.getD 3 0)
+    else allGatherPrimDimN 0 numShards 0 vShards
+  let (dq, dk, dv) := bw_attn_varlen fullGO fullQ fullK fullV cuQTensor cuKTensor
+    (n.params.getD 0 1) (n.params.getD 1 1)
+    (n.params.getD 2 1) (n.params.getD 3 1)
+    (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)
+  let linearDQ := (List.range numShards).map (fun r =>
+    chunkPrimDimN 0 numShards r dq)
+  let localDQ := bw_maybe_unshuffle_collective linearDQ cuQ numShards myIdx
+  if replicatedKV then (localDQ, dk, dv)
+  else
+    (localDQ, chunkPrimDimN 0 numShards myIdx dk,
+      chunkPrimDimN 0 numShards myIdx dv)
+
 /-- Singleton collapse for `applyNodeRingAttn_sliding_window`: when `n` is its
     only ring-attn buddy (numShards=1 case), the ring machinery reduces to plain
     `fw_attn_varlen`. This is the Denote-level analogue of Python's
@@ -21644,8 +21864,9 @@ neither rank-sorts nor infers replicas from op names.  Declared buddy order is
 the expert-shard concatenation order.  Missing or malformed metadata inherits
 `replicaBuddies`' fail-closed singleton result.
 
-Only `FW_all2all_moe_gmm` is added here.  Attention dispatch is delegated
-unchanged to `applyNodeRingAttn`; shuffle remains ordinary `applyNode` behavior.
+This layer adds full-expert MoE plus graph-aware backward shuffle, unshuffle,
+zigzag attention, and sliding-window attention. Forward attention remains
+delegated to `applyNodeRingAttn`.
 -/
 
 /-- Faithful full-expert value for one generated five-input MoE node.  Input
@@ -21662,18 +21883,93 @@ noncomputable def applyNodeFullExpertMoE_value
     (n.params.getD 0 1) (n.params.getD 3 1)
     (((n.params.getD 4 10 : Nat) : Scalar))
 
-/-- Canonical distributed apply step. Full-expert MoE is intercepted first;
-    every other operator retains the existing graph-aware attention semantics. -/
+/-- Exact cross-rank gradient of a generated `BW_maybe_shuffle` node.  Buddy
+order is graph authority and is never reconstructed from tensor identifiers. -/
+noncomputable def applyNodeBWMaybeShuffleValue
+    (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor :=
+  let buddies := g.replicaBuddies n
+  let gradShards := buddies.map (fun m => s (m.ins.getD 0 0))
+  let cu := decodeCuSeqlens (s (n.ins.getD 1 0))
+  bw_maybe_shuffle_collective gradShards cu
+    (n.params.getD 0 1) (n.params.getD 1 0)
+
+/-- Exact cross-rank gradient of a generated `BW_maybe_unshuffle` node. -/
+noncomputable def applyNodeBWMaybeUnshuffleValue
+    (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor :=
+  let buddies := g.replicaBuddies n
+  let gradShards := buddies.map (fun m => s (m.ins.getD 0 0))
+  let cu := decodeCuSeqlens (s (n.ins.getD 1 0))
+  bw_maybe_unshuffle_collective gradShards cu
+    (n.params.getD 0 1) (n.params.getD 1 0)
+
+/-- Updating a prefix of declared outputs cannot change an undeclared tensor id. -/
+theorem storeSet_zip_eq_of_not_mem
+    (s : Store) (tids : List Tid) (values : List Tensor) (tid : Tid)
+    (h : tid ∉ tids) :
+    storeSet s (List.zip tids values) tid = s tid := by
+  apply storeSet_eq_of_not_mem_fst
+  induction tids generalizing values with
+  | nil => simp
+  | cons a rest ih =>
+      cases values with
+      | nil => simp
+      | cons value values =>
+          simp only [List.zip_cons_cons, List.map_cons, List.mem_cons, not_or] at h ⊢
+          exact ⟨h.1, ih values h.2⟩
+
+/-- Canonical distributed apply step. Full-expert MoE and graph-aware backward
+    shuffle/unshuffle/attention are intercepted; other operators retain the
+    existing graph-aware forward-attention semantics. -/
 noncomputable def applyNodeDistributed
     (g : GraphDecl) (s : Store) (n : NodeDecl) : Store :=
   if n.op = "OpName.FW_all2all_moe_gmm" then
     storeSet s [(n.outs.getD 0 0, applyNodeFullExpertMoE_value g s n)]
+  else if n.op = "OpName.BW_maybe_shuffle" then
+    storeSet s [(n.outs.getD 0 0, applyNodeBWMaybeShuffleValue g s n)]
+  else if n.op = "OpName.BW_maybe_unshuffle" then
+    storeSet s [(n.outs.getD 0 0, applyNodeBWMaybeUnshuffleValue g s n)]
+  else if n.op = "OpName.BW_attn_zigzag" then
+    let out := applyNodeRingAttn_bw_zigzag g s n
+    storeSet s (List.zip n.outs [out.1, out.2.1, out.2.2])
+  else if n.op = "OpName.BW_attn_sliding_window" then
+    let out := applyNodeRingAttn_bw_sliding_window g s n
+    storeSet s (List.zip n.outs [out.1, out.2.1, out.2.2])
   else
     applyNodeRingAttn g s n
 
 /-- Canonical production-facing distributed graph denotation. -/
 noncomputable def denoteGraphDistributed (g : GraphDecl) (init : Store) : Store :=
   g.nodes.foldl (applyNodeDistributed g) init
+
+/-- A backward shuffle node writes the exact graph-aware inverse permutation. -/
+theorem applyNodeDistributed_bw_maybe_shuffle_out
+    (g : GraphDecl) (s : Store) (rank cpSize cpRank : Nat)
+    (gradTid cuTid outTid : Tid) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.BW_maybe_shuffle",
+        ins := [gradTid, cuTid], outs := [outTid],
+        params := [cpSize, cpRank] } outTid =
+      applyNodeBWMaybeShuffleValue g s
+        { rank := rank, op := "OpName.BW_maybe_shuffle",
+          ins := [gradTid, cuTid], outs := [outTid],
+          params := [cpSize, cpRank] } := by
+  unfold applyNodeDistributed
+  simp [storeSet, List.find?]
+
+/-- A backward unshuffle node writes the exact graph-aware forward permutation. -/
+theorem applyNodeDistributed_bw_maybe_unshuffle_out
+    (g : GraphDecl) (s : Store) (rank cpSize cpRank : Nat)
+    (gradTid cuTid outTid : Tid) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.BW_maybe_unshuffle",
+        ins := [gradTid, cuTid], outs := [outTid],
+        params := [cpSize, cpRank] } outTid =
+      applyNodeBWMaybeUnshuffleValue g s
+        { rank := rank, op := "OpName.BW_maybe_unshuffle",
+          ins := [gradTid, cuTid], outs := [outTid],
+          params := [cpSize, cpRank] } := by
+  unfold applyNodeDistributed
+  simp [storeSet, List.find?]
 
 /-- The MoE interceptor writes faithful full-expert semantics at its output. -/
 theorem applyNodeDistributed_moe_out
@@ -21805,6 +22101,136 @@ theorem applyNodeRingAttn_skip (g : GraphDecl) (s : Store) (n : NodeDecl) (tid :
       simpa using hneq
     · rw [if_neg hsw]
       exact applyNode_skip g s n tid h
+
+/-- The three graph-aware zigzag-attention backward outputs. -/
+theorem applyNodeDistributed_bw_attn_zigzag_out_0
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid qTid kTid vTid cuQTid cuKTid dqTid dkTid dvTid : Tid)
+    (params : List Nat) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.BW_attn_zigzag",
+        ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [dqTid, dkTid, dvTid], params := params } dqTid =
+      (applyNodeRingAttn_bw_zigzag g s
+        { rank := rank, op := "OpName.BW_attn_zigzag",
+          ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+          outs := [dqTid, dkTid, dvTid], params := params }).1 := by
+  unfold applyNodeDistributed
+  simp [storeSet, List.find?]
+
+theorem applyNodeDistributed_bw_attn_zigzag_out_1
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid qTid kTid vTid cuQTid cuKTid dqTid dkTid dvTid : Tid)
+    (params : List Nat) (hne : dqTid ≠ dkTid) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.BW_attn_zigzag",
+        ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [dqTid, dkTid, dvTid], params := params } dkTid =
+      (applyNodeRingAttn_bw_zigzag g s
+        { rank := rank, op := "OpName.BW_attn_zigzag",
+          ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+          outs := [dqTid, dkTid, dvTid], params := params }).2.1 := by
+  unfold applyNodeDistributed
+  simp [storeSet, List.find?, hne]
+
+theorem applyNodeDistributed_bw_attn_zigzag_out_2
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid qTid kTid vTid cuQTid cuKTid dqTid dkTid dvTid : Tid)
+    (params : List Nat) (hne0 : dqTid ≠ dvTid) (hne1 : dkTid ≠ dvTid) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.BW_attn_zigzag",
+        ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [dqTid, dkTid, dvTid], params := params } dvTid =
+      (applyNodeRingAttn_bw_zigzag g s
+        { rank := rank, op := "OpName.BW_attn_zigzag",
+          ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+          outs := [dqTid, dkTid, dvTid], params := params }).2.2 := by
+  unfold applyNodeDistributed
+  simp [storeSet, List.find?, hne0, hne1]
+
+/-- The three graph-aware sliding-window backward outputs. -/
+theorem applyNodeDistributed_bw_attn_sliding_window_out_0
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid qTid kTid vTid cuQTid cuKTid dqTid dkTid dvTid : Tid)
+    (params : List Nat) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.BW_attn_sliding_window",
+        ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [dqTid, dkTid, dvTid], params := params } dqTid =
+      (applyNodeRingAttn_bw_sliding_window g s
+        { rank := rank, op := "OpName.BW_attn_sliding_window",
+          ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+          outs := [dqTid, dkTid, dvTid], params := params }).1 := by
+  unfold applyNodeDistributed
+  simp [storeSet, List.find?]
+
+theorem applyNodeDistributed_bw_attn_sliding_window_out_1
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid qTid kTid vTid cuQTid cuKTid dqTid dkTid dvTid : Tid)
+    (params : List Nat) (hne : dqTid ≠ dkTid) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.BW_attn_sliding_window",
+        ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [dqTid, dkTid, dvTid], params := params } dkTid =
+      (applyNodeRingAttn_bw_sliding_window g s
+        { rank := rank, op := "OpName.BW_attn_sliding_window",
+          ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+          outs := [dqTid, dkTid, dvTid], params := params }).2.1 := by
+  unfold applyNodeDistributed
+  simp [storeSet, List.find?, hne]
+
+theorem applyNodeDistributed_bw_attn_sliding_window_out_2
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid qTid kTid vTid cuQTid cuKTid dqTid dkTid dvTid : Tid)
+    (params : List Nat) (hne0 : dqTid ≠ dvTid) (hne1 : dkTid ≠ dvTid) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.BW_attn_sliding_window",
+        ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [dqTid, dkTid, dvTid], params := params } dvTid =
+      (applyNodeRingAttn_bw_sliding_window g s
+        { rank := rank, op := "OpName.BW_attn_sliding_window",
+          ins := [gTid, qTid, kTid, vTid, cuQTid, cuKTid],
+          outs := [dqTid, dkTid, dvTid], params := params }).2.2 := by
+  unfold applyNodeDistributed
+  simp [storeSet, List.find?, hne0, hne1]
+
+/-- Every distributed interceptor preserves tensor ids outside the node outputs. -/
+theorem applyNodeDistributed_skip
+    (g : GraphDecl) (s : Store) (n : NodeDecl) (tid : Tid)
+    (hnil : n.outs ≠ []) (h : tid ∉ n.outs) :
+    applyNodeDistributed g s n tid = s tid := by
+  have hmem : n.outs.getD 0 0 ∈ n.outs := by
+    cases hout : n.outs with
+    | nil => exact absurd hout hnil
+    | cons a rest => rw [List.getD_cons_zero]; exact List.mem_cons_self
+  have hneq : tid ≠ n.outs.getD 0 0 := by
+    intro heq
+    exact h (heq ▸ hmem)
+  unfold applyNodeDistributed
+  by_cases hmoe : n.op = "OpName.FW_all2all_moe_gmm"
+  · rw [if_pos hmoe]
+    apply storeSet_eq_of_not_mem_fst
+    simpa using hneq
+  · rw [if_neg hmoe]
+    by_cases hshuffle : n.op = "OpName.BW_maybe_shuffle"
+    · rw [if_pos hshuffle]
+      apply storeSet_eq_of_not_mem_fst
+      simpa using hneq
+    · rw [if_neg hshuffle]
+      by_cases hunshuffle : n.op = "OpName.BW_maybe_unshuffle"
+      · rw [if_pos hunshuffle]
+        apply storeSet_eq_of_not_mem_fst
+        simpa using hneq
+      · rw [if_neg hunshuffle]
+        by_cases hzigzag : n.op = "OpName.BW_attn_zigzag"
+        · rw [if_pos hzigzag]
+          exact storeSet_zip_eq_of_not_mem s n.outs _ tid h
+        · rw [if_neg hzigzag]
+          by_cases hsliding : n.op = "OpName.BW_attn_sliding_window"
+          · rw [if_pos hsliding]
+            exact storeSet_zip_eq_of_not_mem s n.outs _ tid h
+          · rw [if_neg hsliding]
+            exact applyNodeRingAttn_skip g s n tid hnil h
 
 /-- `applyNodeRingAttn` on a zigzag node with singleton output reads out the
     ring-attn zigzag semantics at the output tid (specialized ring-case `_out`
@@ -22416,6 +22842,20 @@ theorem fw_multiref_allGather0_commute_2
            (evalOp numParts rank "OpName.FW_multiref" [n] [b]).getD j (zeroTensor [])] := by
   rw [evalOp_fw_multiref, evalOp_fw_multiref, evalOp_fw_multiref]
   simp only [List.getD_eq_getElem?_getD, List.getElem?_replicate, hj, if_true, Option.getD_some]
+
+/-- Distinct graph-local projections of `FW_multiref` are still the same tensor;
+this is the legacy-authority form where replica output ordinals need not align. -/
+theorem fw_multiref_allGather0_commute_2_indices
+    (numParts rank n js j0 j1 : Nat)
+    (hjs : js < n) (hj0 : j0 < n) (hj1 : j1 < n) (a b : Tensor) :
+    (evalOp numParts rank "OpName.FW_multiref" [n]
+      [allGatherPrimDimN 0 2 0 [a, b]]).getD js (zeroTensor [])
+      = allGatherPrimDimN 0 2 0
+          [(evalOp numParts rank "OpName.FW_multiref" [n] [a]).getD j0 (zeroTensor []),
+           (evalOp numParts rank "OpName.FW_multiref" [n] [b]).getD j1 (zeroTensor [])] := by
+  rw [evalOp_fw_multiref, evalOp_fw_multiref, evalOp_fw_multiref]
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_replicate,
+    hjs, hj0, hj1, if_true, Option.getD_some]
 
 /-- 2-D `fw_linear` shape helper (local to Phase C2a): `[b, i] × [o, i] → [b, o]`. -/
 private theorem fw_linear_2d_shape_c2a (b i o : Nat) (x w : Tensor)

@@ -61,7 +61,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
           · intro t
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_linear_out SyntheticReductionTuple.gSM t 0 100 300 500
             · decide
             · decide
@@ -79,7 +79,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
           · intro t
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_linear_out SyntheticReductionTuple.gPM t 0 200 400 600
             · decide
             · decide
@@ -108,7 +108,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
           · intro t
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_linear_out SyntheticReductionTuple.gPM t 1 201 401 601
             · decide
             · decide
@@ -137,7 +137,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
           · intro t
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_linear_out SyntheticReductionTuple.gPM t 2 202 402 602
             · decide
             · decide
@@ -207,7 +207,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
           · intro t
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_linear_out SyntheticReductionTuple.gSM t 0 101 301 501
             · decide
             · decide
@@ -225,7 +225,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
           · intro t
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_linear_out SyntheticReductionTuple.gPM t 0 210 410 610
             · decide
             · decide
@@ -254,7 +254,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
           · intro t
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_linear_out SyntheticReductionTuple.gPM t 1 211 411 611
             · decide
             · decide
@@ -283,7 +283,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
           · intro t
             rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
             unfold applyNodeDistributed
-            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
             · exact applyNode_fw_linear_out SyntheticReductionTuple.gPM t 2 212 412 612
             · decide
             · decide

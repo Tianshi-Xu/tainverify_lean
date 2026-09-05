@@ -177,6 +177,5 @@ def test_generated_mixed_linear_atomic_witness_is_exact_renderer_output():
     ir, relation, segment = _fixture(3)
     source = _witness(composer.render_closed_segment(ir, relation, segment.segment_id))
     path = Path(__file__).parents[2] / "trainverify/denote/GeneratedMixedKRankLinearAtomicWitness.lean"
-    path.write_text(source, encoding="utf-8")
     assert path.read_text(encoding="utf-8") == source
     assert "sorry" not in source

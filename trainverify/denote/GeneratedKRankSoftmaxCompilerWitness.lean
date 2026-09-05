@@ -18,8 +18,8 @@ private def segment_000000_sm_node : NodeDecl := { rank := 0, op := "OpName.FW_s
 private def segment_000000_pm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW_softmax", ins := [201], outs := [301] }
 private def segment_000000_pm_node_1 : NodeDecl := { rank := 1, op := "OpName.FW_softmax", ins := [202], outs := [302] }
 private def segment_000000_pm_node_2 : NodeDecl := { rank := 2, op := "OpName.FW_softmax", ins := [203], outs := [303] }
-private def segment_000000_sm_nodes : List NodeDecl := [segment_000000_sm_node]
-private def segment_000000_pm_nodes : List NodeDecl := [segment_000000_pm_node_0, segment_000000_pm_node_1, segment_000000_pm_node_2]
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_softmax", ins := [100], outs := [110] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_softmax", ins := [201], outs := [301] }, { rank := 1, op := "OpName.FW_softmax", ins := [202], outs := [302] }, { rank := 2, op := "OpName.FW_softmax", ins := [203], outs := [303] }]
 
 private def segment_000000 :
     ClosedDepSegmentCertificate SyntheticSoftmaxDim1.gSM SyntheticSoftmaxDim1.gPM state_pre state_post where
@@ -123,8 +123,8 @@ private def segment_000000_sm_node : NodeDecl := { rank := 0, op := "OpName.FW_s
 private def segment_000000_pm_node_0 : NodeDecl := { rank := 0, op := "OpName.FW_softmax", ins := [201], outs := [301] }
 private def segment_000000_pm_node_1 : NodeDecl := { rank := 1, op := "OpName.FW_softmax", ins := [202], outs := [302] }
 private def segment_000000_pm_node_2 : NodeDecl := { rank := 2, op := "OpName.FW_softmax", ins := [203], outs := [303] }
-private def segment_000000_sm_nodes : List NodeDecl := [segment_000000_sm_node]
-private def segment_000000_pm_nodes : List NodeDecl := [segment_000000_pm_node_0, segment_000000_pm_node_1, segment_000000_pm_node_2]
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_softmax", ins := [100], outs := [110] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_softmax", ins := [201], outs := [301] }, { rank := 1, op := "OpName.FW_softmax", ins := [202], outs := [302] }, { rank := 2, op := "OpName.FW_softmax", ins := [203], outs := [303] }]
 
 private def segment_000000 :
     ClosedDepSegmentCertificate SyntheticSoftmaxDim2.gSM SyntheticSoftmaxDim2.gPM state_pre state_post where

@@ -268,6 +268,5 @@ def test_generated_atomic_reduction_output_witness_is_exact_renderer_output():
     second = _witness_source(composer.render_closed_segment(ir, relation, segment.segment_id))
     assert first == second
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedMixedReductionOutputLinearWitness.lean"
-    witness.write_text(first, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == first
     assert "sorry" not in first

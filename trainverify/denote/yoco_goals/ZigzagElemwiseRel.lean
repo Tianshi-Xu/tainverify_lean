@@ -573,6 +573,22 @@ theorem fw_swiglu_valAt (gate up : Tensor) (idx : Nat)
   rw [valAt_of_lt _ _ (by simpa only [Tensor.mkShape] using h)]
   rfl
 
+/-! ### `fw_glu` -/
+
+theorem fw_glu_shape_of_shapes (x gate : Tensor) (sh : Shape)
+    (hx : x.shape = sh) (_hgate : gate.shape = sh) :
+    (fw_glu x gate).shape = sh := by
+  unfold fw_glu Tensor.mkShape
+  exact hx
+
+theorem fw_glu_valAt (x gate : Tensor) (idx : Nat)
+    (h : idx < prodShape x.shape) :
+    valAt (fw_glu x gate) idx =
+      valAt x idx * sigmoidScalar (valAt gate idx) := by
+  unfold fw_glu
+  rw [valAt_of_lt _ _ (by simpa only [Tensor.mkShape] using h)]
+  rfl
+
 /-! ### `elemwiseMul` (the denotation of `OpName.FW_mul`) -/
 
 theorem elemwiseMul_shape_of_shapes' (x y : Tensor) (sh : Shape)
@@ -687,6 +703,55 @@ theorem swiglu
   · exact fw_swiglu_shape_of_shapes zG0 zU0 [lDim, d]
       hAs.rank0_shape hBs.rank0_shape
   · exact fw_swiglu_shape_of_shapes zG1 zU1 [lDim, d]
+      hAs.rank1_shape hBs.rank1_shape
+
+/-! ## (2b) `fw_glu` (`OpName.FW_glu`) -/
+
+/-- Pointwise GLU preserves two CP2 zigzag tensors with shared metadata. -/
+theorem glu
+    {fullX zX0 zX1 fullG zG0 zG1 cu : Tensor} (lDim d : Nat)
+    (hX : Zigzag2Rel fullX zX0 zX1 cu [lDim * 2, d] [lDim, d])
+    (hG : Zigzag2Rel fullG zG0 zG1 cu [lDim * 2, d] [lDim, d])
+    (hl : 0 < lDim) (hd : 0 < d) :
+    Zigzag2Rel (fw_glu fullX fullG) (fw_glu zX0 zG0) (fw_glu zX1 zG1)
+      cu [lDim * 2, d] [lDim, d] := by
+  have hval : ∀ (x y : Tensor) (a b idx : Nat), x.shape = [a, b] →
+      y.shape = [a, b] → idx < a * b →
+      valAt (fw_glu x y) idx =
+        valAt x idx * sigmoidScalar (valAt y idx) := by
+    intro x y a b idx hx _hy hidx
+    exact fw_glu_valAt x y idx (by rw [hx, prodShape_2d']; exact hidx)
+  have hzero : (0 : Scalar) * sigmoidScalar 0 = 0 := by rw [zero_mul]
+  rcases hX with ⟨a0, a1, hAs⟩
+  rcases hG with ⟨b0, b1, hBs⟩
+  have ha0 : a0.shape = [lDim, d] := hAs.source0_shape
+  have ha1 : a1.shape = [lDim, d] := hAs.source1_shape
+  have hb0 : b0.shape = [lDim, d] := hBs.source0_shape
+  have hb1 : b1.shape = [lDim, d] := hBs.source1_shape
+  refine ⟨fw_glu a0 b0, fw_glu a1 b1, ?_, ?_, ?_, ?_,
+    fw_glu_shape_of_shapes a0 b0 [lDim, d] ha0 hb0,
+    fw_glu_shape_of_shapes a1 b1 [lDim, d] ha1 hb1, ?_, ?_,
+    ZigzagCuWF_binary_cp2 fw_glu fw_glu_shape_of_shapes
+      (decodeCuSeqlens cu) a0 a1 b0 b1 lDim d hAs.cu_wf ha0 ha1 hb0 hb1⟩
+  · rw [hAs.full_value, hBs.full_value]
+    exact binary_allGather0_commute_cp2 fw_glu
+      (fun a b => a * sigmoidScalar b) fw_glu_shape_of_shapes hval
+      a0 a1 b0 b1 lDim d hl hd ha0 ha1 hb0 hb1
+  · rw [hAs.rank0_value, hBs.rank0_value]
+    exact binary_shuffle_collective_cp2 fw_glu
+      (fun a b => a * sigmoidScalar b) fw_glu_shape_of_shapes hval hzero
+      a0 a1 b0 b1 (decodeCuSeqlens cu) lDim d 0 hl hd (by decide)
+      ha0 ha1 hb0 hb1
+  · rw [hAs.rank1_value, hBs.rank1_value]
+    exact binary_shuffle_collective_cp2 fw_glu
+      (fun a b => a * sigmoidScalar b) fw_glu_shape_of_shapes hval hzero
+      a0 a1 b0 b1 (decodeCuSeqlens cu) lDim d 1 hl hd (by decide)
+      ha0 ha1 hb0 hb1
+  · exact fw_glu_shape_of_shapes fullX fullG [lDim * 2, d]
+      hAs.full_shape hBs.full_shape
+  · exact fw_glu_shape_of_shapes zX0 zG0 [lDim, d]
+      hAs.rank0_shape hBs.rank0_shape
+  · exact fw_glu_shape_of_shapes zX1 zG1 [lDim, d]
       hAs.rank1_shape hBs.rank1_shape
 
 /-! ## (3) `OpName.FW_mul`, denoted by `elemwiseMul`

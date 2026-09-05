@@ -4217,19 +4217,19 @@ def goal_8 : LineageGoal :=
   { ts := 576, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 576 }], tpShapes := [[1, 8, 32]] }
 
 def goal_9 : LineageGoal :=
-  { ts := 577, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 577 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 577, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 577 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_10 : LineageGoal :=
   { ts := 578, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 1261 }, { rank := 1, tid := 1262 }, { rank := 2, tid := 1263 }, { rank := 3, tid := 1264 }], tpShapes := [[1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2]], gatherDim := 3 }
 
 def goal_11 : LineageGoal :=
-  { ts := 579, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 579 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 579, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 579 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_12 : LineageGoal :=
   { ts := 580, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 1285 }, { rank := 1, tid := 1286 }, { rank := 2, tid := 1287 }, { rank := 3, tid := 1288 }], tpShapes := [[1, 1, 8, 8], [1, 1, 8, 8], [1, 1, 8, 8], [1, 1, 8, 8]], gatherDim := 1 }
 
 def goal_13 : LineageGoal :=
-  { ts := 581, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 581 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 581, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 581 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_14 : LineageGoal :=
   { ts := 582, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 1309 }, { rank := 1, tid := 1310 }, { rank := 2, tid := 1311 }, { rank := 3, tid := 1312 }], tpShapes := [[1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2]], gatherDim := 3 }
@@ -4256,7 +4256,7 @@ def goal_21 : LineageGoal :=
   { ts := 589, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 589 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_22 : LineageGoal :=
-  { ts := 590, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 590 }], tpShapes := [[1, 8, 32]] }
+  { ts := 590, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 590 }], tpShapes := [[1, 8, 32]] }
 
 def goal_23 : LineageGoal :=
   { ts := 592, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 1477 }, { rank := 1, tid := 1478 }, { rank := 2, tid := 1479 }, { rank := 3, tid := 1480 }], tpShapes := [[1, 8, 8], [1, 8, 8], [1, 8, 8], [1, 8, 8]], gatherDim := 2 }
@@ -4292,19 +4292,19 @@ def goal_33 : LineageGoal :=
   { ts := 611, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 611 }], tpShapes := [[1, 8, 32]] }
 
 def goal_34 : LineageGoal :=
-  { ts := 612, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 612 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 612, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 612 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_35 : LineageGoal :=
   { ts := 613, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 1781 }, { rank := 1, tid := 1782 }, { rank := 2, tid := 1783 }, { rank := 3, tid := 1784 }], tpShapes := [[1, 4, 2, 8], [1, 4, 2, 8], [1, 4, 2, 8], [1, 4, 2, 8]], gatherDim := 2 }
 
 def goal_36 : LineageGoal :=
-  { ts := 614, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 614 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 614, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 614 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_37 : LineageGoal :=
   { ts := 615, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 1805 }, { rank := 1, tid := 1806 }, { rank := 2, tid := 1807 }, { rank := 3, tid := 1808 }], tpShapes := [[1, 1, 8, 8], [1, 1, 8, 8], [1, 1, 8, 8], [1, 1, 8, 8]], gatherDim := 1 }
 
 def goal_38 : LineageGoal :=
-  { ts := 616, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 616 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 616, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 616 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_39 : LineageGoal :=
   { ts := 617, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 1829 }, { rank := 1, tid := 1830 }, { rank := 2, tid := 1831 }, { rank := 3, tid := 1832 }], tpShapes := [[1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2]], gatherDim := 3 }
@@ -4331,7 +4331,7 @@ def goal_46 : LineageGoal :=
   { ts := 624, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 624 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_47 : LineageGoal :=
-  { ts := 625, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 625 }], tpShapes := [[1, 8, 32]] }
+  { ts := 625, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 625 }], tpShapes := [[1, 8, 32]] }
 
 def goal_48 : LineageGoal :=
   { ts := 627, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 2025 }, { rank := 1, tid := 2026 }, { rank := 2, tid := 2027 }, { rank := 3, tid := 2028 }], tpShapes := [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]], gatherDim := 1 }
@@ -4367,19 +4367,19 @@ def goal_58 : LineageGoal :=
   { ts := 646, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 646 }], tpShapes := [[1, 8, 32]] }
 
 def goal_59 : LineageGoal :=
-  { ts := 647, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 647 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 647, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 647 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_60 : LineageGoal :=
   { ts := 648, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 2345 }, { rank := 1, tid := 2346 }, { rank := 2, tid := 2347 }, { rank := 3, tid := 2348 }], tpShapes := [[1, 1, 8, 8], [1, 1, 8, 8], [1, 1, 8, 8], [1, 1, 8, 8]], gatherDim := 1 }
 
 def goal_61 : LineageGoal :=
-  { ts := 649, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 649 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 649, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 649 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_62 : LineageGoal :=
   { ts := 650, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 2369 }, { rank := 1, tid := 2370 }, { rank := 2, tid := 2371 }, { rank := 3, tid := 2372 }], tpShapes := [[1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2]], gatherDim := 3 }
 
 def goal_63 : LineageGoal :=
-  { ts := 651, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 651 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 651, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 651 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_64 : LineageGoal :=
   { ts := 652, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 2393 }, { rank := 1, tid := 2394 }, { rank := 2, tid := 2395 }, { rank := 3, tid := 2396 }], tpShapes := [[1, 4, 2, 8], [1, 4, 2, 8], [1, 4, 2, 8], [1, 4, 2, 8]], gatherDim := 2 }
@@ -4406,7 +4406,7 @@ def goal_71 : LineageGoal :=
   { ts := 659, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 659 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_72 : LineageGoal :=
-  { ts := 660, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 660 }], tpShapes := [[1, 8, 32]] }
+  { ts := 660, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 660 }], tpShapes := [[1, 8, 32]] }
 
 def goal_73 : LineageGoal :=
   { ts := 662, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 662 }], tpShapes := [[1, 8, 32]] }
@@ -4442,19 +4442,19 @@ def goal_83 : LineageGoal :=
   { ts := 681, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 681 }], tpShapes := [[1, 8, 32]] }
 
 def goal_84 : LineageGoal :=
-  { ts := 682, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 682 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 682, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 682 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_85 : LineageGoal :=
   { ts := 683, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 2901 }, { rank := 1, tid := 2902 }, { rank := 2, tid := 2903 }, { rank := 3, tid := 2904 }], tpShapes := [[1, 1, 8, 8], [1, 1, 8, 8], [1, 1, 8, 8], [1, 1, 8, 8]], gatherDim := 1 }
 
 def goal_86 : LineageGoal :=
-  { ts := 684, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 684 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 684, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 684 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_87 : LineageGoal :=
   { ts := 685, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 2925 }, { rank := 1, tid := 2926 }, { rank := 2, tid := 2927 }, { rank := 3, tid := 2928 }], tpShapes := [[1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2], [1, 4, 8, 2]], gatherDim := 3 }
 
 def goal_88 : LineageGoal :=
-  { ts := 686, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 686 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 686, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 686 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_89 : LineageGoal :=
   { ts := 687, tsShape := [1, 4, 8, 8], tps := [{ rank := 0, tid := 2949 }, { rank := 1, tid := 2950 }, { rank := 2, tid := 2951 }, { rank := 3, tid := 2952 }], tpShapes := [[1, 4, 2, 8], [1, 4, 2, 8], [1, 4, 2, 8], [1, 4, 2, 8]], gatherDim := 2 }
@@ -4481,7 +4481,7 @@ def goal_96 : LineageGoal :=
   { ts := 694, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 694 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_97 : LineageGoal :=
-  { ts := 695, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 695 }], tpShapes := [[1, 8, 32]] }
+  { ts := 695, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 695 }], tpShapes := [[1, 8, 32]] }
 
 def goal_98 : LineageGoal :=
   { ts := 697, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 697 }], tpShapes := [[1, 8, 32]] }
@@ -4538,19 +4538,19 @@ def goal_115 : LineageGoal :=
   { ts := 731, tsShape := [32, 32], tps := [{ rank := 0, tid := 1190 }], tpShapes := [[32, 32]] }
 
 def goal_116 : LineageGoal :=
-  { ts := 732, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 732 }], tpShapes := [[1, 8, 32]] }
+  { ts := 732, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 732 }], tpShapes := [[1, 8, 32]] }
 
 def goal_117 : LineageGoal :=
   { ts := 733, tsShape := [32, 32], tps := [{ rank := 0, tid := 1218 }], tpShapes := [[32, 32]] }
 
 def goal_118 : LineageGoal :=
-  { ts := 734, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 734 }], tpShapes := [[1, 8, 32]] }
+  { ts := 734, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 734 }], tpShapes := [[1, 8, 32]] }
 
 def goal_119 : LineageGoal :=
   { ts := 735, tsShape := [32, 32], tps := [{ rank := 0, tid := 1246 }, { rank := 1, tid := 1249 }, { rank := 2, tid := 1252 }, { rank := 3, tid := 1255 }], tpShapes := [[8, 32], [8, 32], [8, 32], [8, 32]] }
 
 def goal_120 : LineageGoal :=
-  { ts := 736, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 736 }], tpShapes := [[1, 8, 32]] }
+  { ts := 736, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 736 }], tpShapes := [[1, 8, 32]] }
 
 def goal_121 : LineageGoal :=
   { ts := 737, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 737 }], tpShapes := [[1, 8, 4, 8]] }
@@ -4589,7 +4589,7 @@ def goal_132 : LineageGoal :=
   { ts := 748, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 1445 }, { rank := 1, tid := 1446 }, { rank := 2, tid := 1447 }, { rank := 3, tid := 1448 }], tpShapes := [[1, 8, 4, 2], [1, 8, 4, 2], [1, 8, 4, 2], [1, 8, 4, 2]], gatherDim := 3 }
 
 def goal_133 : LineageGoal :=
-  { ts := 749, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 749 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 749, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 749 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_134 : LineageGoal :=
   { ts := 750, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 750 }], tpShapes := [[1, 8, 32]] }
@@ -4643,19 +4643,19 @@ def goal_150 : LineageGoal :=
   { ts := 773, tsShape := [32, 32], tps := [{ rank := 0, tid := 1714 }, { rank := 1, tid := 1716 }, { rank := 2, tid := 1718 }, { rank := 3, tid := 1720 }], tpShapes := [[32, 8], [32, 8], [32, 8], [32, 8]], gatherDim := 1 }
 
 def goal_151 : LineageGoal :=
-  { ts := 774, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 774 }], tpShapes := [[1, 8, 32]] }
+  { ts := 774, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 774 }], tpShapes := [[1, 8, 32]] }
 
 def goal_152 : LineageGoal :=
   { ts := 775, tsShape := [32, 32], tps := [{ rank := 0, tid := 1738 }], tpShapes := [[32, 32]] }
 
 def goal_153 : LineageGoal :=
-  { ts := 776, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 776 }], tpShapes := [[1, 8, 32]] }
+  { ts := 776, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 776 }], tpShapes := [[1, 8, 32]] }
 
 def goal_154 : LineageGoal :=
   { ts := 777, tsShape := [32, 32], tps := [{ rank := 0, tid := 1770 }, { rank := 1, tid := 1772 }, { rank := 2, tid := 1774 }, { rank := 3, tid := 1776 }], tpShapes := [[32, 8], [32, 8], [32, 8], [32, 8]], gatherDim := 1 }
 
 def goal_155 : LineageGoal :=
-  { ts := 778, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 778 }], tpShapes := [[1, 8, 32]] }
+  { ts := 778, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 778 }], tpShapes := [[1, 8, 32]] }
 
 def goal_156 : LineageGoal :=
   { ts := 779, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 779 }], tpShapes := [[1, 8, 4, 8]] }
@@ -4694,7 +4694,7 @@ def goal_167 : LineageGoal :=
   { ts := 790, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 1990 }, { rank := 1, tid := 1992 }, { rank := 2, tid := 1994 }, { rank := 3, tid := 1996 }], tpShapes := [[1, 8, 4, 2], [1, 8, 4, 2], [1, 8, 4, 2], [1, 8, 4, 2]], gatherDim := 3 }
 
 def goal_168 : LineageGoal :=
-  { ts := 791, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 791 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 791, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 791 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_169 : LineageGoal :=
   { ts := 792, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 792 }], tpShapes := [[1, 8, 32]] }
@@ -4748,19 +4748,19 @@ def goal_185 : LineageGoal :=
   { ts := 815, tsShape := [32, 32], tps := [{ rank := 0, tid := 2274 }, { rank := 1, tid := 2277 }, { rank := 2, tid := 2280 }, { rank := 3, tid := 2283 }], tpShapes := [[8, 32], [8, 32], [8, 32], [8, 32]] }
 
 def goal_186 : LineageGoal :=
-  { ts := 816, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 816 }], tpShapes := [[1, 8, 32]] }
+  { ts := 816, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 816 }], tpShapes := [[1, 8, 32]] }
 
 def goal_187 : LineageGoal :=
   { ts := 817, tsShape := [32, 32], tps := [{ rank := 0, tid := 2302 }, { rank := 1, tid := 2305 }, { rank := 2, tid := 2308 }, { rank := 3, tid := 2311 }], tpShapes := [[8, 32], [8, 32], [8, 32], [8, 32]] }
 
 def goal_188 : LineageGoal :=
-  { ts := 818, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 818 }], tpShapes := [[1, 8, 32]] }
+  { ts := 818, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 818 }], tpShapes := [[1, 8, 32]] }
 
 def goal_189 : LineageGoal :=
   { ts := 819, tsShape := [32, 32], tps := [{ rank := 0, tid := 2330 }], tpShapes := [[32, 32]] }
 
 def goal_190 : LineageGoal :=
-  { ts := 820, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 820 }], tpShapes := [[1, 8, 32]] }
+  { ts := 820, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 820 }], tpShapes := [[1, 8, 32]] }
 
 def goal_191 : LineageGoal :=
   { ts := 821, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 821 }], tpShapes := [[1, 8, 4, 8]] }
@@ -4799,7 +4799,7 @@ def goal_202 : LineageGoal :=
   { ts := 832, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 2546 }, { rank := 1, tid := 2548 }, { rank := 2, tid := 2550 }, { rank := 3, tid := 2552 }], tpShapes := [[1, 2, 4, 8], [1, 2, 4, 8], [1, 2, 4, 8], [1, 2, 4, 8]], gatherDim := 1 }
 
 def goal_203 : LineageGoal :=
-  { ts := 833, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 833 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 833, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 833 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_204 : LineageGoal :=
   { ts := 834, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 834 }], tpShapes := [[1, 8, 32]] }
@@ -4853,19 +4853,19 @@ def goal_220 : LineageGoal :=
   { ts := 857, tsShape := [32, 32], tps := [{ rank := 0, tid := 2834 }, { rank := 1, tid := 2836 }, { rank := 2, tid := 2838 }, { rank := 3, tid := 2840 }], tpShapes := [[32, 8], [32, 8], [32, 8], [32, 8]], gatherDim := 1 }
 
 def goal_221 : LineageGoal :=
-  { ts := 858, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 858 }], tpShapes := [[1, 8, 32]] }
+  { ts := 858, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 858 }], tpShapes := [[1, 8, 32]] }
 
 def goal_222 : LineageGoal :=
   { ts := 859, tsShape := [32, 32], tps := [{ rank := 0, tid := 2862 }, { rank := 1, tid := 2864 }, { rank := 2, tid := 2866 }, { rank := 3, tid := 2868 }], tpShapes := [[32, 8], [32, 8], [32, 8], [32, 8]], gatherDim := 1 }
 
 def goal_223 : LineageGoal :=
-  { ts := 860, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 860 }], tpShapes := [[1, 8, 32]] }
+  { ts := 860, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 860 }], tpShapes := [[1, 8, 32]] }
 
 def goal_224 : LineageGoal :=
   { ts := 861, tsShape := [32, 32], tps := [{ rank := 0, tid := 2886 }], tpShapes := [[32, 32]] }
 
 def goal_225 : LineageGoal :=
-  { ts := 862, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 862 }], tpShapes := [[1, 8, 32]] }
+  { ts := 862, tsShape := [1, 8, 32], tps := [{ rank := 3, tid := 862 }], tpShapes := [[1, 8, 32]] }
 
 def goal_226 : LineageGoal :=
   { ts := 863, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 863 }], tpShapes := [[1, 8, 4, 8]] }
@@ -4904,7 +4904,7 @@ def goal_237 : LineageGoal :=
   { ts := 874, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 3110 }, { rank := 1, tid := 3112 }, { rank := 2, tid := 3114 }, { rank := 3, tid := 3116 }], tpShapes := [[1, 2, 4, 8], [1, 2, 4, 8], [1, 2, 4, 8], [1, 2, 4, 8]], gatherDim := 1 }
 
 def goal_238 : LineageGoal :=
-  { ts := 875, tsShape := [1, 8, 4, 8], tps := [{ rank := 0, tid := 875 }], tpShapes := [[1, 8, 4, 8]] }
+  { ts := 875, tsShape := [1, 8, 4, 8], tps := [{ rank := 3, tid := 875 }], tpShapes := [[1, 8, 4, 8]] }
 
 def goal_239 : LineageGoal :=
   { ts := 876, tsShape := [1, 8, 32], tps := [{ rank := 0, tid := 876 }], tpShapes := [[1, 8, 32]] }

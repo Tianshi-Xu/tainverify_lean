@@ -100,7 +100,7 @@ def render_closed_k_rank_reduction_linear_tuple_segment(ir, relation, segment_id
         expected_theorem = reduction_theorem2 + ("_3d" if len(activation.full_shape) == 3 else "")
         if (
             cert.rank_count != k or transition.lean_theorem != expected_theorem
-            or activation.kind != "sharded" or weight.kind != "sharded" or output.kind != "reduction"
+            or activation.kind != "sharded" or weight.kind not in {"sharded", "chunked"} or output.kind != "reduction"
             or len(activation.full_shape) not in (2, 3)
             or activation.gather_dim != len(activation.full_shape) - 1
             or weight.gather_dim != 1 or cert.activation_chunk_dim != activation.gather_dim
@@ -117,19 +117,25 @@ def render_closed_k_rank_reduction_linear_tuple_segment(ir, relation, segment_id
             or activation.shard_shape[-1] != weight.shard_shape[1]
             or output.full_shape != (*activation.full_shape[:-1], weight.full_shape[0])
         ):
-            raise ValueError("reduction-linear tuple producer role/shape/theorem authority is malformed")
+            raise ValueError(
+                "reduction-linear tuple producer role/shape/theorem authority is malformed: "
+                f"theorem={(transition.lean_theorem, expected_theorem)} "
+                f"activation={(activation.kind, activation.gather_dim, activation.full_shape, activation.shard_shape)} "
+                f"weight={(weight.kind, weight.gather_dim, weight.full_shape, weight.shard_shape)} "
+                f"output={(output.kind, output.full_shape, output.shard_shape)}"
+            )
 
     sm_range = tuple(range(*segment.sm_range))
     pm_range = tuple(range(*segment.pm_range))
     sm_owned = tuple(index for transition in transitions for index in transition.sm_node_indices)
     pm_owned = tuple(index for transition in transitions for index in transition.pm_node_indices)
     if (
-        len(set(sm_owned)) != len(sm_owned) or set(sm_owned) != set(sm_range)
-        or len(set(pm_owned)) != len(pm_owned) or set(pm_owned) != set(pm_range)
+        len(set(sm_owned)) != len(sm_owned) or not set(sm_owned) <= set(sm_range)
+        or len(set(pm_owned)) != len(pm_owned) or not set(pm_owned) <= set(pm_range)
         or any(index < 0 or index >= len(ir.sm_nodes) for index in sm_owned)
         or any(index < 0 or index >= len(ir.pm_nodes) for index in pm_owned)
     ):
-        raise ValueError("reduction-linear tuple footprints do not exactly partition graph authority")
+        raise ValueError("reduction-linear tuple writers overlap or leave the complete frame")
     for transition, cert, pair, output in zip(reduction_transitions, reductions, inputs, outputs):
         activation, weight = pair
         expected_sm = (int(cert.sm_linear_step.split(":")[1]),)
@@ -141,14 +147,18 @@ def render_closed_k_rank_reduction_linear_tuple_segment(ir, relation, segment_id
         sm_node = ir.sm_nodes[expected_sm[0]]
         pm_nodes = tuple(ir.pm_nodes[index] for index in expected_pm)
         if (
-            sm_node.rank != 0 or sm_node.op != "FW_linear" or sm_node.params
+            sm_node.rank != 0 or sm_node.op not in {"FW_linear", "FW_mix_precision_linear"} or sm_node.params
             or sm_node.ins != [activation.sm_tid, weight.sm_tid] or sm_node.outs != [output.sm_tid]
             or tuple(node.rank for node in pm_nodes) != tuple(range(k))
         ):
-            raise ValueError("reduction-linear tuple SM/PM roles were tampered")
+            raise ValueError(
+                "reduction-linear tuple SM/PM roles were tampered: "
+                f"sm={sm_node} expected={(activation.sm_tid, weight.sm_tid, output.sm_tid)} "
+                f"pm={pm_nodes}"
+            )
         for rank, node in enumerate(pm_nodes):
             if (
-                node.op != "FW_linear" or node.params
+                node.op != sm_node.op or node.params
                 or node.ins != [activation.pm_tids[rank], weight.pm_tids[rank]]
                 or node.outs != [output.pm_tids[rank]]
             ):
@@ -212,6 +222,8 @@ def render_closed_k_rank_reduction_linear_tuple_segment(ir, relation, segment_id
         pos = sm_pos[absolute_index] if side == "sm" else pm_pos[absolute_index]
         graph, store, nodes, final = ((smg, "smStore", "smNodes", "smFinal") if side == "sm" else (pmg, "pmStore", "pmNodes", "pmFinal"))
         prefix, suffix = f"{nodes}.take {pos}", f"{nodes}.drop {pos + 1}"
+        apply_lemma = ("applyNode_fw_mix_precision_linear_out_1p"
+                       if node.op == "FW_mix_precision_linear" else "applyNode_fw_linear_out")
         lines.extend([
             f"    have {name} : {final} {node.outs[0]} = fw_linear ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
             "      calc",
@@ -222,8 +234,8 @@ def render_closed_k_rank_reduction_linear_tuple_segment(ir, relation, segment_id
             "          · intro t",
             "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
             "            unfold applyNodeDistributed",
-            "            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]",
-            f"            · exact applyNode_fw_linear_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
+            "            rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]",
+            f"            · exact {apply_lemma} {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
             "            · decide", "            · decide", "          · native_decide", "          · native_decide",
             f"        _ = fw_linear ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
             f"          rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({prefix}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
@@ -237,7 +249,12 @@ def render_closed_k_rank_reduction_linear_tuple_segment(ir, relation, segment_id
         wtids = "[" + ", ".join(map(str, weight.pm_tids)) + "]"
         otids = "[" + ", ".join(map(str, output.pm_tids)) + "]"
         fact_hyp(f"hActivation{producer}", activation, f"ShardedRel (smStore {activation.sm_tid}) ({atids}.map pmStore) {activation.gather_dim} {_shape_text(list(activation.full_shape))} {_shape_text(list(activation.shard_shape))}")
-        fact_hyp(f"hWeight{producer}", weight, f"ShardedRel (smStore {weight.sm_tid}) ({wtids}.map pmStore) 1 {_shape_text(list(weight.full_shape))} {_shape_text(list(weight.shard_shape))}")
+        weight_predicate = f"ShardedRel (smStore {weight.sm_tid}) ({wtids}.map pmStore) 1 {_shape_text(list(weight.full_shape))} {_shape_text(list(weight.shard_shape))}"
+        if weight.kind == "chunked":
+            fact_hyp(f"hWeightChunked{producer}", weight, "ChunkedRel" + weight_predicate.removeprefix("ShardedRel"))
+            lines.append(f"    have hWeight{producer} := hWeightChunked{producer}.toShardedRel")
+        else:
+            fact_hyp(f"hWeight{producer}", weight, weight_predicate)
         lines.extend([
             f"    let pmActivationTids{producer} : List Tid := {atids}",
             f"    let pmWeightTids{producer} : List Tid := {wtids}",

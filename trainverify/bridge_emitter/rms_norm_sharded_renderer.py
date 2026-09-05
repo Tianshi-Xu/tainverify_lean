@@ -1,0 +1,42 @@
+"""Sparse full-frame renderer for two-rank dim-0 RMSNorm transport."""
+from __future__ import annotations
+
+def render_closed_two_rank_rms_norm_segment(ir,relation,segment_id):
+    try:
+        from .composer import _node_text,_render_mixed_final_value
+        from .relation_compiler import get_closed_rule_spec
+    except ImportError:
+        from composer import _node_text,_render_mixed_final_value
+        from relation_compiler import get_closed_rule_spec
+    spec=get_closed_rule_spec('rms-norm-sharded-two-rank-dim0');rule=spec.rule_id;theorem=spec.lean_theorems[0];chain=relation.dependent_chain_plan;seg=next((s for s in chain.segments if s.segment_id==segment_id),None)
+    if seg is None or len(seg.transition_ids)!=1:raise ValueError('RMS segment missing')
+    t=next((x for x in relation.transition_specs if x.transition_id==seg.transition_ids[0]),None)
+    cs=[c for c in relation.certificates if type(c) is spec.certificate_type and c.rule_id==rule and c.lean_theorem==theorem and (c.input_fact,)==t.pre_facts and (c.output_fact,)==t.post_facts]
+    if len(cs)!=1:raise ValueError('RMS exact certificate missing');c=cs[0]
+    c=cs[0];records={x.source:x for x in chain.relation_facts};states={x.state_id:x for x in chain.states};pre=records[c.input_fact];post=records[c.output_fact];before=states[seg.pre_state_id];after=states[seg.post_state_id]
+    if (c.rank_count!=2 or c.gather_dim!=0 or c.op!=spec.op or len(c.external_tids)!=1 or pre.kind!='sharded' or post.kind!='sharded' or pre.gather_dim!=0 or post.gather_dim!=0 or len(pre.pm_tids)!=2 or len(post.pm_tids)!=2 or len(pre.full_shape)!=2 or pre.full_shape!=post.full_shape or pre.shard_shape!=post.shard_shape):raise ValueError('RMS metadata mismatch')
+    weight=c.external_tids[0];wshape=c.external_shapes[0];smwi=t.sm_node_indices[0];pmwi=tuple(t.pm_node_indices);smframeidx=tuple(range(*seg.sm_range));pmframeidx=tuple(range(*seg.pm_range));smnode=ir.sm_nodes[smwi];pmwriters=tuple(ir.pm_nodes[i] for i in pmwi)
+    if len(pmwi)!=2 or not {smwi}<=set(smframeidx) or not set(pmwi)<=set(pmframeidx) or smnode.ins!=[pre.sm_tid,weight] or smnode.outs!=[post.sm_tid] or any(n.ins!=[pre.pm_tids[r],weight] or n.outs!=[post.pm_tids[r]] or n.rank!=r or n.op!=spec.op for r,n in enumerate(pmwriters)):raise ValueError('RMS writer ownership mismatch')
+    auth=chain.authority_facts;eq=[x for x in auth if x.kind=='tensor_eq' and (x.left_side,x.left_tid,x.right_side,x.right_tid)==('sm',weight,'pm',weight)];sh=[x for x in auth if x.kind=='tensor_shape' and (x.side,x.tid,tuple(x.shape))==('pm',weight,tuple(wshape))]
+    if len(eq)!=1 or len(sh)!=1:raise ValueError('RMS weight authority missing')
+    smframe=tuple(ir.sm_nodes[i] for i in smframeidx);pmframe=tuple(ir.pm_nodes[i] for i in pmframeidx)
+    sm_live={pre.sm_tid,post.sm_tid,weight};pm_live={*pre.pm_tids,*post.pm_tids,weight}
+    for i,n in zip(smframeidx,smframe):
+        if i!=smwi and set(n.outs)&sm_live:raise ValueError('RMS SM frame overwrites live authority')
+    for i,n in zip(pmframeidx,pmframe):
+        if i not in pmwi and set(n.outs)&pm_live:raise ValueError('RMS PM frame overwrites live authority')
+    def parts(name,nodes):
+        chunks=[nodes[i:i+128] for i in range(0,len(nodes),128)];names=[f'{name}Part{j}' for j in range(len(chunks))];lines=[]
+        for nm,ch in zip(names,chunks):lines.append(f"private def {nm} : List NodeDecl := [{', '.join(_node_text(n) for n in ch)}]")
+        lines.append(f"private def {name} : List NodeDecl := {' ++ '.join(names) if names else '[]'}");return lines
+    smn=f'{segment_id}_smNodes';pmn=f'{segment_id}_pmNodes';smf=f'{segment_id}_smFinal';pmf=f'{segment_id}_pmFinal';lines=['end',*parts(smn,smframe),*parts(pmn,pmframe),'noncomputable section',f'@[irreducible] private def {smf} (s : Store) := {smn}.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) s',f'@[irreducible] private def {pmf} (s : Store) := {pmn}.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) s','']
+    def writer(name,graph,store,final,nodes_name,frame,pos,node):
+        fs=f'({final} {store})';expr=f'fw_rms_norm ({{store}} {node.ins[0]}) ({{store}} {node.ins[1]})';th=f'{segment_id}_{name}';lines.extend([f'private theorem {th} ({store} : Store) : {fs} {node.outs[0]} = {expr.format(store=fs)} := by',f'  have hfinal : {fs} = {nodes_name}.foldl (applyNodeDistributedFaithful {graph}) {store} := by unfold {final}; rfl'])
+        proof=_render_mixed_final_value(name='hout',graph=graph,initial_store=store,final_store=fs,final_equality='hfinal',nodes_name=nodes_name,nodes=list(frame),position=pos,output_tid=node.outs[0],input_tids=tuple(node.ins),written_tids={x for n in frame for x in n.outs},expression=expr,apply_lines=['rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]','simp [applyNodeDistributed, applyNodeRingAttn]',f'exact applyNode_fw_rms_norm_out_1p {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}'])
+        lines.extend(x[2:] if x.startswith('  ') else x for x in proof);lines.extend(['  exact hout','']);return th
+    hs=writer('hSm',ir.sm_graph_ref,'smStore',smf,smn,smframe,smwi-seg.sm_range[0],smnode);hp=[writer(f'hPm{r}',ir.pm_graph_ref,'pmStore',pmf,pmn,pmframe,i-seg.pm_range[0],n) for r,(i,n) in enumerate(zip(pmwi,pmwriters))]
+    inf=f'[pmFinal {pre.pm_tids[0]}, pmFinal {pre.pm_tids[1]}]';outf=f'[pmFinal {post.pm_tids[0]}, pmFinal {post.pm_tids[1]}]';rows=pre.shard_shape[0];hidden=pre.shard_shape[1]
+    lines.extend(['set_option maxHeartbeats 500000 in',f'private theorem {segment_id}_sound (smStore pmStore : Store) (hstate : {before.state_id}.Holds smStore pmStore) : {after.state_id}.Holds ({smf} smStore) ({pmf} pmStore) := by',f'  let smFinal := {smf} smStore',f'  let pmFinal := {pmf} pmStore',f'  have hframeRaw : {before.state_id}.Holds ({smn}.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore) ({pmn}.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) := by',f'    apply RelationState.Holds.fold_frame (smGraph := {ir.sm_graph_ref}) (pmGraph := {ir.pm_graph_ref}) {smn} {pmn} smStore pmStore hstate <;> native_decide',f'  have hSmFinal : smFinal = {smn}.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore := by unfold smFinal {smf}; rfl',f'  have hPmFinal : pmFinal = {pmn}.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore := by unfold pmFinal {pmf}; rfl',f'  have hframe : {before.state_id}.Holds smFinal pmFinal := by rw [hSmFinal,hPmFinal]; exact hframeRaw',f'  have hin : {pre.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)',f'  change ShardedRel (smFinal {pre.sm_tid}) {inf} 0 [{rows*2}, {hidden}] [{rows}, {hidden}] at hin',f'  have heq : smFinal {weight} = pmFinal {weight} := by exact hframe {eq[0].fact_id} (by native_decide)',f'  have htransport := ShardedRel.fw_rms_norm_2d (rows := {rows}) (hidden := {hidden}) hin heq (by omega) (by omega)',f'  have hsw:={hs} smStore',f'  change smFinal {post.sm_tid} = fw_rms_norm (smFinal {pre.sm_tid}) (smFinal {weight}) at hsw'])
+    for r,h in enumerate(hp):lines.extend([f'  have hp{r}:={h} pmStore',f'  change pmFinal {post.pm_tids[r]} = fw_rms_norm (pmFinal {pre.pm_tids[r]}) (pmFinal {weight}) at hp{r}'])
+    lines.extend([f'  have hout : {post.fact_id}.Holds smFinal pmFinal := by',f'    change ShardedRel (smFinal {post.sm_tid}) {outf} 0 [{rows*2}, {hidden}] [{rows}, {hidden}]','    rw [hsw, hp0, hp1]','    simpa only using htransport','  intro fact hfact',f'  have hc : fact ∈ [{post.fact_id}] ++ {before.state_id}.facts := (show {after.state_id}.facts ⊆ [{post.fact_id}] ++ {before.state_id}.facts by native_decide) hfact','  simp only [List.mem_append,List.mem_cons,List.not_mem_nil,or_false] at hc','  rcases hc with rfl | old','  · exact hout','  · exact hframe fact old','',f'private def {segment_id} : ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where',f'  smNodes := {smn}',f'  pmNodes := {pmn}','  sound := by','    intro smStore pmStore hstate',f'    rw [← show {smf} smStore = {smn}.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore by unfold {smf}; rfl]',f'    rw [← show {pmf} pmStore = {pmn}.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore by unfold {pmf}; rfl]',f'    exact {segment_id}_sound smStore pmStore hstate',''])
+    return '\n'.join(lines)

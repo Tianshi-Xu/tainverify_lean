@@ -63,12 +63,8 @@ def render_closed_mixed_linear_sequence_segment(ir, relation, segment_id: str) -
     transitions = tuple(items[0] for items in resolved)
     if any(t.rule_id not in contracts for t in transitions):
         raise ValueError("mixed linear sequence contains an unsupported transition class")
-    if not any(t.rule_id == "linear-sharded-k-rank-dim1" for t in transitions):
-        raise ValueError("mixed linear sequence requires local-linear authority")
-    if not any(t.rule_id == "alltoall-k-rank-layout-transport" for t in transitions):
-        raise ValueError("mixed linear sequence requires AllToAll authority")
-    if not any(t.rule_id == "linear-reduction-producer-k-rank" for t in transitions):
-        raise ValueError("mixed linear sequence requires reduction-linear authority")
+    if len(transitions) <= 1 or len({t.rule_id for t in transitions}) <= 1:
+        raise ValueError("mixed linear sequence requires multiple transition classes")
 
     certs = []
     for transition in transitions:
@@ -149,9 +145,9 @@ def render_closed_mixed_linear_sequence_segment(ir, relation, segment_id: str) -
     pm_indices = tuple(range(*segment.pm_range))
     sm_owned = tuple(i for t in transitions for i in t.sm_node_indices)
     pm_owned = tuple(i for t in transitions for i in t.pm_node_indices)
-    if (len(sm_owned) != len(set(sm_owned)) or set(sm_owned) != set(sm_indices)
-            or len(pm_owned) != len(set(pm_owned)) or set(pm_owned) != set(pm_indices)):
-        raise ValueError("mixed linear sequence footprints are not disjoint and exhaustive")
+    if (len(sm_owned) != len(set(sm_owned)) or not set(sm_owned) <= set(sm_indices)
+            or len(pm_owned) != len(set(pm_owned)) or not set(pm_owned) <= set(pm_indices)):
+        raise ValueError("mixed linear sequence writers overlap or leave the complete frame")
 
     def step_index(step):
         parts = step.split(":")

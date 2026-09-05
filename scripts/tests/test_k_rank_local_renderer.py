@@ -168,8 +168,12 @@ def test_closed_k_rank_linear_renderer_uses_ordered_list_length_and_integrated_t
 
     source = render_closed_segment(ir, relation, "segment_000000")
 
-    ordered_inputs = ", ".join(f"pmStore {tid}" for tid in pre.pm_tids)
-    ordered_outputs = ", ".join(f"pmFinal {tid}" for tid in post.pm_tids)
+    ordered_inputs = ", ".join(
+        f"(segment_000000_pmFinal pmStore) {tid}" for tid in pre.pm_tids
+    )
+    ordered_outputs = ", ".join(
+        f"(segment_000000_pmFinal pmStore) {tid}" for tid in post.pm_tids
+    )
     assert f"[{ordered_inputs}].length" in source
     assert f"[{ordered_outputs}]" in source
     assert "fw_linear_3d_allGatherPrimDimN_dim1_comm" in source
@@ -189,8 +193,6 @@ def test_closed_k_rank_linear_renderer_recreates_exact_lean_witness():
         render_closed_segment(ir, relation, "segment_000000"),
         render_closed_segment(layer_ir, layer_relation, "segment_000000"),
     )
-    witness.unlink(missing_ok=True)
-    witness.write_text(exact_source, encoding="utf-8")
 
     assert witness.read_text(encoding="utf-8") == exact_source
     assert "open RelationCompiler" in exact_source
@@ -205,8 +207,8 @@ def test_closed_k_rank_layernorm_renderer_uses_both_external_equalities_and_shap
 
     assert "fw_layernorm_distribute_allGatherPrimDimN_dim1_K_3d" in source
     for tid in (91, 92):
-        assert f"external_eq_{tid}.Holds" in source
-        assert f"external_shape_{tid}.Holds" in source
+        assert f"hframe external_eq_{tid}" in source
+        assert f"hframe external_shape_{tid}" in source
     assert source.count("foldl_faithful_middle_writer") == 4
 
 
@@ -217,8 +219,12 @@ def test_closed_k_rank_layernorm_owns_one_sm_plus_ordered_dynamic_k_pm_writers(k
     source = render_closed_segment(ir, relation, "segment_000000")
 
     assert source.count("foldl_faithful_middle_writer") == 1 + k
-    assert "[" + ", ".join(f"pmStore {tid}" for tid in pre.pm_tids) + "].length" in source
-    assert "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]" in source
+    assert "[" + ", ".join(
+        f"(segment_000000_pmFinal pmStore) {tid}" for tid in pre.pm_tids
+    ) + "].length" in source
+    assert "[" + ", ".join(
+        f"(segment_000000_pmFinal pmStore) {tid}" for tid in post.pm_tids
+    ) + "]" in source
 
 
 def test_closed_k_rank_layernorm_selects_exact_transition_certificate():
@@ -302,8 +308,12 @@ def test_closed_k_rank_linear_owns_one_sm_plus_ordered_dynamic_k_pm_writers(k):
     source = render_closed_segment(ir, relation, "segment_000000")
 
     assert source.count("foldl_faithful_middle_writer") == 1 + k
-    assert "[" + ", ".join(f"pmStore {tid}" for tid in pre.pm_tids) + "].length" in source
-    assert "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]" in source
+    assert "[" + ", ".join(
+        f"(segment_000000_pmFinal pmStore) {tid}" for tid in pre.pm_tids
+    ) + "].length" in source
+    assert "[" + ", ".join(
+        f"(segment_000000_pmFinal pmStore) {tid}" for tid in post.pm_tids
+    ) + "]" in source
 
 
 def test_closed_k_rank_layernorm_preserves_data_gamma_beta_input_roles():
@@ -317,7 +327,7 @@ def test_closed_k_rank_layernorm_preserves_data_gamma_beta_input_roles():
         **{**relation.__dict__, "certificates": (swapped,)}
     )
 
-    with pytest.raises(ValueError, match="external tensor bindings disagree"):
+    with pytest.raises(ValueError, match="exact typed certificate"):
         render_closed_segment(ir, relation, "segment_000000")
 
 
@@ -330,7 +340,7 @@ def test_closed_k_rank_local_renderer_rejects_tampered_theorem_identity():
         transition_specs=(bad_transition,), certificates=(bad_cert,),
     )
 
-    with pytest.raises(ValueError, match="exact theorem identity"):
+    with pytest.raises(ValueError, match="theorem identity mismatch"):
         render_closed_segment(ir, relation, "segment_000000")
 
 
@@ -342,7 +352,7 @@ def test_closed_k_rank_local_renderer_rejects_dim2_with_dim1_theorem():
         transition_specs=(transition,), certificates=(bad_cert,),
     )
 
-    with pytest.raises(ValueError, match="no checked K-rank local theorem"):
+    with pytest.raises(ValueError, match="exact typed certificate"):
         render_closed_segment(ir, relation, "segment_000000")
 
 
@@ -361,5 +371,5 @@ def test_closed_k_rank_local_renderer_rejects_reordered_pm_tid_authority():
         certificates=relation.certificates,
     )
 
-    with pytest.raises(ValueError, match="ordered PM TIDs"):
+    with pytest.raises(ValueError, match="writer signatures mismatch"):
         render_closed_segment(ir, broken, "segment_000000")

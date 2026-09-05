@@ -1,6 +1,7 @@
 /- Generic relation-composition lemmas used by generated proof certificates. -/
 import denote.KRankLinearGather
 import denote.KRankLinearReduction
+import denote.KRankSwiGLUGather
 import denote.KRankInitValue
 import denote.KRankAddGather
 import denote.KRankTranspose
@@ -25,6 +26,7 @@ import denote.PointwiseGather
 import denote.MoEFullSplitCommute
 import denote.RotaryGather1D
 import denote.EmbeddingHiddenShard
+import denote.EmbeddingSequenceShard
 
 set_option maxRecDepth 100000
 
@@ -48,7 +50,29 @@ theorem applyNodeDistributedFaithful_sliding_attn_out
   rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
     (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]
   unfold applyNodeDistributed applyNodeRingAttn
-  rw [if_neg (by simp), if_neg (by simp), if_pos (by simp)]
+  rw [if_neg (by simp), if_neg (by simp), if_neg (by simp),
+    if_neg (by simp), if_neg (by simp), if_neg (by simp), if_pos (by simp)]
+  unfold storeSet
+  simp [List.find?]
+
+/-- Singleton-output sibling for authorities that omit the historical auxiliary
+sliding-attention output. -/
+theorem applyNodeDistributedFaithful_sliding_attn_out_single
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (qTid kTid vTid cuQTid cuKVTid outTid : Tid) (params : List Nat) :
+    applyNodeDistributedFaithful g s
+      { rank := rank, op := "OpName.FW_attn_sliding_window",
+        ins := [qTid, kTid, vTid, cuQTid, cuKVTid],
+        outs := [outTid], params := params } outTid =
+      applyNodeRingAttn_sliding_window g s
+        { rank := rank, op := "OpName.FW_attn_sliding_window",
+          ins := [qTid, kTid, vTid, cuQTid, cuKVTid],
+          outs := [outTid], params := params } := by
+  rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
+    (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]
+  unfold applyNodeDistributed applyNodeRingAttn
+  rw [if_neg (by simp), if_neg (by simp), if_neg (by simp),
+    if_neg (by simp), if_neg (by simp), if_neg (by simp), if_pos (by simp)]
   unfold storeSet
   simp [List.find?]
 
@@ -84,7 +108,7 @@ theorem Ordinary2Rel.of_eq_chunk2_dim0
   · rw [chunkPrimDimN_shape 0 2 1 source [2 * tokens, hidden] hShape (by decide)]
     simp [List.set, List.getD]
 
-private theorem fw_view_id_of_shape (x : Tensor) (target : Shape)
+theorem fw_view_id_of_shape (x : Tensor) (target : Shape)
     (hx : x.shape = target) : fw_view target x = x := by
   apply Tensor.ext
   · exact hx.symm
@@ -381,6 +405,35 @@ theorem Ordinary2Rel.swiglu
   · rw [fw_swiglu_shape]; exact hB.rank0_shape
   · rw [fw_swiglu_shape]; exact hB.rank1_shape
 
+/-- GLU preserves two ordinary dim-0 relations with the same shape. -/
+theorem Ordinary2Rel.glu
+    {fullX x0 x1 fullG g0 g1 : Tensor} (rows hidden : Nat)
+    (hX : GeneratedPatterns.Ordinary2Rel fullX x0 x1
+      [rows * 2, hidden] [rows, hidden])
+    (hG : GeneratedPatterns.Ordinary2Rel fullG g0 g1
+      [rows * 2, hidden] [rows, hidden])
+    (hrows : 0 < rows) (hhidden : 0 < hidden) :
+    GeneratedPatterns.Ordinary2Rel (fw_glu fullX fullG)
+      (fw_glu x0 g0) (fw_glu x1 g1)
+      [rows * 2, hidden] [rows, hidden] := by
+  constructor
+  · rw [hX.full_value, hG.full_value]
+    exact GeneratedPatterns.ZigzagElemwise.binary_allGather0_commute_cp2
+      fw_glu (fun a b => a * sigmoidScalar b)
+      GeneratedPatterns.ZigzagElemwise.fw_glu_shape_of_shapes
+      (by
+        intro x y a b idx hx _hy hidx
+        exact GeneratedPatterns.ZigzagElemwise.fw_glu_valAt x y idx
+          (by rw [hx, GeneratedPatterns.ZigzagElemwise.prodShape_2d']; exact hidx))
+      x0 x1 g0 g1 rows hidden hrows hhidden
+      hX.rank0_shape hX.rank1_shape hG.rank0_shape hG.rank1_shape
+  · exact GeneratedPatterns.ZigzagElemwise.fw_glu_shape_of_shapes
+      fullX fullG [rows * 2, hidden] hX.full_shape hG.full_shape
+  · exact GeneratedPatterns.ZigzagElemwise.fw_glu_shape_of_shapes
+      x0 g0 [rows, hidden] hX.rank0_shape hG.rank0_shape
+  · exact GeneratedPatterns.ZigzagElemwise.fw_glu_shape_of_shapes
+      x1 g1 [rows, hidden] hX.rank1_shape hG.rank1_shape
+
 /-- A shape-identity view preserves the ordinary two-rank relation. -/
 theorem Ordinary2Rel.view_id
     {full x0 x1 : Tensor} {fullShape shardShape : Shape}
@@ -491,6 +544,46 @@ theorem Ordinary2Rel.per_head_linear_fullProducer_chunks
   rw [hsm, hout0, hout1]
   exact hProjected
 
+/-- Ordinary replicated-linear full-producer/chunks form. -/
+theorem Ordinary2Rel.mix_precision_linear_fullProducer_chunks
+    {full x0 x1 wSM wPM smOut gathered producer out0 out1 : Tensor}
+    (lDim inDim outDim : Nat)
+    (hrel : GeneratedPatterns.Ordinary2Rel full x0 x1
+      [lDim * 2, inDim] [lDim, inDim])
+    (hw : wPM.shape = [outDim, inDim]) (hwEq : wSM = wPM)
+    (hsm : smOut = fw_linear full wSM)
+    (hgather : gathered = allGatherPrimDimN 0 2 0 [x0, x1])
+    (hproducer : producer = fw_linear gathered wPM)
+    (hchunk0 : out0 = chunkPrimDimN 0 2 0 producer)
+    (hchunk1 : out1 = chunkPrimDimN 0 2 1 producer)
+    (hl : 0 < lDim) (hin : 0 < inDim) (hout : 0 < outDim) :
+    GeneratedPatterns.Ordinary2Rel smOut out0 out1
+      [lDim * 2, outDim] [lDim, outDim] := by
+  have hProjected := Ordinary2Rel.mix_precision_linear
+    lDim inDim outDim hrel hw hwEq hl hin hout
+  have hCommute := fw_mix_precision_linear_allGather0_commute_2
+    x0 x1 wPM lDim inDim outDim hl hin hout
+    hrel.rank0_shape hrel.rank1_shape hw
+  have hProducerGather : producer = allGatherPrimDimN 0 2 0
+      [fw_linear x0 wPM, fw_linear x1 wPM] := by
+    rw [hproducer, hgather]; exact hCommute
+  have hout0 : out0 = fw_linear x0 wPM := by
+    rw [hchunk0, hProducerGather]
+    simpa only [List.getD_cons_zero] using
+      (GeneratedPatterns.chunk_allGather_cp2_dim0_2d
+        (fw_linear x0 wPM) (fw_linear x1 wPM)
+        lDim outDim 0 hProjected.rank0_shape hProjected.rank1_shape
+        hl hout (by decide))
+  have hout1 : out1 = fw_linear x1 wPM := by
+    rw [hchunk1, hProducerGather]
+    simpa only [List.getD_cons_succ, List.getD_cons_zero] using
+      (GeneratedPatterns.chunk_allGather_cp2_dim0_2d
+        (fw_linear x0 wPM) (fw_linear x1 wPM)
+        lDim outDim 1 hProjected.rank0_shape hProjected.rank1_shape
+        hl hout (by decide))
+  rw [hsm, hout0, hout1]
+  exact hProjected
+
 /-- Ordinary norm-linear full-producer/chunks form. -/
 theorem Ordinary2Rel.norm_linear_fullProducer_chunks
     {full x0 x1 wSM wPM smOut gathered producer out0 out1 : Tensor}
@@ -598,6 +691,35 @@ theorem GeneratedPatterns.Ordinary2Rel.rms_norm_2d
   · rw [h.full_value, hWeight]
     exact ZigzagCollective.fw_rms_norm_allGather0_commute_2_core
       rank0 rank1 shardWeight shard hidden hShard hHidden h.rank0_shape h.rank1_shape
+  · unfold fw_rms_norm
+    rw [h.full_shape]
+    simp [Tensor.mkShape]
+  · unfold fw_rms_norm
+    rw [h.rank0_shape]
+    simp [Tensor.mkShape]
+  · unfold fw_rms_norm
+    rw [h.rank1_shape]
+    simp [Tensor.mkShape]
+
+/-- Rank-3 sibling: RMSNorm still reduces only the final axis, so an
+independent middle axis is preserved across dim-0 CP2 gathering. -/
+theorem GeneratedPatterns.Ordinary2Rel.rms_norm_3d
+    {full rank0 rank1 fullWeight shardWeight : Tensor}
+    {shard middle hidden : Nat}
+    (h : GeneratedPatterns.Ordinary2Rel full rank0 rank1
+      [shard * 2, middle, hidden] [shard, middle, hidden])
+    (hWeight : fullWeight = shardWeight)
+    (hShard : 0 < shard) (hMiddle : 0 < middle) (hHidden : 0 < hidden) :
+    GeneratedPatterns.Ordinary2Rel
+      (fw_rms_norm full fullWeight)
+      (fw_rms_norm rank0 shardWeight)
+      (fw_rms_norm rank1 shardWeight)
+      [shard * 2, middle, hidden] [shard, middle, hidden] := by
+  constructor
+  · rw [h.full_value, hWeight]
+    exact ZigzagCollective.fw_rms_norm_allGather0_commute_2_core_3d
+      rank0 rank1 shardWeight shard middle hidden hShard hMiddle hHidden
+      h.rank0_shape h.rank1_shape
   · unfold fw_rms_norm
     rw [h.full_shape]
     simp [Tensor.mkShape]
@@ -789,6 +911,348 @@ structure ShardedRel (full : Tensor) (shards : List Tensor)
     fullShape = shardShape.set gatherDim
       (shardShape.getD gatherDim 0 * shards.length)
 
+/-- Canonical row order and physical zigzag row order coexist with an
+independent feature-axis tensor-parallel decomposition.  The existential row
+shards are semantic witnesses; `featureShards` are the ordered graph values. -/
+def ZigzagFeatureRel
+    (full : Tensor) (featureShards : List Tensor) (cu : Tensor)
+    (fullShape rowShardShape featureShardShape : Shape) : Prop :=
+  ∃ row0 row1,
+    GeneratedPatterns.Zigzag2Rel full row0 row1 cu
+      fullShape rowShardShape ∧
+    ShardedRel (allGatherPrimDimN 0 2 0 [row0, row1]) featureShards 1
+      fullShape featureShardShape
+
+namespace ZigzagFeatureRel
+
+/-- Eliminate a hybrid relation without conflating canonical and physical row
+orders. -/
+theorem sources
+    {full : Tensor} {featureShards : List Tensor} {cu : Tensor}
+    {fullShape rowShardShape featureShardShape : Shape}
+    (h : ZigzagFeatureRel full featureShards cu
+      fullShape rowShardShape featureShardShape) :
+    ∃ row0 row1,
+      GeneratedPatterns.Zigzag2Rel full row0 row1 cu
+        fullShape rowShardShape ∧
+      ShardedRel (allGatherPrimDimN 0 2 0 [row0, row1]) featureShards 1
+        fullShape featureShardShape := h
+
+/-- Shape-preserving views on the canonical full value and both feature shards
+preserve the hybrid relation. -/
+theorem view_id_two
+    {full x0 x1 cu : Tensor} {fullShape rowShardShape featureShardShape : Shape}
+    (h : ZigzagFeatureRel full [x0, x1] cu
+      fullShape rowShardShape featureShardShape) :
+    ZigzagFeatureRel (fw_view fullShape full)
+      [fw_view featureShardShape x0, fw_view featureShardShape x1] cu
+      fullShape rowShardShape featureShardShape := by
+  rcases h with ⟨z0, z1, hrow, hfeature⟩
+  rcases hrow with ⟨source0, source1, hrowSources⟩
+  rw [fw_view_id_of_shape full fullShape hrowSources.full_shape,
+      fw_view_id_of_shape x0 featureShardShape
+        (hfeature.shard_shapes x0 (by simp)),
+      fw_view_id_of_shape x1 featureShardShape
+        (hfeature.shard_shapes x1 (by simp))]
+  exact ⟨z0, z1, ⟨source0, source1, hrowSources⟩, hfeature⟩
+
+/-- SwiGLU preserves the independent zigzag-row and feature-shard axes. -/
+theorem swiglu_two
+    {fullG g0 g1 fullU u0 u1 cu : Tensor}
+    (rows inputDim featureDim : Nat)
+    (hG : ZigzagFeatureRel fullG [g0, g1] cu
+      [rows * 2, inputDim] [rows, inputDim] [rows * 2, featureDim])
+    (hU : ZigzagFeatureRel fullU [u0, u1] cu
+      [rows * 2, inputDim] [rows, inputDim] [rows * 2, featureDim])
+    (hSplit : inputDim = 2 * featureDim)
+    (hrows : 0 < rows) (hinput : 0 < inputDim) (hfeature : 0 < featureDim) :
+    ZigzagFeatureRel (fw_swiglu fullG fullU)
+      [fw_swiglu g0 u0, fw_swiglu g1 u1] cu
+      [rows * 2, inputDim] [rows, inputDim] [rows * 2, featureDim] := by
+  rcases hG with ⟨zG0, zG1, hrowG, hfeatureG⟩
+  rcases hU with ⟨zU0, zU1, hrowU, hfeatureU⟩
+  have hrowOut := GeneratedPatterns.Zigzag2Rel.swiglu
+    rows inputDim hrowG hrowU hrows hinput
+  have hfeatureOut : ShardedRel
+      (fw_swiglu (allGatherPrimDimN 0 2 0 [zG0, zG1])
+        (allGatherPrimDimN 0 2 0 [zU0, zU1]))
+      [fw_swiglu g0 u0, fw_swiglu g1 u1] 1
+      [rows * 2, inputDim] [rows * 2, featureDim] := by
+    refine {
+      full_value := ?_
+      full_shape := ?_
+      shards_nonempty := by simp
+      gather_dim_lt := by norm_num
+      shard_shapes := ?_
+      shape_contract := by
+        norm_num [List.set, List.getD]
+        omega
+    }
+    · rw [hfeatureG.full_value, hfeatureU.full_value]
+      exact fw_swiglu_allGatherDim1_two_2d g0 g1 u0 u1
+        (rows * 2) featureDim (by omega) hfeature
+        (hfeatureG.shard_shapes g0 (by simp))
+        (hfeatureG.shard_shapes g1 (by simp))
+        (hfeatureU.shard_shapes u0 (by simp))
+        (hfeatureU.shard_shapes u1 (by simp))
+    · unfold fw_swiglu Tensor.mkShape
+      exact hfeatureU.full_shape
+    · intro shardValue hmem
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+      rcases hmem with rfl | rfl <;> unfold fw_swiglu Tensor.mkShape
+      · exact hfeatureU.shard_shapes u0 (by simp)
+      · exact hfeatureU.shard_shapes u1 (by simp)
+  rcases hrowG with ⟨sourceG0, sourceG1, hrowGSources⟩
+  rcases hrowU with ⟨sourceU0, sourceU1, hrowUSources⟩
+  have hcommute := PointwiseGather.fw_swiglu_allGather0_commute_2
+    zG0 zG1 zU0 zU1 rows inputDim hrows hinput
+    hrowGSources.rank0_shape hrowGSources.rank1_shape
+    hrowUSources.rank0_shape hrowUSources.rank1_shape
+  have hfeatureOut' : ShardedRel
+      (allGatherPrimDimN 0 2 0
+        [fw_swiglu zG0 zU0, fw_swiglu zG1 zU1])
+      [fw_swiglu g0 u0, fw_swiglu g1 u1] 1
+      [rows * 2, inputDim] [rows * 2, featureDim] := by
+    rw [← hcommute]
+    exact hfeatureOut
+  exact ⟨fw_swiglu zG0 zU0, fw_swiglu zG1 zU1,
+    hrowOut, hfeatureOut'⟩
+
+/-- Feature-sharded row-parallel linear reduction exits back to exact CP2
+zigzag row shards. Canonical row order is carried only by `Zigzag2Rel`; the
+AllReduce computes the physical zigzag-order full tensor whose dim-0 chunks
+are the exposed rank outputs. -/
+theorem mix_precision_linear_dim1_allReduce_chunks_cp2
+    {full x0 x1 cu fullWeight w0 w1 : Tensor}
+    (rows inputDim featureDim outputDim : Nat)
+    (hinput : ZigzagFeatureRel full [x0, x1] cu
+      [rows * 2, inputDim] [rows, inputDim] [rows * 2, featureDim])
+    (hweight : ShardedRel fullWeight [w0, w1] 1
+      [outputDim, inputDim] [outputDim, featureDim])
+    (hinputSplit : inputDim = 2 * featureDim)
+    (hrows : 0 < rows) (hfeature : 0 < featureDim)
+    (houtput : 0 < outputDim) :
+    GeneratedPatterns.Zigzag2Rel
+      (fw_linear full fullWeight)
+      (chunkPrimDimN 0 2 0
+        (allReducePrim 2 0 [fw_linear x0 w0, fw_linear x1 w1]))
+      (chunkPrimDimN 0 2 1
+        (allReducePrim 2 0 [fw_linear x0 w0, fw_linear x1 w1]))
+      cu [rows * 2, outputDim] [rows, outputDim] := by
+  rcases hinput with ⟨z0, z1, hrow, hfeatureRel⟩
+  have hinputPos : 0 < inputDim := by omega
+  have hx0 : x0.shape = [rows * 2, featureDim] :=
+    hfeatureRel.shard_shapes x0 (by simp)
+  have hx1 : x1.shape = [rows * 2, featureDim] :=
+    hfeatureRel.shard_shapes x1 (by simp)
+  have hw0 : w0.shape = [outputDim, featureDim] :=
+    hweight.shard_shapes w0 (by simp)
+  have hw1 : w1.shape = [outputDim, featureDim] :=
+    hweight.shard_shapes w1 (by simp)
+  have hreduce := fw_linear_dim1_two_allReduce_2d
+    x0 x1 w0 w1 (rows * 2) featureDim outputDim
+    (by omega) hfeature houtput hx0 hx1 hw0 hw1
+  have hphysicalReduction :
+      fw_linear (allGatherPrimDimN 0 2 0 [z0, z1]) fullWeight =
+        allReducePrim 2 0 [fw_linear x0 w0, fw_linear x1 w1] := by
+    rw [hfeatureRel.full_value, hweight.full_value]
+    exact hreduce
+  rcases hrow with ⟨source0, source1, hrowSources⟩
+  have hrowRel : GeneratedPatterns.Zigzag2Rel full z0 z1 cu
+      [rows * 2, inputDim] [rows, inputDim] :=
+    ⟨source0, source1, hrowSources⟩
+  have hrowOut := GeneratedPatterns.Zigzag2Rel.mix_precision_linear
+    rows inputDim outputDim hrowRel hweight.full_shape
+    hrows hinputPos houtput
+  have hrowGather :
+      fw_linear (allGatherPrimDimN 0 2 0 [z0, z1]) fullWeight =
+        allGatherPrimDimN 0 2 0
+          [fw_linear z0 fullWeight, fw_linear z1 fullWeight] :=
+    fw_mix_precision_linear_allGather0_commute_2
+      z0 z1 fullWeight rows inputDim outputDim
+      hrows hinputPos houtput hrowSources.rank0_shape
+      hrowSources.rank1_shape hweight.full_shape
+  have hreducedGather :
+      allReducePrim 2 0 [fw_linear x0 w0, fw_linear x1 w1] =
+        allGatherPrimDimN 0 2 0
+          [fw_linear z0 fullWeight, fw_linear z1 fullWeight] :=
+    hphysicalReduction.symm.trans hrowGather
+  rcases hrowOut with ⟨outSource0, outSource1, hrowOutSources⟩
+  have houtRel : GeneratedPatterns.Zigzag2Rel
+      (fw_linear full fullWeight) (fw_linear z0 fullWeight)
+      (fw_linear z1 fullWeight) cu
+      [rows * 2, outputDim] [rows, outputDim] :=
+    ⟨outSource0, outSource1, hrowOutSources⟩
+  have hchunk0 := GeneratedPatterns.chunk_allGather_cp2_dim0_2d
+    (fw_linear z0 fullWeight) (fw_linear z1 fullWeight)
+    rows outputDim 0 hrowOutSources.rank0_shape
+    hrowOutSources.rank1_shape hrows houtput (by decide)
+  have hchunk1 := GeneratedPatterns.chunk_allGather_cp2_dim0_2d
+    (fw_linear z0 fullWeight) (fw_linear z1 fullWeight)
+    rows outputDim 1 hrowOutSources.rank0_shape
+    hrowOutSources.rank1_shape hrows houtput (by decide)
+  rw [hreducedGather, hchunk0, hchunk1]
+  simpa only [List.getD_cons_zero, List.getD_cons_succ] using houtRel
+
+end ZigzagFeatureRel
+
+/-- A graph-written full physical zigzag tensor together with its canonical
+full tensor and exact rank-local zigzag shards. -/
+structure JoinedZigzag2Rel
+    (full row0 row1 joined cu : Tensor)
+    (fullShape rowShardShape : Shape) : Prop where
+  row : GeneratedPatterns.Zigzag2Rel full row0 row1 cu
+    fullShape rowShardShape
+  joined_value : joined = allGatherPrimDimN 0 2 0 [row0, row1]
+
+namespace JoinedZigzag2Rel
+
+theorem of_allGather
+    {full row0 row1 joined cu : Tensor}
+    {fullShape rowShardShape : Shape}
+    (hrow : GeneratedPatterns.Zigzag2Rel full row0 row1 cu
+      fullShape rowShardShape)
+    (hjoined : joined = allGatherPrimDimN 0 2 0 [row0, row1]) :
+    JoinedZigzag2Rel full row0 row1 joined cu fullShape rowShardShape :=
+  { row := hrow, joined_value := hjoined }
+
+end JoinedZigzag2Rel
+
+/-- Existential row witnesses for a graph-written physical zigzag tensor. -/
+def JoinedZigzagRel
+    (full joined cu : Tensor) (fullShape rowShardShape : Shape) : Prop :=
+  ∃ row0 row1,
+    JoinedZigzag2Rel full row0 row1 joined cu fullShape rowShardShape
+
+namespace JoinedZigzagRel
+
+/-- Publish a graph-written physical joined tensor from exact live row shards. -/
+theorem of_allGather
+    {full row0 row1 joined cu : Tensor}
+    {fullShape rowShardShape : Shape}
+    (hrow : GeneratedPatterns.Zigzag2Rel full row0 row1 cu
+      fullShape rowShardShape)
+    (hjoined : joined = allGatherPrimDimN 0 2 0 [row0, row1]) :
+    JoinedZigzagRel full joined cu fullShape rowShardShape := by
+  exact ⟨row0, row1, JoinedZigzag2Rel.of_allGather hrow hjoined⟩
+
+/-- Denotational identity writers preserve joined-zigzag authority. -/
+theorem identity
+    {full joined cu : Tensor} {fullShape rowShardShape : Shape}
+    (h : JoinedZigzagRel full joined cu fullShape rowShardShape) :
+    JoinedZigzagRel (tensorId full) (tensorId joined) cu
+      fullShape rowShardShape := by
+  simpa only [tensorId] using h
+
+/-- A shape-identity 2-D view preserves joined-zigzag authority. -/
+theorem view_id_2d
+    {full joined cu : Tensor} {rows hidden : Nat}
+    (h : JoinedZigzagRel full joined cu
+      [rows * 2, hidden] [rows, hidden]) :
+    JoinedZigzagRel (fw_view [rows * 2, hidden] full)
+      (fw_view [rows * 2, hidden] joined) cu
+      [rows * 2, hidden] [rows, hidden] := by
+  rcases h with ⟨row0, row1, hjoined⟩
+  have hhead : (([row0, row1] : List Tensor).head?.map
+      (fun t => t.shape)).getD [] = [rows, hidden] := by
+    simp [hjoined.row.rank0_shape]
+  have hjoinedShape : joined.shape = [rows * 2, hidden] := by
+    rw [hjoined.joined_value,
+      allGatherPrimDimN_shape 0 2 _ [rows, hidden] hhead]
+    simp [List.set, List.getD, Nat.mul_comm]
+  rw [fw_view_id_of_shape full [rows * 2, hidden]
+      hjoined.row.full_shape,
+    fw_view_id_of_shape joined [rows * 2, hidden] hjoinedShape]
+  exact ⟨row0, row1, hjoined⟩
+
+/-- Replicated RMSNorm preserves canonical and physical zigzag orders. -/
+theorem rms_norm
+    {full joined cu wSM wPM : Tensor} (rows hidden : Nat)
+    (h : JoinedZigzagRel full joined cu
+      [rows * 2, hidden] [rows, hidden])
+    (hwEq : wSM = wPM) (hrows : 0 < rows) (hhidden : 0 < hidden) :
+    JoinedZigzagRel
+      (fw_rms_norm full wSM) (fw_rms_norm joined wPM) cu
+      [rows * 2, hidden] [rows, hidden] := by
+  rcases h with ⟨row0, row1, hjoined⟩
+  rcases hjoined.row with ⟨source0, source1, hsources⟩
+  have hbase : GeneratedPatterns.Zigzag2Rel full row0 row1 cu
+      [rows * 2, hidden] [rows, hidden] := ⟨source0, source1, hsources⟩
+  have hrow := GeneratedPatterns.Zigzag2Rel.rms_norm
+    (w := wPM) rows hidden hbase hrows hhidden rfl
+  refine ⟨fw_rms_norm row0 wPM, fw_rms_norm row1 wPM, ?_⟩
+  refine { row := ?_, joined_value := ?_ }
+  · simpa only [hwEq] using hrow
+  · rw [hjoined.joined_value]
+    exact ZigzagCollective.fw_rms_norm_allGather0_commute_2_core
+      row0 row1 wPM rows hidden hrows hhidden
+      hsources.rank0_shape hsources.rank1_shape
+
+/-- Replicated per-head linear preserves canonical and physical zigzag orders. -/
+theorem per_head_linear
+    {full joined cu wSM wPM : Tensor} (rows inputDim heads headDim : Nat)
+    (h : JoinedZigzagRel full joined cu
+      [rows * 2, inputDim] [rows, inputDim])
+    (hw : wPM.shape = [heads, headDim, inputDim])
+    (hwEq : wSM = wPM)
+    (hrows : 0 < rows) (hinput : 0 < inputDim)
+    (hheads : 0 < heads) (hhead : 0 < headDim) :
+    JoinedZigzagRel
+      (fw_per_head_linear full wSM) (fw_per_head_linear joined wPM) cu
+      [rows * 2, heads, headDim] [rows, heads, headDim] := by
+  rcases h with ⟨row0, row1, hjoined⟩
+  rcases hjoined.row with ⟨source0, source1, hsources⟩
+  have hbase : GeneratedPatterns.Zigzag2Rel full row0 row1 cu
+      [rows * 2, inputDim] [rows, inputDim] := ⟨source0, source1, hsources⟩
+  have hrow := GeneratedPatterns.Zigzag2Rel.per_head_linear
+    rows inputDim heads headDim hbase hw
+    hrows hinput hheads hhead
+  refine ⟨fw_per_head_linear row0 wPM, fw_per_head_linear row1 wPM, ?_⟩
+  refine { row := ?_, joined_value := ?_ }
+  · simpa only [hwEq] using hrow
+  · rw [hjoined.joined_value]
+    exact fw_per_head_mix_precision_linear_allGather0_commute_2
+      row0 row1 wPM rows inputDim heads headDim
+      hrows hinput hheads hhead
+      hsources.rank0_shape hsources.rank1_shape hw
+
+end JoinedZigzagRel
+
+/-- Shared-weight embedding transports sequence-axis sharding for any positive
+rank count.  No model dimensions or tensor IDs are encoded in the theorem. -/
+theorem ShardedRel.fw_embedding_shared_weight_dim1
+    {ids fullWeight sharedWeight : Tensor} {idsShards : List Tensor}
+    {b s hidden : Nat}
+    (hids : ShardedRel ids idsShards 1
+      [b, s * idsShards.length] [b, s])
+    (hweightEq : fullWeight = sharedWeight)
+    (hweightShape : lastD sharedWeight.shape = hidden)
+    (hb : 0 < b) (hs : 0 < s) (hhidden : 0 < hidden) :
+    ShardedRel (fw_embedding ids fullWeight)
+      (idsShards.map (fun shard => fw_embedding shard sharedWeight)) 1
+      [b, s * idsShards.length, hidden] [b, s, hidden] := by
+  have hK : 0 < idsShards.length := by
+    cases hlist : idsShards with
+    | nil => exact (hids.shards_nonempty hlist).elim
+    | cons _ _ => simp
+  constructor
+  · rw [hweightEq, hids.full_value]
+    simpa only [List.length_map] using
+      fw_embedding_allGatherPrimDimN_dim1_shared_weight
+        idsShards.length b s hidden idsShards sharedWeight
+        hK hb hs hhidden rfl hids.shard_shapes hweightShape
+  · rw [fw_embedding_shape, hids.full_shape, hweightEq, hweightShape]
+    rfl
+  · cases hlist : idsShards with
+    | nil => exact (hids.shards_nonempty hlist).elim
+    | cons _ _ => simp
+  · simp
+  · intro shard hshard
+    rcases List.mem_map.mp hshard with ⟨source, hsource, rfl⟩
+    rw [fw_embedding_shape, hids.shard_shapes source hsource, hweightShape]
+    rfl
+  · simp [List.set, List.getD]
+
 /-- `FW_contiguous` is definitionally identity, so it transports an exact
 ordered sharding relation without changing its shape contract. -/
 theorem ShardedRel.fw_contiguous
@@ -807,6 +1271,354 @@ theorem ShardedRel.fw_contiguous
         rw [show TrainVerify.Denote.tensorId shard = shard by rfl, ih]
   rw [hmap]
   exact h
+
+/-- Literal shape-preserving views transport an ordered sharding relation. -/
+theorem ShardedRel.fw_view_id
+    {full : Tensor} {shards : List Tensor} {gatherDim : Nat}
+    {fullShape shardShape : Shape}
+    (h : ShardedRel full shards gatherDim fullShape shardShape) :
+    ShardedRel (fw_view fullShape full)
+      (shards.map (fw_view shardShape)) gatherDim fullShape shardShape := by
+  have hfull : fw_view fullShape full = full :=
+    fw_view_id_of_shape full fullShape h.full_shape
+  have hmapAux : ∀ xs : List Tensor,
+      (∀ shard ∈ xs, shard.shape = shardShape) →
+      xs.map (fw_view shardShape) = xs := by
+    intro xs hshapes
+    induction xs with
+    | nil => rfl
+    | cons shard rest ih =>
+        simp only [List.map]
+        rw [fw_view_id_of_shape shard shardShape (hshapes shard (by simp))]
+        rw [ih (by
+          intro item hitem
+          exact hshapes item (by simp [hitem]))]
+  have hmap : shards.map (fw_view shardShape) = shards :=
+    hmapAux shards h.shard_shapes
+  rw [hfull, hmap]
+  exact h
+
+/-- List-indexed CP2 dim-0 rank-2 sharding projects to ordinary authority. -/
+theorem ShardedRel.toOrdinary2_dim0_rank2
+    {full rank0 rank1 : Tensor} {rows width : Nat}
+    (h : ShardedRel full [rank0, rank1] 0 [rows * 2, width] [rows, width]) :
+    GeneratedPatterns.Ordinary2Rel full rank0 rank1
+      [rows * 2, width] [rows, width] := {
+  full_value := by simpa only [List.length_cons, List.length_nil] using h.full_value
+  full_shape := h.full_shape
+  rank0_shape := h.shard_shapes rank0 (by simp)
+  rank1_shape := h.shard_shapes rank1 (by simp)
+}
+
+/-- CP2 rank-2 ordinary authority embeds into list-indexed dim-0 sharding. -/
+theorem ShardedRel.ofOrdinary2_dim0_rank2
+    {full rank0 rank1 : Tensor} {rows width : Nat}
+    (h : GeneratedPatterns.Ordinary2Rel full rank0 rank1
+      [rows * 2, width] [rows, width]) :
+    ShardedRel full [rank0, rank1] 0 [rows * 2, width] [rows, width] := by
+  refine {
+    full_value := by simpa only [List.length_cons, List.length_nil] using h.full_value
+    full_shape := h.full_shape
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  intro shardValue hmem
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+  rcases hmem with rfl | rfl
+  · exact h.rank0_shape
+  · exact h.rank1_shape
+
+/-- CP2 rank-3 ordinary authority embeds into list-indexed dim-0 sharding. -/
+theorem ShardedRel.ofOrdinary2_dim0_rank3
+    {full rank0 rank1 : Tensor} {rows d1 d2 : Nat}
+    (h : GeneratedPatterns.Ordinary2Rel full rank0 rank1
+      [rows * 2, d1, d2] [rows, d1, d2]) :
+    ShardedRel full [rank0, rank1] 0
+      [rows * 2, d1, d2] [rows, d1, d2] := by
+  refine {
+    full_value := by simpa only [List.length_cons, List.length_nil] using h.full_value
+    full_shape := h.full_shape
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  intro shardValue hmem
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+  rcases hmem with rfl | rfl
+  · exact h.rank0_shape
+  · exact h.rank1_shape
+
+/-- Two-rank dim-0 sharding survives a literal rank-3 to rank-2 flatten. -/
+theorem ShardedRel.fw_view_3d_to_2d_dim0_two
+    {full rank0 rank1 : Tensor} {rows heads headDim : Nat}
+    (h : ShardedRel full [rank0, rank1] 0
+      [rows * 2, heads, headDim] [rows, heads, headDim])
+    (hRows : 0 < rows) (hHeads : 0 < heads) (hHeadDim : 0 < headDim) :
+    ShardedRel (fw_view [rows * 2, heads * headDim] full)
+      [fw_view [rows, heads * headDim] rank0,
+       fw_view [rows, heads * headDim] rank1] 0
+      [rows * 2, heads * headDim] [rows, heads * headDim] := by
+  refine {
+    full_value := ?_
+    full_shape := rfl
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  · rw [h.full_value]
+    exact GeneratedPatterns.fw_view_allGather0_commute_cp2
+      rank0 rank1 rows heads headDim hRows hHeads hHeadDim
+      (h.shard_shapes rank0 (by simp))
+      (h.shard_shapes rank1 (by simp))
+  · intro shardValue hmem
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+    rcases hmem with rfl | rfl <;> rfl
+
+/-- The CP2 projection of rank-3 row sharding after flattening. -/
+theorem ShardedRel.fw_view_3d_to_2d_ordinary_two
+    {full rank0 rank1 : Tensor} {rows heads headDim : Nat}
+    (h : ShardedRel full [rank0, rank1] 0
+      [rows * 2, heads, headDim] [rows, heads, headDim])
+    (hRows : 0 < rows) (hHeads : 0 < heads) (hHeadDim : 0 < headDim) :
+    GeneratedPatterns.Ordinary2Rel
+      (fw_view [rows * 2, heads * headDim] full)
+      (fw_view [rows, heads * headDim] rank0)
+      (fw_view [rows, heads * headDim] rank1)
+      [rows * 2, heads * headDim] [rows, heads * headDim] := by
+  have hout := ShardedRel.fw_view_3d_to_2d_dim0_two h hRows hHeads hHeadDim
+  exact {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hout.full_value
+    full_shape := hout.full_shape
+    rank0_shape := hout.shard_shapes _ (by simp)
+    rank1_shape := hout.shard_shapes _ (by simp)
+  }
+
+/-- Two-rank row sharding is preserved by a replicated rank-2 linear. -/
+theorem ShardedRel.fw_linear_dim0_two_2d
+    {full rank0 rank1 weight : Tensor} {rows input output : Nat}
+    (h : ShardedRel full [rank0, rank1] 0
+      [rows * 2, input] [rows, input])
+    (hWeight : weight.shape = [output, input])
+    (hRows : 0 < rows) (hInput : 0 < input) (hOutput : 0 < output) :
+    ShardedRel (fw_linear full weight)
+      [fw_linear rank0 weight, fw_linear rank1 weight] 0
+      [rows * 2, output] [rows, output] := by
+  refine {
+    full_value := ?_
+    full_shape := ?_
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  · rw [h.full_value]
+    exact GeneratedPatterns.fw_linear_allGather0_commute_2_of rank0 rank1 weight rows input output
+      hRows hInput hOutput
+      (h.shard_shapes rank0 (by simp))
+      (h.shard_shapes rank1 (by simp)) hWeight
+  · rw [fw_linear_is_matmul (rows * 2) input output full weight
+      h.full_shape hWeight]
+    rfl
+  · intro shardValue hmem
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+    rcases hmem with rfl | rfl
+    · rw [fw_linear_is_matmul rows input output rank0 weight
+        (h.shard_shapes rank0 (by simp)) hWeight]
+      rfl
+    · rw [fw_linear_is_matmul rows input output rank1 weight
+        (h.shard_shapes rank1 (by simp)) hWeight]
+      rfl
+
+/-- Two-rank row sharding is preserved by replicated per-head projection. -/
+theorem ShardedRel.fw_per_head_linear_dim0_two
+    {full rank0 rank1 wSM wPM : Tensor}
+    {rows input heads headDim : Nat}
+    (h : ShardedRel full [rank0, rank1] 0
+      [rows * 2, input] [rows, input])
+    (hWeight : wPM.shape = [heads, headDim, input])
+    (hWeightEq : wSM = wPM)
+    (hRows : 0 < rows) (hInput : 0 < input)
+    (hHeads : 0 < heads) (hHeadDim : 0 < headDim) :
+    ShardedRel (fw_per_head_linear full wSM)
+      [fw_per_head_linear rank0 wPM, fw_per_head_linear rank1 wPM] 0
+      [rows * 2, heads, headDim] [rows, heads, headDim] := by
+  have hOrd : GeneratedPatterns.Ordinary2Rel full rank0 rank1
+      [rows * 2, input] [rows, input] := {
+    full_value := by simpa only [List.length_cons, List.length_nil] using h.full_value
+    full_shape := h.full_shape
+    rank0_shape := h.shard_shapes rank0 (by simp)
+    rank1_shape := h.shard_shapes rank1 (by simp)
+  }
+  have hout := Ordinary2Rel.per_head_linear rows input heads headDim
+    hOrd hWeight hWeightEq hRows hInput hHeads hHeadDim
+  refine {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hout.full_value
+    full_shape := hout.full_shape
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  intro shardValue hmem
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+  rcases hmem with rfl | rfl
+  · exact hout.rank0_shape
+  · exact hout.rank1_shape
+
+/-- Two-rank row sharding is preserved by faithful GLU. -/
+theorem ShardedRel.fw_glu_dim0_two_2d
+    {fullX x0 x1 fullGate gate0 gate1 : Tensor} {rows hidden : Nat}
+    (hX : ShardedRel fullX [x0, x1] 0
+      [rows * 2, hidden] [rows, hidden])
+    (hGate : ShardedRel fullGate [gate0, gate1] 0
+      [rows * 2, hidden] [rows, hidden])
+    (hRows : 0 < rows) (hHidden : 0 < hidden) :
+    ShardedRel (fw_glu fullX fullGate)
+      [fw_glu x0 gate0, fw_glu x1 gate1] 0
+      [rows * 2, hidden] [rows, hidden] := by
+  have hXOrd : GeneratedPatterns.Ordinary2Rel fullX x0 x1
+      [rows * 2, hidden] [rows, hidden] := {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hX.full_value
+    full_shape := hX.full_shape
+    rank0_shape := hX.shard_shapes x0 (by simp)
+    rank1_shape := hX.shard_shapes x1 (by simp)
+  }
+  have hGateOrd : GeneratedPatterns.Ordinary2Rel fullGate gate0 gate1
+      [rows * 2, hidden] [rows, hidden] := {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hGate.full_value
+    full_shape := hGate.full_shape
+    rank0_shape := hGate.shard_shapes gate0 (by simp)
+    rank1_shape := hGate.shard_shapes gate1 (by simp)
+  }
+  have hout := Ordinary2Rel.glu rows hidden hXOrd hGateOrd hRows hHidden
+  refine {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hout.full_value
+    full_shape := hout.full_shape
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  intro shardValue hmem
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+  rcases hmem with rfl | rfl
+  · exact hout.rank0_shape
+  · exact hout.rank1_shape
+
+/-- Two-rank row sharding is preserved by SwiGLU. -/
+theorem ShardedRel.fw_swiglu_dim0_two_2d
+    {fullA a0 a1 fullB b0 b1 : Tensor} {rows hidden : Nat}
+    (hA : ShardedRel fullA [a0, a1] 0
+      [rows * 2, hidden] [rows, hidden])
+    (hB : ShardedRel fullB [b0, b1] 0
+      [rows * 2, hidden] [rows, hidden])
+    (hRows : 0 < rows) (hHidden : 0 < hidden) :
+    ShardedRel (fw_swiglu fullA fullB)
+      [fw_swiglu a0 b0, fw_swiglu a1 b1] 0
+      [rows * 2, hidden] [rows, hidden] := by
+  have hAOrd : GeneratedPatterns.Ordinary2Rel fullA a0 a1
+      [rows * 2, hidden] [rows, hidden] := {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hA.full_value
+    full_shape := hA.full_shape
+    rank0_shape := hA.shard_shapes a0 (by simp)
+    rank1_shape := hA.shard_shapes a1 (by simp)
+  }
+  have hBOrd : GeneratedPatterns.Ordinary2Rel fullB b0 b1
+      [rows * 2, hidden] [rows, hidden] := {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hB.full_value
+    full_shape := hB.full_shape
+    rank0_shape := hB.shard_shapes b0 (by simp)
+    rank1_shape := hB.shard_shapes b1 (by simp)
+  }
+  have hout := Ordinary2Rel.swiglu rows hidden hAOrd hBOrd hRows hHidden
+  refine {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hout.full_value
+    full_shape := hout.full_shape
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  intro shardValue hmem
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+  rcases hmem with rfl | rfl
+  · exact hout.rank0_shape
+  · exact hout.rank1_shape
+
+/-- Two-rank feature-sharded SwiGLU commutes with dim-1 reconstruction. -/
+theorem ShardedRel.fw_swiglu_dim1_two_2d
+    {gateFull upFull gate0 gate1 up0 up1 : Tensor}
+    {rows shard : Nat}
+    (hGate : ShardedRel gateFull [gate0, gate1] 1
+      [rows, shard * 2] [rows, shard])
+    (hUp : ShardedRel upFull [up0, up1] 1
+      [rows, shard * 2] [rows, shard])
+    (hrows : 0 < rows) (hshard : 0 < shard) :
+    ShardedRel (fw_swiglu gateFull upFull)
+      [fw_swiglu gate0 up0, fw_swiglu gate1 up1] 1
+      [rows, shard * 2] [rows, shard] := by
+  refine {
+    full_value := ?_
+    full_shape := ?_
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  · rw [hGate.full_value, hUp.full_value]
+    exact fw_swiglu_allGatherDim1_two_2d gate0 gate1 up0 up1 rows shard
+      hrows hshard
+      (hGate.shard_shapes gate0 (by simp))
+      (hGate.shard_shapes gate1 (by simp))
+      (hUp.shard_shapes up0 (by simp))
+      (hUp.shard_shapes up1 (by simp))
+  · unfold fw_swiglu Tensor.mkShape
+    exact hUp.full_shape
+  · intro shardValue hmem
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+    rcases hmem with rfl | rfl <;> unfold fw_swiglu Tensor.mkShape
+    · exact hUp.shard_shapes up0 (by simp)
+    · exact hUp.shard_shapes up1 (by simp)
+
+/-- Two-rank dim-0 RMSNorm transport for list-indexed sharding authority. -/
+theorem ShardedRel.fw_rms_norm_2d
+    {full rank0 rank1 fullWeight shardWeight : Tensor}
+    {rows hidden : Nat}
+    (h : ShardedRel full [rank0, rank1] 0
+      [rows * 2, hidden] [rows, hidden])
+    (hWeight : fullWeight = shardWeight)
+    (hRows : 0 < rows) (hHidden : 0 < hidden) :
+    ShardedRel (fw_rms_norm full fullWeight)
+      [fw_rms_norm rank0 shardWeight, fw_rms_norm rank1 shardWeight] 0
+      [rows * 2, hidden] [rows, hidden] := by
+  have hOrd : GeneratedPatterns.Ordinary2Rel full rank0 rank1
+      [rows * 2, hidden] [rows, hidden] := {
+    full_value := by
+      simpa only [List.length_cons, List.length_nil] using h.full_value
+    full_shape := h.full_shape
+    rank0_shape := h.shard_shapes rank0 (by simp)
+    rank1_shape := h.shard_shapes rank1 (by simp)
+  }
+  have hout :=
+    TrainVerify.Denote.RelationCompiler.GeneratedPatterns.Ordinary2Rel.rms_norm_2d
+      hOrd hWeight hRows hHidden
+  refine {
+    full_value := by simpa only [List.length_cons, List.length_nil] using hout.full_value
+    full_shape := hout.full_shape
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num
+  }
+  intro shard hmem
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+  rcases hmem with rfl | rfl
+  · exact hout.rank0_shape
+  · exact hout.rank1_shape
 
 /-- Rank-4 transpose of axes 1 and 2 preserves a dim-3 ordered sharding relation. -/
 theorem ShardedRel.fw_transposeAxes_1_2_dim3_rank4
@@ -971,6 +1783,85 @@ structure ReductionRel (full : Tensor) (contributions : List Tensor)
   reduced_shape :
     (allReducePrim contributions.length 0 contributions).shape = fullShape
 
+/-- A dim-0 vocabulary-sharded embedding produces one ordered additive
+contribution per weight shard. -/
+theorem ShardedRel.fw_embedding_vocab_to_reduction
+    {fullW ids fullOut : Tensor} {Ws contributions : List Tensor}
+    {idsShape : Shape} {shard hidden : Nat}
+    (hWeight : ShardedRel fullW Ws 0
+      [shard * Ws.length, hidden] [shard, hidden])
+    (hshard : 0 < shard) (hhidden : 0 < hidden)
+    (hids : ids.shape = idsShape)
+    (hFullWriter : fullOut = fw_embedding ids fullW)
+    (hContributionWriters :
+      contributions = List.ofFn (fun r : Fin Ws.length =>
+        fw_embedding_offset (r.val * shard) ids
+          (Ws.getD r.val (zeroTensor [shard, hidden])))) :
+    ReductionRel fullOut contributions (idsShape ++ [hidden]) := by
+  have hparts : 0 < Ws.length := by
+    cases hWs : Ws with
+    | nil => exact (hWeight.shards_nonempty hWs).elim
+    | cons W rest => simp
+  have hWsHead :
+      (Ws.head?.map (fun t => t.shape)).getD [] = [shard, hidden] := by
+    cases hWs : Ws with
+    | nil => exact (hWeight.shards_nonempty hWs).elim
+    | cons W rest =>
+      simp only [List.head?, Option.map, Option.getD]
+      apply hWeight.shard_shapes W
+      rw [hWs]
+      exact List.mem_cons_self
+  have hWsShape : ∀ r (_ : r < Ws.length),
+      (Ws.getD r (zeroTensor [shard, hidden])).shape = [shard, hidden] := by
+    intro r hr
+    rw [List.getD, List.getElem?_eq_getElem hr, Option.getD_some]
+    exact hWeight.shard_shapes Ws[r] (List.getElem_mem hr)
+  have hBase := TrainVerify.Denote.fw_embedding_eq_allReduce_offset_shards
+    (numParts := Ws.length) (shard := shard) (hidden := hidden)
+    (hparts := hparts) (hshard := hshard) (hhid := hhidden)
+    (ids := ids) (Ws := Ws) (hlen := rfl)
+    (hWs_head := hWsHead) (hWs_shape := hWsShape)
+  have hFullValue : fullOut = allReducePrim contributions.length 0 contributions := by
+    calc
+      fullOut = fw_embedding ids fullW := hFullWriter
+      _ = fw_embedding ids (allGatherPrimDimN 0 Ws.length 0 Ws) := by
+        rw [← hWeight.full_value]
+      _ = allReducePrim Ws.length 0 (List.ofFn (fun r : Fin Ws.length =>
+          fw_embedding_offset (r.val * shard) ids
+            (Ws.getD r.val (zeroTensor [shard, hidden])))) := hBase
+      _ = allReducePrim contributions.length 0 contributions := by
+        rw [hContributionWriters, List.length_ofFn]
+  have hFullShape : fullOut.shape = idsShape ++ [hidden] := by
+    rw [hFullWriter, fw_embedding_shape, hWeight.full_shape, hids]
+    rfl
+  refine {
+    full_value := hFullValue
+    full_shape := hFullShape
+    contributions_nonempty := ?_
+    contribution_shapes := ?_
+    reduced_shape := ?_
+  }
+  · intro hnil
+    have hz : contributions.length = 0 := congrArg List.length hnil
+    rw [hContributionWriters, List.length_ofFn] at hz
+    omega
+  · intro contribution hmem
+    rw [hContributionWriters] at hmem
+    obtain ⟨r, hr, rfl⟩ := List.mem_iff_getElem.mp hmem
+    have hrWs : r < Ws.length := by simpa only [List.length_ofFn] using hr
+    rw [List.getElem_ofFn, fw_embedding_offset_shape, hWsShape r hrWs, hids]
+    simp [lastD]
+  · rw [← hFullValue]
+    exact hFullShape
+
+/-- The faithful CROSS_DP_WRED evaluator and the generic reduction relation use
+the same pointwise sum on every nonempty ordered contribution list. -/
+theorem cross_dp_wred_eq_allReducePrim (xs : List Tensor) (hne : xs ≠ []) :
+    cross_dp_wred xs = allReducePrim xs.length 0 xs := by
+  cases xs with
+  | nil => exact (hne rfl).elim
+  | cons x rest => rfl
+
 /-- Publish the exact value consumed by the rank-0 AllReduce writer.  Producer
 semantics remain outside this writer-only reconstruction theorem. -/
 theorem ReductionRel.to_joined_allReduce
@@ -978,6 +1869,48 @@ theorem ReductionRel.to_joined_allReduce
     (h : ReductionRel full contributions fullShape) :
     full = allReducePrim contributions.length 0 contributions :=
   h.full_value
+
+/-- A singleton reduction carries exact shared-value authority. -/
+theorem ReductionRel.singleton_value
+    {full x : Tensor} {fullShape : Shape}
+    (h : ReductionRel full [x] fullShape) : full = x := by
+  rw [h.full_value]
+  apply Tensor.ext
+  · rfl
+  · intro idx hidx
+    change idx < prodShape (allReducePrim 1 0 [x]).shape at hidx
+    change valAt (allReducePrim 1 0 [x]) idx = valAt x idx
+    have hshape : (allReducePrim 1 0 [x]).shape = x.shape := rfl
+    rw [hshape] at hidx
+    simp [allReducePrim, Tensor.mkShape, valAt, hidx]
+
+/-- A reduced full tensor followed by exact dim-0 chunks publishes an ordinary
+row-sharding relation. -/
+theorem ReductionRel.to_ordinary_chunks_2d
+    {full reduced out0 out1 : Tensor} {contributions : List Tensor}
+    (rows hidden : Nat)
+    (h : ReductionRel full contributions [rows * 2, hidden])
+    (hreduced : reduced = allReducePrim contributions.length 0 contributions)
+    (hout0 : out0 = chunkPrimDimN 0 2 0 reduced)
+    (hout1 : out1 = chunkPrimDimN 0 2 1 reduced)
+    (hrows : 0 < rows) (hhidden : 0 < hidden) :
+    GeneratedPatterns.Ordinary2Rel full out0 out1
+      [rows * 2, hidden] [rows, hidden] := by
+  have hfullReduced : full = reduced := h.full_value.trans hreduced.symm
+  have hreducedShape : reduced.shape = [rows * 2, hidden] := by
+    rw [← hfullReduced]
+    exact h.full_shape
+  refine ⟨?_, h.full_shape, ?_, ?_⟩
+  · rw [hout0, hout1, hfullReduced]
+    have hreconstruct := allGatherPrimDimN_chunks_ofFn 0 2 reduced
+      (by omega) (by rw [hreducedShape]; simp)
+      (by rw [hreducedShape]; simp [List.getD])
+    simpa only [List.ofFn_succ, List.ofFn_zero, Fin.val_zero,
+      Fin.succ_zero_eq_one, Fin.val_one] using hreconstruct.symm
+  · rw [hout0, chunkPrimDimN_shape 0 2 0 reduced _ hreducedShape (by omega)]
+    simp
+  · rw [hout1, chunkPrimDimN_shape 0 2 1 reduced _ hreducedShape (by omega)]
+    simp
 
 /-- Rank-count-polymorphic replication relation. The ordered replica list is
     authority: every PM value equals the SM value and has the same shape. -/
@@ -988,14 +1921,87 @@ structure ReplicatedRel (full : Tensor) (replicas : List Tensor)
   replica_values : ∀ replica ∈ replicas, replica = full
   replica_shapes : ∀ replica ∈ replicas, replica.shape = shape
 
+/-- A sharded relation whose ordered PM values are authenticated as the exact
+chunks of the SM value. This stronger producer fact lets distant consumers use
+the original chunk writers without claiming ownership of those nodes again. -/
+structure ChunkedRel (full : Tensor) (chunks : List Tensor) (dim : Nat)
+    (fullShape shardShape : Shape) extends
+    ShardedRel full chunks dim fullShape shardShape where
+  chunk_values : ∀ r, r < chunks.length →
+    chunks.getD r (zeroTensor shardShape) =
+      chunkPrimDimN dim chunks.length r full
+
+/-- Build exact two-way chunk authority from two checked chunk values. -/
+theorem ChunkedRel.of_chunks_two
+    {full c0 c1 : Tensor} {dim : Nat} {fullShape shardShape : Shape}
+    (hfullShape : full.shape = fullShape)
+    (hc0Shape : c0.shape = shardShape) (hc1Shape : c1.shape = shardShape)
+    (hdim : dim < shardShape.length)
+    (hcontract : fullShape = shardShape.set dim (shardShape.getD dim 0 * 2))
+    (hc0 : c0 = chunkPrimDimN dim 2 0 full)
+    (hc1 : c1 = chunkPrimDimN dim 2 1 full) :
+    ChunkedRel full [c0, c1] dim fullShape shardShape := by
+  have hdimFull : dim < full.shape.length := by
+    rw [hfullShape, hcontract, List.length_set]
+    exact hdim
+  have hdiv : full.shape.getD dim 0 % 2 = 0 := by
+    rw [hfullShape, hcontract]
+    simp [List.getD, List.set, hdim]
+  have hreconstruct := allGatherPrimDimN_chunks_ofFn dim 2 full
+    (by decide) hdimFull hdiv
+  change allGatherPrimDimN dim 2 0
+    [chunkPrimDimN dim 2 0 full, chunkPrimDimN dim 2 1 full] = full at hreconstruct
+  refine {
+    full_value := ?_
+    full_shape := hfullShape
+    shards_nonempty := by simp
+    gather_dim_lt := hdim
+    shard_shapes := ?_
+    shape_contract := by simpa only [List.length_cons, List.length_nil] using hcontract
+    chunk_values := ?_
+  }
+  · rw [hc0, hc1]
+    exact hreconstruct.symm
+  · intro shardValue hmem
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+    rcases hmem with rfl | rfl
+    · exact hc0Shape
+    · exact hc1Shape
+  · intro r hr
+    simp only [List.length_cons, List.length_nil] at hr
+    have hrCases : r = 0 ∨ r = 1 := by omega
+    rcases hrCases with rfl | rfl
+    · simpa only [List.length_cons, List.length_nil, List.getD_cons_zero] using hc0
+    · simpa only [List.length_cons, List.length_nil, List.getD_cons_succ,
+        List.getD_cons_zero] using hc1
+
+/-- The weaker sharded projection of exact two-way chunk authority. -/
+theorem ShardedRel.of_chunks_two
+    {full c0 c1 : Tensor} {dim : Nat} {fullShape shardShape : Shape}
+    (hfullShape : full.shape = fullShape)
+    (hc0Shape : c0.shape = shardShape) (hc1Shape : c1.shape = shardShape)
+    (hdim : dim < shardShape.length)
+    (hcontract : fullShape = shardShape.set dim (shardShape.getD dim 0 * 2))
+    (hc0 : c0 = chunkPrimDimN dim 2 0 full)
+    (hc1 : c1 = chunkPrimDimN dim 2 1 full) :
+    ShardedRel full [c0, c1] dim fullShape shardShape :=
+  (ChunkedRel.of_chunks_two hfullShape hc0Shape hc1Shape hdim
+    hcontract hc0 hc1).toShardedRel
+
 inductive RelationFact where
   | sharded (smTid : Tid) (pmTids : List Tid) (gatherDim : Nat)
+      (fullShape shardShape : Shape)
+  | chunked (smTid : Tid) (pmTids : List Tid) (gatherDim : Nat)
       (fullShape shardShape : Shape)
   | reduction (smTid : Tid) (pmTids : List Tid) (fullShape : Shape)
   | replicated (smTid : Tid) (pmTids : List Tid) (shape : Shape)
   | joined (smTid pmTid : Tid) (shape : Shape)
   | ordinary (smTid pmRank0Tid pmRank1Tid : Tid) (fullShape shardShape : Shape)
   | zigzag (smTid pmRank0Tid pmRank1Tid metadataTid : Tid) (fullShape shardShape : Shape)
+  | zigzagFeature (smTid : Tid) (pmTids : List Tid) (metadataTid : Tid)
+      (fullShape rowShardShape featureShardShape : Shape)
+  | joinedZigzag (smTid joinedPmTid metadataTid : Tid)
+      (fullShape rowShardShape : Shape)
   | gather (smTid pmRank0Tid pmRank1Tid dim : Tid) (fullShape shardShape : Shape)
   | joinedOrdinary (smTid pmRank0Tid pmRank1Tid joinedPmTid : Tid)
       (fullShape shardShape : Shape)
@@ -1017,6 +2023,8 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
   match fact with
   | .sharded smTid pmTids gatherDim fullShape shardShape =>
       ShardedRel (sm smTid) (pmTids.map pm) gatherDim fullShape shardShape
+  | .chunked smTid pmTids gatherDim fullShape shardShape =>
+      ChunkedRel (sm smTid) (pmTids.map pm) gatherDim fullShape shardShape
   | .reduction smTid pmTids fullShape =>
       ReductionRel (sm smTid) (pmTids.map pm) fullShape
   | .replicated smTid pmTids shape =>
@@ -1031,6 +2039,12 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
       GeneratedPatterns.Zigzag2Rel
         (sm smTid) (pm pmRank0Tid) (pm pmRank1Tid) (pm metadataTid)
         fullShape shardShape
+  | .zigzagFeature smTid pmTids metadataTid fullShape rowShardShape featureShardShape =>
+      ZigzagFeatureRel (sm smTid) (pmTids.map pm) (pm metadataTid)
+        fullShape rowShardShape featureShardShape
+  | .joinedZigzag smTid joinedPmTid metadataTid fullShape rowShardShape =>
+      JoinedZigzagRel (sm smTid) (pm joinedPmTid) (pm metadataTid)
+        fullShape rowShardShape
   | .gather smTid pmRank0Tid pmRank1Tid dim fullShape shardShape =>
       sm smTid = allGatherPrimDimN dim 2 0 [pm pmRank0Tid, pm pmRank1Tid] ∧
       (sm smTid).shape = fullShape ∧
@@ -1075,7 +2089,154 @@ theorem fw_view (targetShape inputShape : Shape) {smValue pmValue : Tensor}
   rw [hValue]
   exact ⟨rfl, rfl, rfl⟩
 
+/-- Any denotational identity cast preserves a joined equality and shape. -/
+theorem identity (inputShape : Shape) {smValue pmValue : Tensor}
+    (h : smValue = pmValue ∧ smValue.shape = inputShape ∧
+      pmValue.shape = inputShape) :
+    tensorId smValue = tensorId pmValue ∧
+      (tensorId smValue).shape = inputShape ∧
+      (tensorId pmValue).shape = inputShape := by
+  simpa only [tensorId] using h
+
+/-- Replicated RMSNorm preserves joined equality. -/
+theorem rms_norm
+    {smValue pmValue wSM wPM : Tensor} (rows hidden : Nat)
+    (h : smValue = pmValue ∧ smValue.shape = [rows, hidden] ∧
+      pmValue.shape = [rows, hidden])
+    (hwEq : wSM = wPM) :
+    fw_rms_norm smValue wSM = fw_rms_norm pmValue wPM ∧
+      (fw_rms_norm smValue wSM).shape = [rows, hidden] ∧
+      (fw_rms_norm pmValue wPM).shape = [rows, hidden] := by
+  rcases h with ⟨hValue, hSM, hPM⟩
+  subst pmValue
+  subst wPM
+  exact ⟨rfl, ZigzagCollective.fw_rms_norm_shape_2d smValue wSM rows hidden hSM,
+    ZigzagCollective.fw_rms_norm_shape_2d smValue wSM rows hidden hSM⟩
+
+/-- Elementwise addition preserves two joined equalities. -/
+theorem add
+    {smA pmA smB pmB : Tensor} {shape : Shape}
+    (hA : smA = pmA ∧ smA.shape = shape ∧ pmA.shape = shape)
+    (hB : smB = pmB ∧ smB.shape = shape ∧ pmB.shape = shape) :
+    elemwiseAdd smA smB = elemwiseAdd pmA pmB ∧
+      (elemwiseAdd smA smB).shape = shape ∧
+      (elemwiseAdd pmA pmB).shape = shape := by
+  rcases hA with ⟨ha, hsa, hpa⟩
+  rcases hB with ⟨hb, hsb, hpb⟩
+  subst pmA
+  subst pmB
+  exact ⟨rfl, elemwiseAdd_shape_of_shapes smA smB shape hsa hsb,
+    elemwiseAdd_shape_of_shapes smA smB shape hsa hsb⟩
+
+/-- Replicated per-head linear preserves joined equality. -/
+theorem per_head_linear
+    {smValue pmValue wSM wPM : Tensor} (rows inputDim heads headDim : Nat)
+    (h : smValue = pmValue ∧ smValue.shape = [rows, inputDim] ∧
+      pmValue.shape = [rows, inputDim])
+    (hw : wPM.shape = [heads, headDim, inputDim])
+    (hwEq : wSM = wPM) :
+    fw_per_head_linear smValue wSM = fw_per_head_linear pmValue wPM ∧
+      (fw_per_head_linear smValue wSM).shape = [rows, heads, headDim] ∧
+      (fw_per_head_linear pmValue wPM).shape = [rows, heads, headDim] := by
+  rcases h with ⟨hValue, hSM, hPM⟩
+  subst pmValue
+  subst wPM
+  exact ⟨rfl, ZigzagCollective.fw_per_head_linear_shape_2d smValue wSM rows inputDim heads headDim hSM hw,
+    ZigzagCollective.fw_per_head_linear_shape_2d smValue wSM rows inputDim heads headDim hSM hw⟩
+
 end JoinedRel
+
+/-- Two-rank dim-0 weight shards produce dim-1 output shards for rank-2 linear. -/
+theorem ShardedRel.fw_linear_output_dim1_two_2d
+    {smActivation pmActivation fullWeight w0 w1 : Tensor}
+    {rows input output : Nat}
+    (hActivation : smActivation = pmActivation ∧
+      smActivation.shape = [rows, input] ∧
+      pmActivation.shape = [rows, input])
+    (hWeight : ShardedRel fullWeight [w0, w1] 0
+      [output * 2, input] [output, input])
+    (hrows : 0 < rows) (hinput : 0 < input) (houtput : 0 < output) :
+    ShardedRel (fw_linear smActivation fullWeight)
+      [fw_linear pmActivation w0, fw_linear pmActivation w1] 1
+      [rows, output * 2] [rows, output] := by
+  rcases hActivation with ⟨hValue, hSmShape, hPmShape⟩
+  refine {
+    full_value := ?_
+    full_shape := ?_
+    shards_nonempty := by simp
+    gather_dim_lt := by norm_num
+    shard_shapes := ?_
+    shape_contract := by norm_num [List.set, List.getD]
+  }
+  · rw [hValue, hWeight.full_value]
+    exact fw_linear_2d_weight_allGather_dim0_two pmActivation w0 w1
+      rows input output hrows hinput houtput hPmShape
+      (hWeight.shard_shapes w0 (by simp))
+      (hWeight.shard_shapes w1 (by simp))
+  · rw [fw_linear_is_matmul rows input (output * 2) smActivation fullWeight
+      hSmShape hWeight.full_shape]
+    rfl
+  · intro shardValue hmem
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+    rcases hmem with rfl | rfl
+    · rw [fw_linear_is_matmul rows input output pmActivation w0
+        hPmShape (hWeight.shard_shapes w0 (by simp))]
+      rfl
+    · rw [fw_linear_is_matmul rows input output pmActivation w1
+        hPmShape (hWeight.shard_shapes w1 (by simp))]
+      rfl
+
+namespace ZigzagFeatureRel
+
+/-- A physical joined-zigzag activation with dim-0 weight shards enters the
+hybrid feature-sharded relation after rank-local output projection. -/
+theorem output_sharded_linear_two
+    {full joined cu fullWeight w0 w1 : Tensor}
+    (rows inputDim outputFeature : Nat)
+    (hinput : JoinedZigzagRel full joined cu
+      [rows * 2, inputDim] [rows, inputDim])
+    (hweight : ShardedRel fullWeight [w0, w1] 0
+      [outputFeature * 2, inputDim] [outputFeature, inputDim])
+    (hrows : 0 < rows) (hinputDim : 0 < inputDim)
+    (houtput : 0 < outputFeature) :
+    ZigzagFeatureRel (fw_linear full fullWeight)
+      [fw_linear joined w0, fw_linear joined w1] cu
+      [rows * 2, outputFeature * 2]
+      [rows, outputFeature * 2]
+      [rows * 2, outputFeature] := by
+  rcases hinput with ⟨z0, z1, hjoined⟩
+  rcases hjoined.row with ⟨source0, source1, hrowSources⟩
+  have hrowRel : GeneratedPatterns.Zigzag2Rel full z0 z1 cu
+      [rows * 2, inputDim] [rows, inputDim] :=
+    ⟨source0, source1, hrowSources⟩
+  have hrowOut := GeneratedPatterns.Zigzag2Rel.mix_precision_linear
+    rows inputDim (outputFeature * 2) hrowRel hweight.full_shape
+    hrows hinputDim (by omega)
+  have hhead : (([z0, z1].head?.map (fun t => t.shape)).getD []) =
+      [rows, inputDim] := by simp [hrowSources.rank0_shape]
+  have hjoinedShape : joined.shape = [rows * 2, inputDim] := by
+    rw [hjoined.joined_value,
+      allGatherPrimDimN_shape 0 2 _ [rows, inputDim] hhead]
+    simp [List.set, List.getD]
+  have hfeature0 := ShardedRel.fw_linear_output_dim1_two_2d
+    (smActivation := joined) (pmActivation := joined)
+    ⟨rfl, hjoinedShape, hjoinedShape⟩ hweight
+    (by omega) hinputDim houtput
+  have hcommute := fw_mix_precision_linear_allGather0_commute_2
+    z0 z1 fullWeight rows inputDim (outputFeature * 2)
+    hrows hinputDim (by omega)
+    hrowSources.rank0_shape hrowSources.rank1_shape hweight.full_shape
+  have hfeature : ShardedRel
+      (allGatherPrimDimN 0 2 0
+        [fw_linear z0 fullWeight, fw_linear z1 fullWeight])
+      [fw_linear joined w0, fw_linear joined w1] 1
+      [rows * 2, outputFeature * 2] [rows * 2, outputFeature] := by
+    rw [← hcommute, ← hjoined.joined_value]
+    exact hfeature0
+  exact ⟨fw_linear z0 fullWeight, fw_linear z1 fullWeight,
+    hrowOut, hfeature⟩
+
+end ZigzagFeatureRel
 
 structure RelationState where
   facts : List RelationFact
@@ -1277,11 +2438,14 @@ namespace RelationFact
 
 def smTids : RelationFact → List Tid
   | .sharded smTid _ _ _ _ => [smTid]
+  | .chunked smTid _ _ _ _ => [smTid]
   | .reduction smTid _ _ => [smTid]
   | .replicated smTid _ _ => [smTid]
   | .joined smTid _ _ => [smTid]
   | .ordinary smTid _ _ _ _ => [smTid]
   | .zigzag smTid _ _ _ _ _ => [smTid]
+  | .zigzagFeature smTid _ _ _ _ _ => [smTid]
+  | .joinedZigzag smTid _ _ _ _ => [smTid]
   | .gather smTid _ _ _ _ _ => [smTid]
   | .joinedOrdinary smTid _ _ _ _ _ => [smTid]
   | .indexedStack smTid _ _ sourceTids _ _ _ =>
@@ -1298,11 +2462,14 @@ def smTids : RelationFact → List Tid
 
 def pmTids : RelationFact → List Tid
   | .sharded _ pmTids _ _ _ => pmTids
+  | .chunked _ pmTids _ _ _ => pmTids
   | .reduction _ pmTids _ => pmTids
   | .replicated _ pmTids _ => pmTids
   | .joined _ pmTid _ => [pmTid]
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
   | .zigzag _ pm0 pm1 metadataTid _ _ => [pm0, pm1, metadataTid]
+  | .zigzagFeature _ rankTids metadataTid _ _ _ => rankTids ++ [metadataTid]
+  | .joinedZigzag _ joinedTid metadataTid _ _ => [joinedTid, metadataTid]
   | .gather _ pm0 pm1 _ _ _ => [pm0, pm1]
   | .joinedOrdinary _ pm0 pm1 joinedTid _ _ => [pm0, pm1, joinedTid]
   | .indexedStack _ pm0 pm1 sourceTids _ _ _ =>
@@ -1325,6 +2492,14 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
     fact.Holds sm' pm' := by
   cases fact with
   | sharded smTid rankTids gatherDim fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp)]
+      have hmap : rankTids.map pm' = rankTids.map pm := by
+        apply List.map_congr_left
+        exact hpm
+      rw [hmap]
+      exact h
+  | chunked smTid rankTids gatherDim fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp)]
       have hmap : rankTids.map pm' = rankTids.map pm := by
@@ -1359,6 +2534,19 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
   | zigzag smTid pm0 pm1 metadataTid fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
+      exact h
+  | zigzagFeature smTid rankTids metadataTid fullShape rowShardShape featureShardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp)]
+      have hmap : rankTids.map pm' = rankTids.map pm := by
+        apply List.map_congr_left
+        intro tid htid
+        exact hpm tid (by simp [htid])
+      rw [hmap, hpm metadataTid (by simp)]
+      exact h
+  | joinedZigzag smTid joinedTid metadataTid fullShape rowShardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
       exact h
   | gather smTid pm0 pm1 dim fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢

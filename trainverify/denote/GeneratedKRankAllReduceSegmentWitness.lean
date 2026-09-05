@@ -96,7 +96,7 @@ private theorem segment_reduce_writer_value (pmStore : Store) :
       rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
         (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
       unfold applyNodeDistributed
-      rw [if_neg (by decide)]
+      rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide)]
       rw [applyNodeRingAttn_eq_applyNode_of_not_ring]
       · exact applyNode_allReducePrim_out pm_graph t 0 [200, 201, 202] 901
       · decide

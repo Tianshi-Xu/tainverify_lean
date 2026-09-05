@@ -5,7 +5,6 @@ Authors: TrainVerify contributors
 -/
 import denote.FaithfulDistributedBridge
 import denote.GraphSlicing
-import denote.yoco_goals.Layer0DistributedMigration
 
 /-!
 # Reaching `denoteGraph` results from the faithful track
@@ -19,10 +18,9 @@ applyNodeRingAttn             -- + attn_zigzag / attn_sliding_window
 applyNode                     -- the base evaluator
 ```
 
-`Layer0DistributedMigration` already bridges the middle step
-(`foldl_distributed_eq_ring_of_no_moe`). This file adds the last one, so a tid
-whose prefix contains none of those operators has the *same* value under the
-faithful evaluator and under plain `denoteGraph`.
+The bridge is model-neutral: a prefix containing none of the intercepted
+operators has the same value under the faithful evaluator and under plain
+`denoteGraph`.
 
 That is what the head of the self-decoder needs: `4680` is produced by an
 embedding and an `AllReducePrim`, neither of which any evaluator intercepts, and
@@ -47,6 +45,44 @@ theorem foldl_ring_eq_plain_of_no_attn (g : GraphDecl) (pre : List NodeDecl) (s 
     rw [this]
     exact ih _ (fun n hn => h n (List.mem_cons_of_mem _ hn))
 
+/-- On a list containing none of the five graph-aware interceptors, the faithful
+distributed fold is exactly the base fold. -/
+theorem foldl_faithful_eq_plain_of_no_special
+    (g : GraphDecl) (pre : List NodeDecl) (s : Store)
+    (hfaithful : ∀ n ∈ pre,
+      n.op ≠ "OpName.FW_maybe_shuffle" ∧
+      n.op ≠ "OpName.FW_maybe_unshuffle" ∧
+      n.op ≠ "OpName.FW_attn_zigzag")
+    (hmoe : ∀ n ∈ pre,
+      n.op ≠ "OpName.FW_all2all_moe_gmm" ∧
+      n.op ≠ "OpName.BW_maybe_shuffle" ∧
+      n.op ≠ "OpName.BW_maybe_unshuffle" ∧
+      n.op ≠ "OpName.BW_attn_zigzag" ∧
+      n.op ≠ "OpName.BW_attn_sliding_window")
+    (hattn : ∀ n ∈ pre,
+      n.op ≠ "OpName.FW_attn_zigzag" ∧
+      n.op ≠ "OpName.FW_attn_sliding_window") :
+    pre.foldl (applyNodeDistributedFaithful g) s =
+      pre.foldl (applyNode g) s := by
+  induction pre generalizing s with
+  | nil => rfl
+  | cons a rest ih =>
+    simp only [List.foldl]
+    have hf := hfaithful a List.mem_cons_self
+    have hm := hmoe a List.mem_cons_self
+    have ha := hattn a List.mem_cons_self
+    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
+      g s a hf.1 hf.2.1 hf.2.2]
+    unfold applyNodeDistributed
+    rw [if_neg hm.1, if_neg hm.2.1, if_neg hm.2.2.1,
+      if_neg hm.2.2.2.1, if_neg hm.2.2.2.2]
+    unfold applyNodeRingAttn
+    rw [if_neg ha.1, if_neg ha.2]
+    exact ih _
+      (fun n hn => hfaithful n (List.mem_cons_of_mem _ hn))
+      (fun n hn => hmoe n (List.mem_cons_of_mem _ hn))
+      (fun n hn => hattn n (List.mem_cons_of_mem _ hn))
+
 /-- Plain-evaluator counterpart of `denoteGraphDistributedFaithful_eq_prefix`. -/
 theorem denoteGraph_eq_prefix_of_not_written
     (g : GraphDecl) (init : Store) (tid : Tid) (k : Nat)
@@ -67,14 +103,17 @@ theorem denote_faithful_eq_plain_of_prefix
       n.op ≠ "OpName.FW_maybe_shuffle" ∧
       n.op ≠ "OpName.FW_maybe_unshuffle" ∧
       n.op ≠ "OpName.FW_attn_zigzag")
-    (hmoe : ∀ n ∈ g.nodes.take k, n.op ≠ "OpName.FW_all2all_moe_gmm")
+    (hmoe : ∀ n ∈ g.nodes.take k,
+      n.op ≠ "OpName.FW_all2all_moe_gmm" ∧
+      n.op ≠ "OpName.BW_maybe_shuffle" ∧
+      n.op ≠ "OpName.BW_maybe_unshuffle" ∧
+      n.op ≠ "OpName.BW_attn_zigzag" ∧
+      n.op ≠ "OpName.BW_attn_sliding_window")
     (hattn : ∀ n ∈ g.nodes.take k, n.op ≠ "OpName.FW_attn_zigzag" ∧
                                    n.op ≠ "OpName.FW_attn_sliding_window") :
     denoteGraphDistributedFaithful g init tid = denoteGraph g init tid := by
-  rw [denote_faithful_eq_distributed_of_prefix g init tid k hnil hwrite hops]
-  rw [denoteGraphDistributed_eq_prefix g init tid k hnil hwrite]
-  rw [GeneratedPatterns.foldl_distributed_eq_ring_of_no_moe g (g.nodes.take k) init hmoe]
-  rw [foldl_ring_eq_plain_of_no_attn g (g.nodes.take k) init hattn]
+  rw [denoteGraphDistributedFaithful_eq_prefix g init tid k hnil hwrite]
+  rw [foldl_faithful_eq_plain_of_no_special g (g.nodes.take k) init hops hmoe hattn]
   exact (denoteGraph_eq_prefix_of_not_written g init tid k hwrite).symm
 
 end TrainVerify.Denote

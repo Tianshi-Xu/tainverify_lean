@@ -418,6 +418,19 @@ theorem fw_float
   rw [evalOp_fw_float, evalOp_fw_float, evalOp_fw_float]
   exact hrel
 
+/-- Identity dtype conversion preserves the exact CP2 zigzag relation. -/
+theorem fw_to
+    {full z0 z1 cu : Tensor} {fullShape shardShape : Shape}
+    (numParts rankF rank0 rank1 : Nat) (params : List Nat)
+    (hrel : Zigzag2Rel full z0 z1 cu fullShape shardShape) :
+    Zigzag2Rel
+      ((evalOp numParts rankF "OpName.FW_to" params [full]).headD (zeroTensor []))
+      ((evalOp numParts rank0 "OpName.FW_to" params [z0]).headD (zeroTensor []))
+      ((evalOp numParts rank1 "OpName.FW_to" params [z1]).headD (zeroTensor []))
+      cu fullShape shardShape := by
+  rw [evalOp_fw_to, evalOp_fw_to, evalOp_fw_to]
+  exact hrel
+
 /-! ## (3) Elementwise `FW_add` (residual connection)
 
 `OpName.FW_add` denotes `elemwiseAdd` (`evalOp_fw_add2`); there is no `fw_add`

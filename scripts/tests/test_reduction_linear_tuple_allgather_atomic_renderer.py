@@ -238,6 +238,5 @@ def test_generated_reduction_tuple_allgather_witness_is_exact_deterministic_rend
     second = _witness_source(composer.render_closed_segment(ir, relation, segment.segment_id))
     assert first == second
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedReductionLinearTupleAllGatherWitness.lean"
-    witness.write_text(first, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == first
     assert "sorry" not in first
