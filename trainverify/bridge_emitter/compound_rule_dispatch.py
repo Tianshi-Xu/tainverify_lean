@@ -350,10 +350,10 @@ def select_ordinary_compound_renderer(family: tuple[str, ...]) -> str | None:
 
 def select_tail_compound_renderer(family: tuple[str, ...]) -> str | None:
     """Select family-only grammar after relation-dependent CE dispatch."""
-    if family == (
-        "rms-norm-ordinary-two-rank",
-        "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank",
-    ):
+    if family in {
+        ("rms-norm-ordinary-two-rank", "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank"),
+        ("rms-norm-ordinary-two-rank", "bw-maybe-unshuffle-ordinary-to-zigzag-two-rank"),
+    }:
         return "@local:render_closed_rms_shuffle_segment"
     if family == ("swiglu-ordinary-two-rank", "swiglu-sharded-two-rank-dim0"):
         return "mixed_swiglu_renderer:render_closed_mixed_swiglu_segment"

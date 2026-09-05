@@ -4680,8 +4680,95 @@ def render_closed_rms_norm_segment(ir: GoalIR, relation, segment_id: str) -> str
     return "\n".join(lines)
 
 
+def _validate_shuffle_entry_certificate(ir, relation, transition, nodes, pre, post):
+    from .relation_compiler import FaithfulShuffleCertificate, RelationFactSpec
+
+    cert = _select_exact_typed_certificate(
+        relation, transition, transition.rule_id,
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.of_sources",
+        FaithfulShuffleCertificate,
+        lambda c: ((RelationFactSpec(c.pre_layout, c.input_step_triple),),
+                   (RelationFactSpec(c.post_layout, c.output_step_triple),)),
+    )
+    if ir.sm_num_ranks != 1 or ir.pm_num_ranks != 2 or cert.num_ranks != 2:
+        raise ValueError("shuffle requires exact SM=1/PM=2 graph ranks")
+    if cert.output_step_triple != (
+        f"sm:{transition.sm_node_indices[0]}:0",
+        *(f"pm:{i}:0" for i in transition.pm_node_indices),
+    ):
+        raise ValueError("shuffle certificate footprint mismatch")
+    if (cert.pre_layout, cert.post_layout) != ("ordinary", "zigzag") or (
+        cert.full_shape != pre.full_shape or cert.shard_shape != pre.shard_shape
+        or pre.full_shape != post.full_shape or pre.shard_shape != post.shard_shape
+        or not cert.shard_shape or cert.full_shape != (2 * cert.shard_shape[0], *cert.shard_shape[1:])
+        or any(dim <= 0 for dim in cert.shard_shape)
+        or cert.total_tokens != cert.full_shape[0]
+    ):
+        raise ValueError("shuffle certificate shape/layout mismatch")
+    tid = cert.node_metadata_tid
+    if any(n.ins[1] != tid for n in nodes) or post.metadata_tid != tid:
+        raise ValueError("shuffle certificate metadata binding mismatch")
+    if (cert.metadata_alias_theorem != "TrainVerify.Denote.InputValueClassesHold.eq_of_mem"
+            or cert.metadata_cross_store_theorem != "TrainVerify.Denote.InitGoalHolds.singleton_value_eq"
+            or cert.contract_theorem != "TrainVerify.Denote.PackedCuSeqlensWF.toZigzagCuWF"):
+        raise ValueError("shuffle certificate authority theorem mismatch")
+    from .proof_compiler import _collective_shape_issue
+    inferred = {}
+    issue = _collective_shape_issue(ir, inferred)
+    if issue is not None:
+        raise ValueError(f"shuffle graph shape authority mismatch: {issue.message}")
+    for node, shapes, expected in zip(nodes, (inferred["sm"], inferred["pm"], inferred["pm"]),
+                                      (cert.full_shape, cert.shard_shape, cert.shard_shape)):
+        for node_tid, shape in ((node.ins[0], expected), (node.outs[0], expected), (tid, (2,))):
+            if tuple(shapes.get(node_tid, ())) != shape:
+                raise ValueError("shuffle node input/output shape authority mismatch")
+    lineage = ir.init_lineages.get(tid)
+    if (lineage is None or lineage.ts != tid or tuple(lineage.tps) != ((0, tid),)
+            or cert.metadata_init_lineage_rank_tids != ((0, tid),)
+            or tuple(lineage.tsShape) != (2,) or tuple(map(tuple, lineage.tpShapes)) != ((2,),)
+            or lineage.gatherDim is not None or lineage.replicated):
+        raise ValueError("shuffle metadata InitGoal authority mismatch")
+    for classes in (ir.sm_input_value_classes, ir.pm_input_value_classes):
+        matches = [c for c in classes if tid in c.tids]
+        if len(matches) != 1 or matches[0].source != cert.metadata_source:
+            raise ValueError("shuffle metadata source authority mismatch")
+    aliases = [c for c in ir.pm_input_value_classes if cert.contract_metadata_tid in c.tids]
+    if len(aliases) != 1 or aliases[0].source != cert.metadata_source or not any(
+        (c.side, c.tid, c.total_tokens, c.num_ranks) ==
+        ("pm", cert.contract_metadata_tid, cert.total_tokens, 2) for c in ir.packed_cu_contracts
+    ):
+        raise ValueError("shuffle packed-cu public authority mismatch")
+    regions = [r for r in relation.zigzag_regions if r.region_id == post.metadata_region_id
+               and cert.output_step_triple in r.frontier_triples]
+    if (len(regions) != 1 or regions[0].metadata_source != cert.metadata_source
+            or regions[0].contract_metadata_tid != cert.contract_metadata_tid
+            or tid not in regions[0].alias_tids):
+        raise ValueError("shuffle metadata region authority mismatch")
+    for groups, actual_nodes, members in (
+        (ir.sm_replica_groups, nodes[:1], cert.sm_replica_members),
+        (ir.pm_replica_groups, nodes[1:], cert.pm_replica_members),
+    ):
+        expected = tuple((n.rank, n.outs[0]) for n in actual_nodes)
+        if members != expected:
+            raise ValueError("shuffle certificate buddy roles mismatch")
+        if not groups:  # Only the established forward path accepts legacy authority.
+            if nodes[0].op == "BW_maybe_unshuffle":
+                raise ValueError("backward shuffle requires explicit ordered buddy groups")
+            continue
+        matches = [g for g in groups if any((m.rank, m.primary_out_tid) in expected for m in g.members)]
+        if (len(matches) != 1 or tuple((m.rank, m.primary_out_tid) for m in matches[0].members) != expected
+                or matches[0].irname.rsplit(".", 1)[-1] not in {nodes[0].op, "wrap_" + nodes[0].op[3:]}):
+            raise ValueError("shuffle ordered buddy group authority mismatch")
+    return cert
+
+
 def render_closed_rms_shuffle_segment(ir: GoalIR, relation, segment_id: str) -> str:
-    """Render one atomic ordinary RMSNorm plus faithful shuffle component."""
+    """Compatibility entry point for the registered RMSNorm+shuffle compound."""
+    return render_closed_shuffle_entry_segment(ir, relation, segment_id)
+
+
+def render_closed_shuffle_entry_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render a CP2 FW/BW shuffle entry, alone or with ordinary RMSNorm."""
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
         raise ValueError("RMSNorm+shuffle segment requires a complete closed chain")
@@ -4691,99 +4778,97 @@ def render_closed_rms_shuffle_segment(ir: GoalIR, relation, segment_id: str) -> 
     by_id = {x.transition_id: x for x in relation.transition_specs}
     transitions = [by_id[x] for x in segment.transition_ids]
     family = tuple(x.rule_id for x in transitions)
-    expected = (
-        "rms-norm-ordinary-two-rank",
-        "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank",
-    )
-    if family != expected:
-        raise ValueError("segment is not the registered atomic RMSNorm+shuffle family")
-    rms, shuffle = transitions
-    if rms.lean_theorem != "TrainVerify.Denote.ZigzagCollective.fw_rms_norm_allGather0_commute_2_core":
+    rule_ops = {
+        "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank": "FW_maybe_shuffle",
+        "bw-maybe-unshuffle-ordinary-to-zigzag-two-rank": "BW_maybe_unshuffle",
+    }
+    if not (len(family) == 1 and family[0] in rule_ops) and not (
+        len(family) == 2 and family[0] == "rms-norm-ordinary-two-rank" and family[1] in rule_ops
+    ):
+        raise ValueError("segment is not the registered shuffle-entry family")
+    shuffle = transitions[-1]
+    rms = transitions[0] if len(transitions) == 2 else None
+    expected_op = rule_ops[shuffle.rule_id]
+    if rms is not None and rms.lean_theorem != "TrainVerify.Denote.ZigzagCollective.fw_rms_norm_allGather0_commute_2_core":
         raise ValueError("RMSNorm theorem key mismatch")
     if shuffle.lean_theorem != "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.of_sources":
         raise ValueError("shuffle theorem key mismatch")
 
     sms = ir.sm_nodes[slice(*segment.sm_range)]
     pms = ir.pm_nodes[slice(*segment.pm_range)]
-    if len(sms) != 2 or len(pms) != 4:
-        raise ValueError("RMSNorm+shuffle footprint mismatch")
-    sm_rms, sm_shuffle = sms
-    pm_rms0, pm_shuffle0, pm_rms1, pm_shuffle1 = pms
-    rms_nodes = (sm_rms, pm_rms0, pm_rms1)
+    if len(sms) != (2 if rms else 1) or len(pms) != (4 if rms else 2):
+        raise ValueError("shuffle-entry footprint mismatch")
+    if rms:
+        sm_rms, sm_shuffle = sms
+        pm_rms0, pm_shuffle0, pm_rms1, pm_shuffle1 = pms
+        rms_nodes = (sm_rms, pm_rms0, pm_rms1)
+        if any(x.op != "FW_rms_norm" or len(x.ins) != 2 or len(x.outs) != 1
+               or x.params not in (None, []) for x in rms_nodes):
+            raise ValueError("RMSNorm signature/params mismatch")
+        if tuple(x.rank for x in rms_nodes) != (0, 0, 1):
+            raise ValueError("RMSNorm rank mismatch")
+        if rms.sm_node_indices != (segment.sm_range[0],) or rms.pm_node_indices != (
+            segment.pm_range[0], segment.pm_range[0] + 2
+        ):
+            raise ValueError("RMSNorm authority footprint mismatch")
+    else:
+        sm_shuffle, = sms
+        pm_shuffle0, pm_shuffle1 = pms
     shuffle_nodes = (sm_shuffle, pm_shuffle0, pm_shuffle1)
     if any(
-        x.op != "FW_rms_norm"
-        or len(x.ins) != 2
-        or len(x.outs) != 1
-        or x.params not in (None, [])
-        for x in rms_nodes
-    ):
-        raise ValueError("RMSNorm signature/params mismatch")
-    if any(
-        x.op != "FW_maybe_shuffle" or len(x.ins) != 2 or len(x.outs) != 1
+        x.op != expected_op or len(x.ins) != 2 or len(x.outs) != 1
         for x in shuffle_nodes
     ) or tuple(x.params for x in shuffle_nodes) != ([1, 0], [2, 0], [2, 1]):
         raise ValueError("shuffle signature/params mismatch")
-    if tuple(x.rank for x in rms_nodes) != (0, 0, 1) or tuple(
-        x.rank for x in shuffle_nodes
-    ) != (0, 0, 1):
-        raise ValueError("RMSNorm+shuffle rank mismatch")
-    if rms.sm_node_indices != (segment.sm_range[0],) or rms.pm_node_indices != (
-        segment.pm_range[0], segment.pm_range[0] + 2
-    ):
-        raise ValueError("RMSNorm authority footprint mismatch")
-    if shuffle.sm_node_indices != (segment.sm_range[0] + 1,) or shuffle.pm_node_indices != (
-        segment.pm_range[0] + 1, segment.pm_range[0] + 3
+    if tuple(x.rank for x in shuffle_nodes) != (0, 0, 1):
+        raise ValueError("shuffle rank mismatch")
+    offset = 1 if rms else 0
+    if shuffle.sm_node_indices != (segment.sm_range[0] + offset,) or shuffle.pm_node_indices != (
+        segment.pm_range[0] + offset, segment.pm_range[0] + (3 if rms else 1)
     ):
         raise ValueError("shuffle authority footprint mismatch")
 
     records = {x.source: x for x in chain.relation_facts}
-    rms_inputs = [records[fact] for fact in rms.pre_facts]
-    rms_data = [fact for fact in rms_inputs if fact.kind == "ordinary"]
-    rms_weights = [fact for fact in rms_inputs if fact.kind == "joined"]
-    if len(rms_data) != 1 or len(rms_weights) != 1:
-        raise ValueError("RMSNorm input/weight relation roles are not unique")
-    rms_pre, weight_fact = rms_data[0], rms_weights[0]
-    rms_post = records[rms.post_facts[0]]
+    if len(shuffle.pre_facts) != 1 or len(shuffle.post_facts) != 1:
+        raise ValueError("shuffle requires one pre/post relation")
     shuffle_pre, shuffle_post = records[shuffle.pre_facts[0]], records[shuffle.post_facts[0]]
-    if any(x.kind != "ordinary" for x in (rms_pre, rms_post, shuffle_pre)) or shuffle_post.kind != "zigzag":
-        raise ValueError("RMSNorm+shuffle relation kinds mismatch")
-    for fact, nodes, outputs in (
-        (rms_pre, rms_nodes, False),
-        (rms_post, rms_nodes, True),
-        (shuffle_pre, shuffle_nodes, False),
-        (shuffle_post, shuffle_nodes, True),
-    ):
+    if shuffle_pre.kind != "ordinary" or shuffle_post.kind != "zigzag":
+        raise ValueError("shuffle relation kinds mismatch")
+    fact_nodes = [(shuffle_pre, shuffle_nodes, False), (shuffle_post, shuffle_nodes, True)]
+    if rms:
+        rms_inputs = [records[fact] for fact in rms.pre_facts]
+        rms_data = [fact for fact in rms_inputs if fact.kind == "ordinary"]
+        rms_weights = [fact for fact in rms_inputs if fact.kind == "joined"]
+        if len(rms_data) != 1 or len(rms_weights) != 1 or len(rms.post_facts) != 1:
+            raise ValueError("RMSNorm input/weight relation roles are not unique")
+        rms_pre, weight_fact = rms_data[0], rms_weights[0]
+        rms_post = records[rms.post_facts[0]]
+        if (rms_post.kind != "ordinary" or rms_pre.full_shape != rms_post.full_shape
+                or rms_pre.shard_shape != rms_post.shard_shape
+                or len(rms_pre.shard_shape) != 2
+                or rms_pre.full_shape != (2 * rms_pre.shard_shape[0], rms_pre.shard_shape[1])
+                or any(dim <= 0 for dim in rms_pre.shard_shape)):
+            raise ValueError("RMSNorm relation payload mismatch")
+        fact_nodes += [(rms_pre, rms_nodes, False), (rms_post, rms_nodes, True)]
+        weights = {x.ins[1] for x in rms_nodes}
+        if len(weights) != 1:
+            raise ValueError("RMSNorm weight binding mismatch")
+        weight = next(iter(weights))
+        if (weight_fact.sm_tid != weight or weight_fact.joined_pm_tid != weight
+                or weight_fact.full_shape != (rms_pre.shard_shape[1],)):
+            raise ValueError("RMSNorm joined weight authority mismatch")
+    for fact, nodes, outputs in fact_nodes:
         tids = tuple(x.outs[0] if outputs else x.ins[0] for x in nodes)
         if tids != (fact.sm_tid, fact.pm_rank0_tid, fact.pm_rank1_tid):
-            raise ValueError("RMSNorm+shuffle fact roles do not match node TIDs")
-    if rms_pre.full_shape != rms_post.full_shape or rms_pre.shard_shape != rms_post.shard_shape:
-        raise ValueError("RMSNorm relation payload mismatch")
-    if shuffle_pre.full_shape != shuffle_post.full_shape or shuffle_pre.shard_shape != shuffle_post.shard_shape:
-        raise ValueError("shuffle relation payload mismatch")
-    if any(
-        len(x.shard_shape) != 2
-        or x.full_shape != (x.shard_shape[0] * 2, x.shard_shape[1])
-        for x in (rms_pre, shuffle_pre)
-    ):
-        raise ValueError("RMSNorm+shuffle shape is not positive two-rank 2D")
-    if any(dim <= 0 for fact in (rms_pre, shuffle_pre) for dim in fact.shard_shape):
-        raise ValueError("RMSNorm+shuffle shape is not positive two-rank 2D")
-    weights = {x.ins[1] for x in rms_nodes}
+            raise ValueError("shuffle-entry fact roles do not match node TIDs")
     metadata = {x.ins[1] for x in shuffle_nodes}
-    if len(weights) != 1 or len(metadata) != 1:
-        raise ValueError("RMSNorm weight or shuffle metadata binding mismatch")
-    weight = next(iter(weights)); metadata_tid = next(iter(metadata))
-    if shuffle_post.metadata_tid != metadata_tid or shuffle_post.metadata_region_id is None:
-        raise ValueError("shuffle metadata provenance mismatch")
-
+    if len(metadata) != 1:
+        raise ValueError("shuffle metadata binding mismatch")
+    metadata_tid = next(iter(metadata))
+    certificate = _validate_shuffle_entry_certificate(
+        ir, relation, shuffle, shuffle_nodes, shuffle_pre, shuffle_post
+    )
     authorities = list(chain.authority_facts)
-    if (
-        weight_fact.sm_tid != weight
-        or weight_fact.joined_pm_tid != weight
-        or weight_fact.full_shape != (rms_pre.shard_shape[1],)
-    ):
-        raise ValueError("RMSNorm joined weight authority mismatch")
     metadata_aliases = [
         x for x in authorities
         if x.kind == "tensor_eq" and (x.left_side, x.left_tid) == ("pm", metadata_tid)
@@ -4800,26 +4885,30 @@ def render_closed_rms_shuffle_segment(ir: GoalIR, relation, segment_id: str) -> 
     if len(packed_facts) != 1:
         raise ValueError("shuffle PackedCuSeqlensWF authority mismatch")
     packed = packed_facts[0]
-    if packed.total_tokens != shuffle_pre.shard_shape[0] * 2:
-        raise ValueError("shuffle packed-cu token count mismatch")
+    if (packed.total_tokens != certificate.total_tokens
+            or packed.tid != certificate.contract_metadata_tid):
+        raise ValueError("shuffle packed-cu token count/alias mismatch")
 
     states = {x.state_id: x for x in chain.states}
     before, after = states[segment.pre_state_id], states[segment.post_state_id]
     required = {
-        rms_pre.fact_id, shuffle_pre.fact_id, weight_fact.fact_id,
-        metadata_alias.fact_id, packed.fact_id,
+        shuffle_pre.fact_id, metadata_alias.fact_id, packed.fact_id,
     }
+    if rms:
+        required |= {rms_pre.fact_id, weight_fact.fact_id}
     if not required <= set(before.fact_ids):
         raise ValueError("RMSNorm+shuffle authority is not live in the pre-state")
-    fresh = {rms_post.fact_id, shuffle_post.fact_id}
+    fresh = {shuffle_post.fact_id} | ({rms_post.fact_id} if rms else set())
     if not fresh <= set(after.fact_ids) or not set(after.fact_ids) <= fresh | set(before.fact_ids):
         raise ValueError("RMSNorm+shuffle state delta mismatch")
 
     sm_text = [_node_text(x) for x in sms]
     pm_text = [_node_text(x) for x in pms]
-    fs_rms, ss_rms = _shape_text(rms_post.full_shape), _shape_text(rms_post.shard_shape)
+    if rms:
+        fs_rms, ss_rms = _shape_text(rms_post.full_shape), _shape_text(rms_post.shard_shape)
+        shard_rms, hidden_rms = rms_pre.shard_shape
     fs_shuf, ss_shuf = _shape_text(shuffle_post.full_shape), _shape_text(shuffle_post.shard_shape)
-    shard_rms, hidden_rms = rms_pre.shard_shape
+    fresh_text = ", ".join(([rms_post.fact_id] if rms else []) + [shuffle_post.fact_id])
     sm_graph, pm_graph = ir.sm_graph_ref, ir.pm_graph_ref
 
     lines = [
@@ -4836,10 +4925,12 @@ def render_closed_rms_shuffle_segment(ir: GoalIR, relation, segment_id: str) -> 
         f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
         "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
         "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
-        f"    have hRmsIn : {rms_pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        *([f"    have hRmsIn : {rms_pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)"] if rms else []),
         f"    have hShuffleIn : {shuffle_pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
-        f"    have hWeightRel : {weight_fact.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
-        f"    have hWeight : smStore {weight} = pmStore {weight} := hWeightRel.1",
+        *([
+            f"    have hWeightRel : {weight_fact.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+            f"    have hWeight : smStore {weight} = pmStore {weight} := hWeightRel.1",
+        ] if rms else []),
         f"    have hPacked : {packed.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
         f"    have hMetadataAlias : {metadata_alias.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
 
@@ -4865,16 +4956,17 @@ def render_closed_rms_shuffle_segment(ir: GoalIR, relation, segment_id: str) -> 
             "          (by native_decide) (by native_decide))",
         ]
 
-    lines += rms_writer("hSmRms", sm_graph, "smStore", "smFinal", sm_rms, [], [sm_shuffle])
-    lines += rms_writer("hPmRms0", pm_graph, "pmStore", "pmFinal", pm_rms0, [], pms[1:])
-    lines += rms_writer("hPmRms1", pm_graph, "pmStore", "pmFinal", pm_rms1, pms[:2], [pm_shuffle1])
-    lines += [
-        f"    have hRmsOut : {rms_post.fact_id}.Holds smFinal pmFinal := by",
-        f"      change GeneratedPatterns.Ordinary2Rel (smStore {sm_rms.ins[0]}) (pmStore {pm_rms0.ins[0]}) (pmStore {pm_rms1.ins[0]}) {fs_rms} {ss_rms} at hRmsIn",
-        f"      have core := GeneratedPatterns.Ordinary2Rel.rms_norm_2d hRmsIn hWeight (by decide : 0 < {shard_rms}) (by decide : 0 < {hidden_rms})",
-        f"      change GeneratedPatterns.Ordinary2Rel (smFinal {sm_rms.outs[0]}) (pmFinal {pm_rms0.outs[0]}) (pmFinal {pm_rms1.outs[0]}) {fs_rms} {ss_rms}",
-        "      rw [hSmRms, hPmRms0, hPmRms1]", "      exact core",
-    ]
+    if rms:
+        lines += rms_writer("hSmRms", sm_graph, "smStore", "smFinal", sm_rms, [], [sm_shuffle])
+        lines += rms_writer("hPmRms0", pm_graph, "pmStore", "pmFinal", pm_rms0, [], pms[1:])
+        lines += rms_writer("hPmRms1", pm_graph, "pmStore", "pmFinal", pm_rms1, pms[:2], [pm_shuffle1])
+        lines += [
+            f"    have hRmsOut : {rms_post.fact_id}.Holds smFinal pmFinal := by",
+            f"      change GeneratedPatterns.Ordinary2Rel (smStore {sm_rms.ins[0]}) (pmStore {pm_rms0.ins[0]}) (pmStore {pm_rms1.ins[0]}) {fs_rms} {ss_rms} at hRmsIn",
+            f"      have core := GeneratedPatterns.Ordinary2Rel.rms_norm_2d hRmsIn hWeight (by decide : 0 < {shard_rms}) (by decide : 0 < {hidden_rms})",
+            f"      change GeneratedPatterns.Ordinary2Rel (smFinal {sm_rms.outs[0]}) (pmFinal {pm_rms0.outs[0]}) (pmFinal {pm_rms1.outs[0]}) {fs_rms} {ss_rms}",
+            "      rw [hSmRms, hPmRms0, hPmRms1]", "      exact core",
+        ]
 
     def shuffle_writer(name, graph, store, final, node, before_nodes, after_nodes, buddies):
         data0, data1 = sm_shuffle.ins[0], sm_shuffle.ins[0]
@@ -4888,8 +4980,16 @@ def render_closed_rms_shuffle_segment(ir: GoalIR, relation, segment_id: str) -> 
             f"      simpa [{final}, {'smNodes' if final == 'smFinal' else 'pmNodes'}] using",
             f"        (foldl_faithful_middle_writer {graph} {store} {prefix} [{', '.join(_node_text(x) for x in after_nodes)}] {_node_text(node)} {node.outs[0]}",
             f"          (fun t => ZigzagCollective.fw_maybe_shuffle_collective [t {data0}, t {data1}] (decodeCuSeqlens (t {metadata_tid})) {node.params[0]} {rank}) (by",
-            "            intro t", "            rw [applyNodeDistributedFaithful_shuffle_out]",
-            "            unfold applyNodeFaithfulShuffleValue",
+            "            intro t",
+            *([
+                "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+                "            rw [applyNodeDistributed_bw_maybe_unshuffle_out]",
+                "            unfold applyNodeBWMaybeUnshuffleValue",
+                "            rw [ZigzagCollective.bw_maybe_unshuffle_collective_eq_fw_shuffle]",
+            ] if expected_op == "BW_maybe_unshuffle" else [
+                "            rw [applyNodeDistributedFaithful_shuffle_out]",
+                "            unfold applyNodeFaithfulShuffleValue",
+            ]),
             f"            rw [show {graph}.replicaBuddies {_node_text(node)} = [{', '.join(_node_text(x) for x in buddies)}] by native_decide]",
             "            rfl) (by native_decide) (by native_decide))",
             f"    have {name} : {final} {node.outs[0]} = applyNodeFaithfulShuffleValue {graph} {store} {_node_text(node)} := by",
@@ -4907,9 +5007,9 @@ def render_closed_rms_shuffle_segment(ir: GoalIR, relation, segment_id: str) -> 
         ]
         return out
 
-    lines += shuffle_writer("hSmShuffle", sm_graph, "smStore", "smFinal", sm_shuffle, [sm_rms], [], [sm_shuffle])
-    lines += shuffle_writer("hPmShuffle0", pm_graph, "pmStore", "pmFinal", pm_shuffle0, [pm_rms0], pms[2:], [pm_shuffle0, pm_shuffle1])
-    lines += shuffle_writer("hPmShuffle1", pm_graph, "pmStore", "pmFinal", pm_shuffle1, pms[:3], [], [pm_shuffle0, pm_shuffle1])
+    lines += shuffle_writer("hSmShuffle", sm_graph, "smStore", "smFinal", sm_shuffle, sms[:-1], [], [sm_shuffle])
+    lines += shuffle_writer("hPmShuffle0", pm_graph, "pmStore", "pmFinal", pm_shuffle0, pms[:offset], pms[offset + 1:], [pm_shuffle0, pm_shuffle1])
+    lines += shuffle_writer("hPmShuffle1", pm_graph, "pmStore", "pmFinal", pm_shuffle1, pms[:-1], [], [pm_shuffle0, pm_shuffle1])
     lines += [
         f"    have hMetadataFinal : pmFinal {metadata_tid} = pmStore {metadata_tid} :=",
         f"      foldl_applyNodeDistributedFaithful_at_not_written {pm_graph} pmNodes pmStore {metadata_tid} (by native_decide) (by native_decide)",
@@ -4923,13 +5023,14 @@ def render_closed_rms_shuffle_segment(ir: GoalIR, relation, segment_id: str) -> 
         "      rw [hSmShuffle, hPmShuffle0, hPmShuffle1, hMetadataFinal]",
         "      exact core",
         "    intro fact hfact",
-        f"    have covered : fact ∈ [{rms_post.fact_id}, {shuffle_post.fact_id}] ++ {before.state_id}.facts := by",
-        f"      exact (show {after.state_id}.facts ⊆ [{rms_post.fact_id}, {shuffle_post.fact_id}] ++ {before.state_id}.facts by native_decide) hfact",
+        f"    have covered : fact ∈ [{fresh_text}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{fresh_text}] ++ {before.state_id}.facts by native_decide) hfact",
         "    simp only [List.mem_append] at covered",
         "    rcases covered with fresh | hold",
         "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
-        "      rcases fresh with rfl | rfl",
-        "      · exact hRmsOut", "      · exact hShuffleOut",
+        *(["      rcases fresh with rfl | rfl",
+           "      · exact hRmsOut", "      · exact hShuffleOut"] if rms else [
+           "      rcases fresh with rfl", "      exact hShuffleOut"]),
         "    · exact hframe fact hold", "",
     ]
     return "\n".join(lines)

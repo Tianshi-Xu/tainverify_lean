@@ -6524,6 +6524,237 @@ def test_closed_rms_norm_renderer_covers_all_zigzag_singletons(monkeypatch, goal
         assert source.count("let pmFinal :=") == 1
 
 
+def _synthetic_bw_unshuffle_goal(monkeypatch):
+    """Synthetic op substitution on real YOCO topology, not production authority."""
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    ir = load_goal_ir(1, str(Path(__file__).resolve().parents[2]))
+    for side in ("sm", "pm"):
+        for node in getattr(ir, side + "_nodes"):
+            if node.op == "FW_maybe_shuffle":
+                node.op = "BW_maybe_unshuffle"
+        attr = side + "_replica_groups"
+        setattr(ir, attr, tuple(
+            replace(group, irname="BW_maybe_unshuffle")
+            if "maybe_shuffle" in group.irname else group
+            for group in getattr(ir, attr)
+        ))
+    return ir
+
+
+def test_synthetic_bw_unshuffle_closes_ordinary_to_zigzag(monkeypatch):
+    ir = _synthetic_bw_unshuffle_goal(monkeypatch)
+    proof = compile_proof_plan(ir, build_default_registry())
+    assert proof.supported
+    relation = compile_relation_plan(ir, proof)
+    assert relation.unresolved_frontiers == ()
+    assert relation.unresolved_side_conditions == ()
+    assert relation.dependent_chain_plan.complete
+    certs = [c for c in relation.certificates
+             if c.rule_id == "bw-maybe-unshuffle-ordinary-to-zigzag-two-rank"]
+    assert len(certs) == 1
+    cert = certs[0]
+    assert type(cert) is relation_compiler_module.FaithfulShuffleCertificate
+    assert cert.pm_replica_members == ((0, 9750), (1, 9751))
+    transitions = {t.transition_id: t for t in relation.transition_specs}
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if any(transitions[t].rule_id == cert.rule_id for t in s.transition_ids))
+    source = render_closed_segment(ir, relation, segment.segment_id)
+    assert "applyNodeDistributed_bw_maybe_unshuffle_out" in source
+    assert "applyNodeDistributedFaithful_shuffle_out" not in source
+    assert "Ordinary2Rel.to_zigzag_shuffle" in source
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert "sorry" not in source
+
+
+@pytest.fixture(scope="module", params=["FW_maybe_shuffle", "BW_maybe_unshuffle"])
+def shuffle_entry_case(request):
+    with pytest.MonkeyPatch.context() as mp:
+        ir = _synthetic_bw_unshuffle_goal(mp)
+        if request.param == "FW_maybe_shuffle":
+            for side in ("sm", "pm"):
+                for node in getattr(ir, side + "_nodes"):
+                    if node.op == "BW_maybe_unshuffle":
+                        node.op = request.param
+                attr = side + "_replica_groups"
+                setattr(ir, attr, tuple(replace(g, irname=request.param)
+                    if g.irname == "BW_maybe_unshuffle" else g for g in getattr(ir, attr)))
+        relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    cert = next(c for c in relation.certificates
+                if type(c) is relation_compiler_module.FaithfulShuffleCertificate)
+    transition = next(t for t in relation.transition_specs if t.rule_id == cert.rule_id)
+    segment = next(s for s in relation.dependent_chain_plan.segments
+                   if transition.transition_id in s.transition_ids)
+    return ir, relation, cert, transition, segment
+
+
+def _singleton_shuffle_entry(case):
+    """Synthetic isolated boundary; graph refs need new exact declarations for Lean."""
+    from copy import deepcopy
+    ir, relation, cert, transition, segment = deepcopy(case)
+    ir.sm_nodes = [ir.sm_nodes[i] for i in transition.sm_node_indices]
+    ir.pm_nodes = [ir.pm_nodes[i] for i in transition.pm_node_indices]
+    ir.sm_shapes = [(ir.sm_nodes[0].ins[0], list(cert.full_shape)), *ir.sm_shapes]
+    ir.pm_shapes = [(n.ins[0], list(cert.shard_shape)) for n in ir.pm_nodes] + ir.pm_shapes
+    ir.lineage = LineageGoal(ir.sm_nodes[0].outs[0], list(cert.full_shape),
+        [(n.rank, n.outs[0]) for n in ir.pm_nodes], [list(cert.shard_shape)] * 2, gatherDim=0)
+    old_post = transition.post_facts[0]
+    cert = replace(cert, output_step_triple=("sm:0:0", "pm:0:0", "pm:1:0"))
+    post = replace(old_post, step_triple=cert.output_step_triple)
+    transition = _bind_certificate_digest(replace(transition,
+        sm_node_indices=(0,), pm_node_indices=(0, 1), post_facts=(post,)), cert)
+    chain = relation.dependent_chain_plan
+    removed = {f.fact_id for f in chain.relation_facts
+               if any(f.source in t.post_facts for t in relation.transition_specs
+                      if t.transition_id in segment.transition_ids and t.transition_id != transition.transition_id)}
+    segment = replace(segment, transition_ids=(transition.transition_id,), sm_range=(0, 1), pm_range=(0, 2))
+    target = next(f.fact_id for f in chain.relation_facts if f.source == old_post)
+    chain = replace(chain, segments=(segment,),
+        initial_state_id=segment.pre_state_id, terminal_state_id=segment.post_state_id,
+        terminal_target_fact_id=target, retained_target_fact_ids=(target,),
+        expected_sm_node_count=1, expected_pm_node_count=2,
+        states=tuple(replace(s, fact_ids=tuple(f for f in s.fact_ids if f not in removed))
+                     if s.state_id == segment.post_state_id else s for s in chain.states
+                     if s.state_id in (segment.pre_state_id, segment.post_state_id)),
+        relation_facts=tuple(replace(f, source=post) if f.source == old_post else f for f in chain.relation_facts))
+    relation = replace(relation, certificates=(cert,), transition_specs=(transition,),
+        dependent_chain_plan=chain,
+        zigzag_regions=tuple(replace(region, frontier_triples=tuple(
+            cert.output_step_triple if f == old_post.step_triple else f for f in region.frontier_triples))
+            for region in relation.zigzag_regions))
+    return ir, relation, cert, transition, segment
+
+
+@pytest.mark.parametrize("mutation", ["mixed", "cp4", "params", "order"])
+def test_shuffle_entry_matcher_remains_bounded(shuffle_entry_case, mutation):
+    from copy import deepcopy
+    ir, relation, cert, transition, segment = deepcopy(shuffle_entry_case)
+    proof = compile_proof_plan(ir, build_default_registry())
+    if mutation == "cp4":
+        ir.pm_num_ranks = 4
+    else:
+        target = cert.output_step_triple[-1]
+        changes = {"mixed": {"op": "FW_maybe_shuffle" if ir.pm_nodes[transition.pm_node_indices[1]].op == "BW_maybe_unshuffle" else "BW_maybe_unshuffle"},
+                   "params": {"parameters": (4, 1)}, "order": {"rank": 0}}
+        proof = replace(proof, steps=tuple(replace(s, **changes[mutation])
+                        if s.step_id == target else s for s in proof.steps))
+    call = lambda: relation_compiler_module.advance_faithful_shuffle_relation_frontiers(
+        ir, proof, (cert.output_step_triple,), ("zigzag",))
+    if mutation == "mixed":
+        certificates, frontiers, _ = call()
+        assert not certificates and frontiers == (cert.output_step_triple,)
+    else:
+        with pytest.raises(RelationCompositionError):
+            call()
+
+
+def test_shuffle_entry_singleton_is_shared_and_dispatched(shuffle_entry_case):
+    ir, relation, cert, transition, segment = _singleton_shuffle_entry(shuffle_entry_case)
+    spec = relation_compiler_module.get_closed_rule_spec(cert.rule_id)
+    assert spec.certificate_type is relation_compiler_module.FaithfulShuffleCertificate
+    assert spec.singleton_renderer == "composer:render_closed_shuffle_entry_segment"
+    source = render_closed_segment(ir, relation, segment.segment_id)
+    assert "Ordinary2Rel.to_zigzag_shuffle" in source
+    assert "hRmsOut" not in source
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    assert "sorry" not in source
+
+
+@pytest.mark.parametrize("mutation", ["digest", "duplicate", "type", "theorem", "roles",
+    "certificate_shape", "node_shape", "rank_count", "group_order", "group_op",
+    "metadata_source", "region", "packed", "frame"])
+def test_shuffle_entry_rejects_stale_authority(shuffle_entry_case, mutation):
+    from copy import deepcopy
+    ir, relation, cert, transition, segment = deepcopy(shuffle_entry_case)
+    chain = relation.dependent_chain_plan
+    if mutation == "digest":
+        transition = replace(transition, certificate_digest="0" * 64)
+    elif mutation == "duplicate":
+        relation = replace(relation, certificates=(*relation.certificates, cert))
+    elif mutation in {"type", "theorem", "roles", "certificate_shape", "metadata_source"}:
+        changes = {"theorem": {"lean_theorem": "wrong"},
+                   "roles": {"input_step_triple": tuple(reversed(cert.input_step_triple))},
+                   "certificate_shape": {"shard_shape": (1, 1)},
+                   "metadata_source": {"metadata_source": "wrong"}}
+        bad = SimpleNamespace(**vars(cert)) if mutation == "type" else replace(cert, **changes[mutation])
+        relation = replace(relation, certificates=tuple(bad if c is cert else c for c in relation.certificates))
+        if mutation in {"certificate_shape", "metadata_source"}:
+            transition = _bind_certificate_digest(transition, bad)
+    elif mutation == "node_shape":
+        tid = ir.pm_nodes[transition.pm_node_indices[0]].outs[0]
+        ir.pm_shapes = [(t, shape) for t, shape in ir.pm_shapes if t != tid] + [(tid, [1, 1])]
+    elif mutation == "rank_count":
+        ir.pm_num_ranks = 4
+    elif mutation in {"group_order", "group_op"}:
+        ir.pm_replica_groups = tuple(
+            replace(g, members=tuple(reversed(g.members))) if mutation == "group_order"
+            else replace(g, irname="wrong")
+            for g in ir.pm_replica_groups if any(m.primary_out_tid == cert.pm_replica_members[0][1] for m in g.members))
+    elif mutation == "region":
+        relation = replace(relation, zigzag_regions=())
+    elif mutation == "packed":
+        ir.packed_cu_contracts = ()
+    elif mutation == "frame":
+        chain = replace(chain, states=tuple(replace(s, fact_ids=())
+            if s.state_id == segment.pre_state_id else s for s in chain.states))
+    relation = replace(relation, dependent_chain_plan=chain, transition_specs=tuple(
+        transition if t.transition_id == transition.transition_id else t for t in relation.transition_specs))
+    with pytest.raises(ValueError):
+        render_closed_segment(ir, relation, segment.segment_id)
+
+
+@pytest.mark.parametrize("side", ["sm", "pm"])
+def test_shuffle_entry_backward_missing_group_fails_closed(shuffle_entry_case, side):
+    from copy import deepcopy
+    ir, relation, cert, transition, segment = deepcopy(shuffle_entry_case)
+    setattr(ir, side + "_replica_groups", ())
+    if ir.sm_nodes[transition.sm_node_indices[0]].op == "FW_maybe_shuffle":
+        # Preserve the established forward legacy-authority path.
+        assert render_closed_segment(ir, relation, segment.segment_id)
+    else:
+        with pytest.raises(ValueError, match="backward shuffle requires explicit"):
+            render_closed_segment(ir, relation, segment.segment_id)
+
+
+@pytest.mark.parametrize("singleton", [False, True])
+def test_shuffle_entry_coordinated_buddy_order_is_rejected(shuffle_entry_case, singleton):
+    from copy import deepcopy
+    case = _singleton_shuffle_entry(shuffle_entry_case) if singleton else deepcopy(shuffle_entry_case)
+    ir, relation, cert, transition, segment = case
+    bad = replace(cert, pm_replica_members=tuple(reversed(cert.pm_replica_members)))
+    ir.pm_replica_groups = tuple(
+        replace(g, members=tuple(reversed(g.members)))
+        if any(m.primary_out_tid == cert.pm_replica_members[0][1] for m in g.members) else g
+        for g in ir.pm_replica_groups)
+    transition = _bind_certificate_digest(transition, bad)
+    relation = replace(relation,
+        certificates=tuple(bad if c == cert else c for c in relation.certificates),
+        transition_specs=tuple(transition if t.transition_id == transition.transition_id else t
+                               for t in relation.transition_specs))
+    with pytest.raises(ValueError, match="buddy roles"):
+        render_closed_segment(ir, relation, segment.segment_id)
+
+
+@pytest.mark.parametrize("singleton", [False, True])
+def test_shuffle_entry_missing_only_packed_authority_is_rejected(shuffle_entry_case, singleton):
+    from copy import deepcopy
+    case = _singleton_shuffle_entry(shuffle_entry_case) if singleton else deepcopy(shuffle_entry_case)
+    ir, relation, cert, transition, segment = case
+    chain = relation.dependent_chain_plan
+    packed = next(f.fact_id for f in chain.authority_facts
+                  if f.kind == "packed_cu" and f.tid == cert.contract_metadata_tid and f.side == "pm")
+    before = next(s for s in chain.states if s.state_id == segment.pre_state_id)
+    assert packed in before.fact_ids and len(before.fact_ids) > 1
+    chain = replace(chain, states=tuple(
+        replace(s, fact_ids=tuple(f for f in s.fact_ids if f != packed))
+        if s.state_id == before.state_id else s for s in chain.states))
+    relation = replace(relation, dependent_chain_plan=chain)
+    with pytest.raises(ValueError, match="authority is not live"):
+        render_closed_segment(ir, relation, segment.segment_id)
+
+
 def test_closed_atomic_rms_shuffle_renderer_is_single_fold_and_dispatched(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")

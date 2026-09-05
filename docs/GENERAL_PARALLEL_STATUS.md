@@ -1,5 +1,27 @@
 # General parallel-configuration status
 
+## CP2 entry compiler closure
+
+The shared ordinary-to-zigzag entry now accepts homogeneous FW_maybe_shuffle or
+BW_maybe_unshuffle triples, through the same FaithfulShuffleCertificate and
+singleton/ordinary-RMSNorm compound renderer. BW uses its actual distributed
+writer equality before the existing BW-unshuffle/FW-shuffle semantic equality.
+Mixed-op triples, CP>2 and hybrid BW attention remain outside this slice.
+BW requires explicit ordered buddy groups; the pre-existing FW legacy path is
+unchanged. Certificate, shape, metadata-region, public packed-cu and live-state
+checks remain tied to the actual nodes.
+
+Four exact-source audits use independent synthetic graph declarations matching
+FW/BW nodes and ordered buddies: singleton and RMSNorm compound, both directions
+into zigzag. All four compile; native-decision axiom counts are respectively
+42/59 (FW singleton/compound) and 51/68 (BW singleton/compound), with no other
+nonstandard axioms. These callers retain the existing native_decide trust base;
+they are not kernel3-only. Reversed graph buddies and an overwritten live frame
+fact are independently rejected by Lean. This is conditional segment closure,
+not a new real-model backward authority or publication-completeness claim.
+The frozen final focused gate passes 73 tests. All three whole-model canonical
+bundles regenerate byte-identically; no publication artifacts were updated.
+
 ## CP frontier: arbitrary-K single-sequence inverse
 
 `KRankZigzagSingle.lean` proves the value-level left inverse
@@ -15,9 +37,9 @@ the two core and six witness declarations have kernel3-or-less axioms.
 This is a mathematical prerequisite, **not CP/ring compiler closure**. Packed
 multi-sequence inverse, process-group ownership binding, generic-K relation
 certificates/renderers, and ring attention remain separate obligations.
-Compiler acceptance is unchanged; CP>2 remains rejected. A synthetic
-BW_maybe_unshuffle substitution on existing YOCO topology additionally exposes
-an unresolved ordinary-to-zigzag frontier despite local planner acceptance.
+Compiler acceptance beyond CP2 is unchanged; CP>2 remains rejected. The synthetic
+BW_maybe_unshuffle substitution on YOCO topology supplied the RED reproduction
+for the CP2 entry slice above; it is not a new captured backward model graph.
 
 ## Scope split
 

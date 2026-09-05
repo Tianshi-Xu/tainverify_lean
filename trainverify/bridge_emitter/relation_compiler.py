@@ -2847,8 +2847,10 @@ def advance_faithful_shuffle_relation_frontiers(
         if any(binding.startswith("init:") for binding in frontier):
             rewritten.append(frontier); rewritten_layouts.append(layout); continue
         steps = tuple(by_id[binding] for binding in frontier)
-        if not all(step.op == "FW_maybe_shuffle" for step in steps):
+        if {step.op for step in steps} not in ({"FW_maybe_shuffle"}, {"BW_maybe_unshuffle"}):
             rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if ir.sm_num_ranks != 1 or ir.pm_num_ranks != 2:
+            raise RelationCompositionError("faithful shuffle requires exact SM=1/PM=2 graph ranks")
         if layout != "zigzag":
             raise RelationCompositionError("faithful shuffle output must be a zigzag frontier")
         if tuple((step.side, step.rank) for step in steps) != (("sm", 0), ("pm", 0), ("pm", 1)):
@@ -2897,7 +2899,9 @@ def advance_faithful_shuffle_relation_frontiers(
         _pm_group, pm_members = matching_group(ir.pm_replica_groups, pm_expected)
         input_triple = _produced_binding_triple(steps, 0)
         certificates.append(FaithfulShuffleCertificate(
-            rule_id="faithful-maybe-shuffle-ordinary-to-zigzag-two-rank",
+            rule_id=("faithful-maybe-shuffle-ordinary-to-zigzag-two-rank"
+                     if steps[0].op == "FW_maybe_shuffle"
+                     else "bw-maybe-unshuffle-ordinary-to-zigzag-two-rank"),
             pre_layout="ordinary", post_layout="zigzag", output_step_triple=frontier,
             input_step_triple=input_triple, node_metadata_tid=metadata_tid,
             contract_metadata_tid=contract.tid, metadata_source=pm_class.source,
@@ -10182,6 +10186,16 @@ _register_closed_rule_specs(
         "float-ordinary-two-rank", FrontierFloatCertificate,
         ("TrainVerify.Denote.fw_float_allGather0_commute_2",),
         "FW_float", "composer:render_closed_float_segment", (),
+    ),
+    ClosedRuleSpec(
+        "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank", FaithfulShuffleCertificate,
+        ("TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.of_sources",),
+        "FW_maybe_shuffle", "composer:render_closed_shuffle_entry_segment", (),
+    ),
+    ClosedRuleSpec(
+        "bw-maybe-unshuffle-ordinary-to-zigzag-two-rank", FaithfulShuffleCertificate,
+        ("TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.of_sources",),
+        "BW_maybe_unshuffle", "composer:render_closed_shuffle_entry_segment", (),
     ),
     ClosedRuleSpec(
         "zigzag-to-ordinary-unshuffle-two-rank", FrontierUnshuffleCertificate,
