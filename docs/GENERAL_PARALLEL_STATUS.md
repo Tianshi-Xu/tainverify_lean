@@ -45,11 +45,27 @@ and cross-buddy negatives also pass. Independent base and delta reviews passed.
 All three canonical model bundles remain byte-identical; no publication output
 was updated.
 
-Composability beyond this singleton graph remains open: a supported CP3
-`FW_contiguous` prefix followed by shuffle has a supported local proof plan but
-relation compilation rejects it with `direct gather fixed point did not preserve
-target authority`. Closing that prefix-to-entry boundary is the next compiler
-slice; no ring/attention or compound support is inferred from this entry.
+The ordinary `FW_contiguous` prefix now composes with FW/BW K-entry through the
+same shared DAG: the prefix target uses one certificate and the entry target
+reuses it together with the entry certificate. The prefix post is the exact
+internal entry pre-fact, not a new external assumption. The shared chain contains
+two closed singleton segments. Initial contiguous inputs require exact InitGoal
+binding plus fresh graph-producer authentication; no intermediate init shortcut
+is used. Only the K-entry normalization path enables this initial-source extension.
+
+Parent checks pass 116 focused tests and 73 CP2/dispatch regressions. The two
+new producer/dimension guards each fail their targeted tests when disabled in
+memory. Six exact Lean sources compile: FW/BW CP3 composed inhabited witnesses,
+K5 conditional compositions, and CP3 reordered-entry conditional compositions.
+All retain the generated native-decision baseline with no other nonstandard
+axioms. Corrupting a prefix producer or skipping its state transition is rejected
+by Lean.
+
+Two boundaries remain explicit: K1 prefix is not yet supported by the existing
+contiguous backend (K1 singleton entry is unchanged); permuting contiguous writer
+node order away from semantic rank order still fails in the contiguous renderer.
+Reordered-entry acceptance does not imply reordered-prefix acceptance. No
+ring/attention or compound expansion is inferred from this two-segment closure.
 
 ## Ordered-K shared relation foundation
 
@@ -70,8 +86,9 @@ K-rank modules and the four existing CP2 entry proofs also compile against the
 new relation module. Independent exact-commit semantic review passed.
 
 This is the shared semantic foundation for the singleton entry compiler above.
-Existing CP2 interfaces are unchanged; the broader K-prefix composition and
-ring-attention obligations remain separate.
+Existing CP2 interfaces are unchanged; general prefix composition and
+ring-attention obligations beyond the supported two-segment boundary remain
+separate.
 
 ## CP frontier: arbitrary-K single-sequence inverse
 

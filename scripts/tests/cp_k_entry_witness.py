@@ -4,9 +4,16 @@ from scripts.tests.test_cp_k_entry import entry_ir, compile_entry
 from trainverify.bridge_emitter import composer
 
 
-def witness_source(op):
-    ir = entry_ir(op=op)
-    _, relation = compile_entry(ir)
+def witness_source(op, *, prefix=False):
+    if prefix:
+        from scripts.tests.test_cp_k_prefix import prefix_ir, shared_prefix
+        from trainverify.bridge_emitter.model_authority import materialize_target_ir
+        model, dag = shared_prefix(prefix_ir(op=op))
+        ir = materialize_target_ir(model, 1)
+        relation = dag.global_relation
+    else:
+        ir = entry_ir(op=op)
+        _, relation = compile_entry(ir)
     chain = relation.dependent_chain_plan
     segment = chain.segments[0]
     graph_lines = ["open TrainVerify.Denote", "namespace CPEntry", "noncomputable section"]
@@ -37,6 +44,21 @@ def witness_source(op):
     assert declarations.endswith(suffix)
     declarations = declarations[:-len(suffix)]
     body = composer.render_closed_segment(ir,relation,segment.segment_id)
+    sound_name = segment.segment_id
+    if prefix:
+        assert len(chain.segments) == 2
+        second = chain.segments[1]
+        body += "\n" + composer.render_closed_segment(ir, relation, second.segment_id)
+        body += "\n" + "\n".join([
+            f"private def composed : ClosedDepSegmentCertificate CPEntry.smGraph CPEntry.pmGraph {chain.initial_state_id} {chain.states[-1].state_id} where",
+            "  smNodes := CPEntry.smGraph.nodes", "  pmNodes := CPEntry.pmGraph.nodes",
+            "  sound := by", "    intro sm pm h",
+            f"    rw [show CPEntry.smGraph.nodes = {segment.segment_id}.smNodes ++ {second.segment_id}.smNodes by native_decide]",
+            f"    rw [show CPEntry.pmGraph.nodes = {segment.segment_id}.pmNodes ++ {second.segment_id}.pmNodes by native_decide]",
+            "    rw [List.foldl_append, List.foldl_append]",
+            f"    exact {second.segment_id}.sound _ _ ({segment.segment_id}.sound sm pm h)",
+        ]) + "\n"
+        sound_name = "composed"
     initial = [f"theorem inhabitedInput : {chain.initial_state_id}.Holds CPEntry.initSM CPEntry.initPM := by",
                "  intro fact hfact",
                f"  change fact ∈ {list(chain.states[0].fact_ids)} at hfact".replace("'", ""),
@@ -54,7 +76,7 @@ def witness_source(op):
         f"theorem inhabitedOutput : {chain.terminal_target_fact_id}.Holds",
         "    (smGraph.nodes.foldl (applyNodeDistributedFaithful smGraph) initSM)",
         "    (pmGraph.nodes.foldl (applyNodeDistributedFaithful pmGraph) initPM) := by",
-        f"  have h := {segment.segment_id}.sound CPEntry.initSM CPEntry.initPM inhabitedInput",
+        f"  have h := {sound_name}.sound CPEntry.initSM CPEntry.initPM inhabitedInput",
         f"  exact h {chain.terminal_target_fact_id} (by native_decide)",
         "#print axioms inhabitedOutput", "",
     ]
@@ -65,11 +87,14 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--prefix", action="store_true", help="emit shared contiguous-prefix/entry witnesses")
     args = parser.parse_args()
     if not args.output_dir.is_absolute():
         parser.error("--output-dir must be absolute")
     args.output_dir.mkdir(parents=True,exist_ok=True)
     for op, name in (("FW_maybe_shuffle","CPKEntryFW.lean"),("BW_maybe_unshuffle","CPKEntryBW.lean")):
+        if args.prefix:
+            name = name.replace("Entry", "Prefix")
         path = args.output_dir / name
-        path.write_text(witness_source(op))
+        path.write_text(witness_source(op, prefix=args.prefix))
         print(path)

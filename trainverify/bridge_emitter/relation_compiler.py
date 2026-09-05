@@ -6204,7 +6204,7 @@ def advance_k_rank_mix_linear_relation_frontiers(plan, frontiers, layouts):
     )
 
 
-def advance_k_rank_contiguous_relation_frontiers(plan, frontiers, layouts):
+def advance_k_rank_contiguous_relation_frontiers(plan, frontiers, layouts, *, goal_ir=None):
     """Transport an exact ordered K-rank ShardedRel through FW_contiguous."""
     if len(frontiers) != len(layouts):
         raise RelationCompositionError("K-rank FW_contiguous frontier/layout arity mismatch")
@@ -6235,17 +6235,29 @@ def advance_k_rank_contiguous_relation_frontiers(plan, frontiers, layouts):
         if any(len(step.input_bindings) != expected_arity or len(getattr(step, "input_shapes", ())) != expected_arity
                for step in writers):
             raise RelationCompositionError("K-rank contiguous writers have invalid input arity")
-        try:
-            inputs = tuple(by_id[step.input_bindings[0]] for step in writers)
-        except KeyError as exc:
-            raise RelationCompositionError(f"K-rank FW_contiguous source is unresolved: {exc}") from exc
-        if inputs[0].side != "sm" or any(step.side != "pm" for step in inputs[1:]):
-            raise RelationCompositionError("K-rank FW_contiguous source frontier has the wrong side")
-        if tuple(int(step.rank) for step in inputs[1:]) != tuple(range(k)):
-            raise RelationCompositionError("K-rank FW_contiguous source shards are not ordered ranks 0..K-1")
-        if any(tuple(writer.input_shapes[0]) != tuple(source.output_shape)
-               for writer, source in zip(writers, inputs)):
-            raise RelationCompositionError("K-rank FW_contiguous declared input shape disagrees with its source")
+        input_refs = tuple(step.input_bindings[0] for step in writers)
+        init_sources = all(ref.startswith("init:") for ref in input_refs)
+        if init_sources and goal_ir is not None and sm_step.op == "FW_contiguous":
+            closed, remaining, _ = close_k_rank_init_authority(goal_ir, (input_refs,), ("sharded",))
+            if remaining or len(closed) != 1:
+                raise RelationCompositionError("K-rank FW_contiguous requires exact InitGoal source authority")
+            from .proof_compiler import compile_proof_plan, build_default_registry
+            authentic = compile_proof_plan(goal_ir, build_default_registry())
+            authentic_steps = _step_map(authentic)
+            if not authentic.supported or any(authentic_steps.get(s.step_id) != s for s in writers):
+                raise RelationCompositionError("K-rank FW_contiguous input producer authority mismatch")
+        else:
+            try:
+                inputs = tuple(by_id[ref] for ref in input_refs)
+            except KeyError as exc:
+                raise RelationCompositionError(f"K-rank FW_contiguous source is unresolved: {exc}") from exc
+            if inputs[0].side != "sm" or any(step.side != "pm" for step in inputs[1:]):
+                raise RelationCompositionError("K-rank FW_contiguous source frontier has the wrong side")
+            if tuple(int(step.rank) for step in inputs[1:]) != tuple(range(k)):
+                raise RelationCompositionError("K-rank FW_contiguous source shards are not ordered ranks 0..K-1")
+            if any(tuple(writer.input_shapes[0]) != tuple(source.output_shape)
+                   for writer, source in zip(writers, inputs)):
+                raise RelationCompositionError("K-rank FW_contiguous declared input shape disagrees with its source")
         if any(tuple(writer.output_shape) != tuple(writer.input_shapes[0]) for writer in writers):
             if sm_step.op in {"FW_view", "FW_reshape"}:
                 rewritten.append(frontier)
@@ -6267,8 +6279,9 @@ def advance_k_rank_contiguous_relation_frontiers(plan, frontiers, layouts):
             raise RelationCompositionError(
                 f"K-rank FW_contiguous does not determine one gather dimension: {candidates}")
         gather_dim = candidates[0]
-        input_refs = tuple(step.step_id for step in inputs)
         input_fact = RelationFactSpec("sharded", input_refs, gather_dim=gather_dim)
+        if init_sources and goal_ir is not None and input_fact != closed[0]:
+            raise RelationCompositionError("K-rank FW_contiguous InitGoal gather dimension mismatch")
         output_fact = RelationFactSpec("sharded", tuple(frontier), gather_dim=gather_dim)
         rule_id = (
             "float-sharded-k-rank" if sm_step.op == "FW_float"
@@ -8863,7 +8876,8 @@ def normalize_relation_frontiers(
         if "contiguous_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_contiguous_relation_frontiers(
-                    plan, current_frontiers, current_layouts
+                    plan, current_frontiers, current_layouts,
+                    goal_ir=goal_ir if "shuffle_k_entry" in rules else None,
                 )
             )
             _extend_unique_certificates(certificate_sink, _certs)
@@ -11577,11 +11591,16 @@ def compile_k_shuffle_entry_boundary(ir: GoalIR, proof: ProofPlan) -> RelationPl
     sink = []
     frontiers, layouts = normalize_relation_frontiers(
         proof, (tuple(proof.target_steps),), ("zigzag_k",),
-        rules=("shuffle_k_entry",), goal_ir=ir, certificate_sink=sink)
+        rules=("shuffle_k_entry", "contiguous_k"), goal_ir=ir, certificate_sink=sink)
     _closed, frontiers, layouts = close_k_rank_init_authority(ir, frontiers, layouts)
     certs = tuple(sink)
-    if len(certs) != 1:
-        raise RelationCompositionError("K shuffle singleton boundary requires one certificate")
+    target_entries = tuple(
+        cert for cert in certs
+        if isinstance(cert, KRankShuffleEntryCertificate)
+        and cert.output_step_triple == tuple(proof.target_steps)
+    )
+    if len(target_entries) != 1:
+        raise RelationCompositionError("K shuffle boundary requires one target entry certificate")
     regions, _ = resolve_zigzag_metadata_regions(ir, certs, (), ())
     transitions = build_certificate_transition_specs(proof, certs)
     external = select_unproduced_external_pre_facts(transitions)
@@ -11606,8 +11625,10 @@ def compile_relation_plan(
     deduplicate_frontiers: bool = True,
 ) -> RelationPlan:
     """Compile registered terminal relation families without hiding backbone gaps."""
-    if (ir.pm_num_ranks != 2 and ir.sm_nodes and ir.pm_nodes
-            and {n.op for n in (*ir.sm_nodes, *ir.pm_nodes)} in
+    by_target_step = _step_map(proof)
+    if (ir.pm_num_ranks != 2 and proof.target_steps
+            and all(ref in by_target_step for ref in proof.target_steps)
+            and {by_target_step[ref].op for ref in proof.target_steps} in
                 ({"FW_maybe_shuffle"}, {"BW_maybe_unshuffle"})):
         return compile_k_shuffle_entry_boundary(ir, proof)
     sharded_embedding_error = None
