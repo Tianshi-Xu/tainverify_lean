@@ -2691,7 +2691,7 @@ def resolve_zigzag_metadata_regions(
 
     for cert in certificates:
         output = getattr(cert, "output_step_triple", None)
-        if isinstance(cert, FaithfulShuffleCertificate):
+        if isinstance(cert, (FaithfulShuffleCertificate, KRankShuffleEntryCertificate)):
             add(output)
             seeds.setdefault(output, []).append((cert.metadata_source, cert.node_metadata_tid))
             continue
@@ -2783,6 +2783,109 @@ def resolve_zigzag_metadata_regions(
     for frontier in zigzag_unresolved:
         authority_by_frontier[frontier] = region_for_root[find(frontier)]
     return tuple(regions), authority_by_frontier
+
+
+@dataclass(frozen=True)
+class KRankShuffleEntryCertificate:
+    rule_id: str
+    op: str
+    output_step_triple: tuple[str, ...]
+    input_step_triple: tuple[str, ...]
+    node_metadata_tid: int
+    contract_metadata_tid: int
+    metadata_source: str
+    metadata_init_lineage_rank_tids: tuple[tuple[int, int], ...]
+    total_tokens: int
+    num_ranks: int
+    sm_replica_members: tuple[tuple[int, int], ...]
+    pm_replica_members: tuple[tuple[int, int], ...]
+    full_shape: tuple[int, ...]
+    shard_shape: tuple[int, ...]
+    lean_theorem: str = "TrainVerify.Denote.RelationCompiler.ZigzagKRel.of_sharded"
+    pre_layout: str = "sharded"
+    post_layout: str = "zigzag_k"
+
+    @property
+    def input_fact(self):
+        return RelationFactSpec("sharded", self.input_step_triple, gather_dim=0)
+
+    @property
+    def output_fact(self):
+        return RelationFactSpec("zigzag_k", self.output_step_triple)
+
+
+def advance_k_rank_shuffle_entry_frontiers(ir, plan, frontiers, layouts):
+    """Exact homogeneous entry only; semantic rank order is never node-index sorted."""
+    from .ordered_buddy_authority_policy import OrderedBuddyRow, check_ordered_cp_buddy_authority
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K shuffle frontier/layout arity mismatch")
+    by_id = _step_map(plan)
+    certificates, remaining, kinds = [], [], []
+    def require(ok, message):
+        if not ok:
+            raise RelationCompositionError("K shuffle " + message)
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "zigzag_k":
+            remaining.append(frontier); kinds.append(layout); continue
+        require(plan.supported, "requires supported graph authority")
+        require(len(frontier) == ir.pm_num_ranks + 1 and ir.pm_num_ranks > 0
+                and ir.sm_num_ranks == 1, "rank count mismatch")
+        require(len(set(frontier)) == len(frontier) and all(ref in by_id for ref in frontier),
+                "missing or duplicate writer")
+        steps = tuple(by_id[ref] for ref in frontier)
+        k = ir.pm_num_ranks
+        op = steps[0].op
+        require(op in {"FW_maybe_shuffle", "BW_maybe_unshuffle"}
+                and all(s.op == op for s in steps), "requires homogeneous entry writers")
+        require(tuple((s.side, s.rank) for s in steps) == (("sm", 0),) + tuple(("pm", r) for r in range(k)), "rank order mismatch")
+        require(tuple(s.parameters for s in steps) == ((1, 0),) + tuple((k,r) for r in range(k)), "parameters mismatch")
+        require(all(len(s.input_tids) == len(s.input_bindings) == len(s.input_shapes) == 2 for s in steps), "signature mismatch")
+        # Bind every step back to the actual graph, including producer identity.
+        for step in steps:
+            nodes = ir.sm_nodes if step.side == "sm" else ir.pm_nodes
+            require(0 <= step.node_index < len(nodes), "missing graph writer")
+            node = nodes[step.node_index]
+            require((node.rank, node.op, tuple(node.ins), tuple(node.outs), tuple(node.params or ())) ==
+                    (step.rank, step.op, step.input_tids, (step.output_tid,), step.parameters), "graph writer mismatch")
+        for groups, side_steps in ((ir.sm_replica_groups, steps[:1]), (ir.pm_replica_groups, steps[1:])):
+            expected = tuple((s.rank, s.output_tid) for s in side_steps)
+            matches = [g for g in groups if any((m.rank,m.primary_out_tid) in expected for m in g.members)]
+            require(len(matches) == 1 and tuple((m.rank,m.primary_out_tid) for m in matches[0].members) == expected,
+                    "requires explicit ordered buddy groups")
+            require(matches[0].irname.rsplit(".",1)[-1] in {op, "wrap_" + op[3:]}, "buddy operator mismatch")
+        if k > 1:
+            decision = check_ordered_cp_buddy_authority(tuple(OrderedBuddyRow(s.node_index, s.op, s.parameters, s.input_tids) for s in steps[1:]), cp_size=k, expected_op=op)
+            require(decision.failure is None, "ordered buddy policy rejected authority")
+        tid = steps[0].input_tids[1]
+        require(all(s.input_tids[1] == tid and s.input_bindings[1] == f"init:{tid}" and s.input_shapes[1] == (2,) for s in steps), "metadata binding mismatch")
+        lineage = ir.init_lineages.get(tid)
+        require(lineage is not None and lineage.ts == tid and tuple(lineage.tps) == ((0,tid),)
+                and tuple(lineage.tsShape) == (2,) and tuple(map(tuple,lineage.tpShapes)) == ((2,),)
+                and lineage.gatherDim is None and not lineage.replicated, "metadata singleton lineage mismatch")
+        classes = []
+        for values in (ir.sm_input_value_classes, ir.pm_input_value_classes):
+            found = [c for c in values if tid in c.tids]
+            require(len(found) == 1, "metadata value class missing or ambiguous")
+            classes.append(found[0])
+        require(classes[0].source == classes[1].source, "metadata cross-class mismatch")
+        full, shard = steps[0].input_shapes[0], steps[1].input_shapes[0]
+        require(bool(shard) and full == (k*shard[0], *shard[1:]) and all(d > 0 for d in (*full,*shard)), "shape split mismatch")
+        require(all(s.input_shapes[0] == shard and s.output_shape == shard for s in steps[1:]) and steps[0].output_shape == full, "input/output shapes mismatch")
+        contracts = [c for c in ir.packed_cu_contracts if c.side == "pm" and c.tid in classes[1].tids]
+        require(bool(contracts) and all((c.total_tokens,c.num_ranks) == (full[0],k) for c in contracts), "packed authority token/rank mismatch")
+        contract = contracts[0]
+        inputs = tuple(s.input_bindings[0] for s in steps)
+        # Verify bindings, not merely TIDs or shapes, against authentic producer planning.
+        from .proof_compiler import compile_proof_plan, build_default_registry
+        authentic = compile_proof_plan(ir, build_default_registry())
+        authentic_steps = _step_map(authentic)
+        require(authentic.supported and all(authentic_steps.get(s.step_id) == s for s in steps), "input producer authority mismatch")
+        certificates.append(KRankShuffleEntryCertificate(
+            "fw-shuffle-sharded-to-zigzag-k" if op == "FW_maybe_shuffle" else "bw-unshuffle-sharded-to-zigzag-k",
+            op, frontier, inputs, tid, contract.tid, classes[1].source, ((0,tid),),
+            full[0], k, ((0,steps[0].output_tid),), tuple((s.rank,s.output_tid) for s in steps[1:]), full, shard))
+        remaining.append(inputs); kinds.append("sharded")
+    return tuple(certificates), tuple(remaining), tuple(kinds)
 
 
 @dataclass(frozen=True)
@@ -8403,6 +8506,7 @@ def normalize_relation_frontiers(
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
     known = {"allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "rms_norm_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"}
+    known.add("shuffle_k_entry")
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -8414,6 +8518,12 @@ def normalize_relation_frontiers(
                 current_frontiers, current_layouts
             )
         prior_state = (current_frontiers, current_layouts)
+        if "shuffle_k_entry" in rules:
+            if goal_ir is None:
+                raise RelationCompositionError("K shuffle requires GoalIR authority")
+            _certs, current_frontiers, current_layouts = advance_k_rank_shuffle_entry_frontiers(
+                goal_ir, plan, current_frontiers, current_layouts)
+            _extend_unique_certificates(certificate_sink, _certs)
         if "allreduce_reconstruction_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_allreduce_reconstruction_frontiers(
@@ -9090,8 +9200,8 @@ def materialize_closed_relation_facts(
 
     metadata_seed = {}
     for certificate in relation.certificates:
-        if isinstance(certificate, FaithfulShuffleCertificate):
-            source = RelationFactSpec("zigzag", certificate.output_step_triple)
+        if isinstance(certificate, (FaithfulShuffleCertificate, KRankShuffleEntryCertificate)):
+            source = RelationFactSpec(certificate.post_layout, certificate.output_step_triple)
             previous = metadata_seed.get(source)
             if previous is not None and previous != certificate.node_metadata_tid:
                 raise RelationCompositionError(
@@ -9109,18 +9219,18 @@ def materialize_closed_relation_facts(
         inherited = {
             actual_metadata[fact]
             for fact in transition.pre_facts
-            if fact.layout in {"zigzag", "zigzag_feature", "joined_zigzag"} and fact in actual_metadata
+            if fact.layout in {"zigzag", "zigzag_k", "zigzag_feature", "joined_zigzag"} and fact in actual_metadata
         }
         missing_inputs = [
             fact for fact in transition.pre_facts
-            if fact.layout in {"zigzag", "zigzag_feature", "joined_zigzag"} and fact not in actual_metadata
+            if fact.layout in {"zigzag", "zigzag_k", "zigzag_feature", "joined_zigzag"} and fact not in actual_metadata
         ]
         if missing_inputs:
             raise RelationCompositionError(
                 f"zigzag metadata input is not live at {transition_id}: {missing_inputs}"
             )
         for fact in transition.post_facts:
-            if fact.layout not in {"zigzag", "zigzag_feature", "joined_zigzag"}:
+            if fact.layout not in {"zigzag", "zigzag_k", "zigzag_feature", "joined_zigzag"}:
                 continue
             seeded = metadata_seed.get(fact)
             if seeded is not None:
@@ -9186,7 +9296,7 @@ def materialize_closed_relation_facts(
     ))
     result = []
     for ordinal, fact in enumerate(ordered):
-        if fact.layout in {"sharded", "chunked", "reduction", "replicated", "zigzag_feature"}:
+        if fact.layout in {"sharded", "chunked", "reduction", "replicated", "zigzag_feature", "zigzag_k"}:
             if len(fact.step_triple) < 2:
                 raise RelationCompositionError(
                     f"K-rank {fact.layout} relation fact requires one SM and at least one PM reference"
@@ -9225,7 +9335,7 @@ def materialize_closed_relation_facts(
                 )
             pm0_tid = pm_tids[0]
             pm1_tid = pm_tids[1] if len(pm_tids) > 1 else pm_tids[0]
-        if fact.layout in {"zigzag", "zigzag_feature", "joined_zigzag"}:
+        if fact.layout in {"zigzag", "zigzag_k", "zigzag_feature", "joined_zigzag"}:
             metadata_tid = actual_metadata.get(fact)
             if metadata_tid is None:
                 raise RelationCompositionError(
@@ -9312,6 +9422,11 @@ def materialize_closed_relation_facts(
                 raise RelationCompositionError(
                     "K-rank sharded relation full shape is not the declared equal-shard gather"
                 )
+        elif fact.layout == "zigzag_k":
+            if (not shard0_shape or any(d <= 0 for d in (*full_shape, *shard0_shape))
+                    or full_shape != (len(pm_tids)*shard0_shape[0], *shard0_shape[1:])
+                    or region.num_ranks != len(pm_tids) or region.total_tokens != full_shape[0]):
+                raise RelationCompositionError("K zigzag metadata rank/token/shape mismatch")
         elif fact.layout == "zigzag_feature":
             if fact.gather_dim != 1 or len(full_shape) < 2 or len(shard0_shape) != len(full_shape):
                 raise RelationCompositionError("zigzag-feature relation requires rank≥2 dim-1 feature sharding")
@@ -9767,7 +9882,7 @@ def build_closed_dependent_chain_plan(
             )
     by_step = {step.step_id: step for step in proof.steps}
     for certificate in relation.certificates:
-        if not isinstance(certificate, FaithfulShuffleCertificate):
+        if not isinstance(certificate, (FaithfulShuffleCertificate, KRankShuffleEntryCertificate)):
             continue
         sm_step = by_step[certificate.output_step_triple[0]]
         if len(sm_step.input_tids) < 2:
@@ -10188,6 +10303,16 @@ _register_closed_rule_specs(
         "FW_float", "composer:render_closed_float_segment", (),
     ),
     ClosedRuleSpec(
+        "fw-shuffle-sharded-to-zigzag-k", KRankShuffleEntryCertificate,
+        ("TrainVerify.Denote.RelationCompiler.ZigzagKRel.of_sharded",),
+        "FW_maybe_shuffle", "k_shuffle_entry_renderer:render_closed_k_shuffle_entry_segment", (),
+    ),
+    ClosedRuleSpec(
+        "bw-unshuffle-sharded-to-zigzag-k", KRankShuffleEntryCertificate,
+        ("TrainVerify.Denote.RelationCompiler.ZigzagKRel.of_sharded",),
+        "BW_maybe_unshuffle", "k_shuffle_entry_renderer:render_closed_k_shuffle_entry_segment", (),
+    ),
+    ClosedRuleSpec(
         "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank", FaithfulShuffleCertificate,
         ("TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.of_sources",),
         "FW_maybe_shuffle", "composer:render_closed_shuffle_entry_segment", (),
@@ -10534,6 +10659,9 @@ def build_certificate_transition_specs(
             pre = tuple(_fact(cert.relation_kind, refs) for refs in cert.input_relation_step_triples)
             post = tuple(_fact(cert.relation_kind, refs) for refs in cert.output_step_triples)
             footprint_groups = tuple(cert.output_step_triples)
+        elif type(cert) is KRankShuffleEntryCertificate:
+            pre, post = (cert.input_fact,), (cert.output_fact,)
+            footprint_groups = (cert.output_step_triple,)
         elif type(cert) is FrontierUnshuffleCertificate or type(cert) is FaithfulShuffleCertificate:
             pre = (_fact(cert.pre_layout, cert.input_step_triple),)
             post = (_fact(cert.post_layout, cert.output_step_triple),)
@@ -11444,6 +11572,32 @@ def _dependency_for_input(
     return matches[0]
 
 
+def compile_k_shuffle_entry_boundary(ir: GoalIR, proof: ProofPlan) -> RelationPlan:
+    """Compile a shared zigzag-K post fact, NOT an ordinary LineageGoal terminal."""
+    sink = []
+    frontiers, layouts = normalize_relation_frontiers(
+        proof, (tuple(proof.target_steps),), ("zigzag_k",),
+        rules=("shuffle_k_entry",), goal_ir=ir, certificate_sink=sink)
+    _closed, frontiers, layouts = close_k_rank_init_authority(ir, frontiers, layouts)
+    certs = tuple(sink)
+    if len(certs) != 1:
+        raise RelationCompositionError("K shuffle singleton boundary requires one certificate")
+    regions, _ = resolve_zigzag_metadata_regions(ir, certs, (), ())
+    transitions = build_certificate_transition_specs(proof, certs)
+    external = select_unproduced_external_pre_facts(transitions)
+    base = RelationPlan(
+        family="cp-shuffle-k-entry-boundary", terminal_rule_id="cp-shuffle-k-entry-boundary",
+        synchronized_steps=(), certificates=certs,
+        unresolved_frontiers=frontiers, unresolved_layouts=layouts,
+        unresolved_side_conditions=(), zigzag_regions=regions,
+        transition_specs=transitions, coverage_plan=build_exact_node_coverage_plan(ir, transitions),
+        dependency_plan=build_transition_dependency_plan(transitions, external_pre_facts=external),
+        atomic_schedule=build_atomic_schedule(ir, transitions, external_pre_facts=external))
+    if frontiers or layouts:
+        return base
+    return replace(base, dependent_chain_plan=build_closed_dependent_chain_plan(ir, proof, base))
+
+
 def compile_relation_plan(
     ir: GoalIR,
     proof: ProofPlan,
@@ -11452,6 +11606,10 @@ def compile_relation_plan(
     deduplicate_frontiers: bool = True,
 ) -> RelationPlan:
     """Compile registered terminal relation families without hiding backbone gaps."""
+    if (ir.pm_num_ranks != 2 and ir.sm_nodes and ir.pm_nodes
+            and {n.op for n in (*ir.sm_nodes, *ir.pm_nodes)} in
+                ({"FW_maybe_shuffle"}, {"BW_maybe_unshuffle"})):
+        return compile_k_shuffle_entry_boundary(ir, proof)
     sharded_embedding_error = None
     try:
         terminal_embedding = match_k_rank_sharded_ids_embedding_terminal(ir, proof)

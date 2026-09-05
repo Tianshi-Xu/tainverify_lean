@@ -537,6 +537,13 @@ def render_closed_relation_declarations(chain, namespace: str) -> str:
                 f".labelChunks {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "
                 f"0 {shape_text(fact.full_shape)} {shape_text(fact.shard_shape)}"
             )
+        elif fact.kind == "zigzag_k":
+            if fact.metadata_tid is None or not fact.pm_tids:
+                raise ValueError(f"K zigzag fact lacks metadata/ranks: {fact.fact_id}")
+            constructor = (
+                f".zigzagK {fact.sm_tid} {shape_text(fact.pm_tids)} {fact.metadata_tid} "
+                f"{shape_text(fact.full_shape)} {shape_text(fact.shard_shape)}"
+            )
         elif fact.kind == "zigzag":
             if fact.metadata_tid is None:
                 raise ValueError(f"zigzag fact lacks metadata: {fact.fact_id}")

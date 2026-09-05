@@ -22,6 +22,35 @@ not a new real-model backward authority or publication-completeness claim.
 The frozen final focused gate passes 73 tests. All three whole-model canonical
 bundles regenerate byte-identically; no publication artifacts were updated.
 
+## Ordered-K singleton entry compiler
+
+The shared compiler now exposes a retained `zigzag_k` boundary for homogeneous
+`FW_maybe_shuffle` or `BW_maybe_unshuffle` singleton entry graphs with positive
+K (the existing CP2 route is preserved). Typed certificates bind ordered graph
+writers, source bindings, explicit replica groups, shapes, and packed metadata
+provenance. The initial domain uses positive tensor extents and two-element
+(single-sequence) metadata; packed multi-sequence inputs are not yet admitted.
+The boundary is shared across target projections, not an ordinary public gather
+terminal, and the public extractor rejects that substitution.
+
+Parent Lean checks cover FW/BW CP3 inhabited input/output witnesses, K1/K5
+conditional entry certificates, and CP3 graphs whose node order differs from
+semantic rank order. All eight positive sources compile with the existing
+generated native-decision baseline and no other nonstandard axioms. Wrong graph
+buddy order, an overwritten retained fact, and FW/BW in-place source overwrites
+are rejected by Lean. The latter currently reach rendering but cannot pass the
+kernel gate; cross-buddy source overwrite is rejected by dependency planning.
+The parent focused gate passes 125 tests; eight additional coordinated-metadata
+and cross-buddy negatives also pass. Independent base and delta reviews passed.
+All three canonical model bundles remain byte-identical; no publication output
+was updated.
+
+Composability beyond this singleton graph remains open: a supported CP3
+`FW_contiguous` prefix followed by shuffle has a supported local proof plan but
+relation compilation rejects it with `direct gather fixed point did not preserve
+target authority`. Closing that prefix-to-entry boundary is the next compiler
+slice; no ring/attention or compound support is inferred from this entry.
+
 ## Ordered-K shared relation foundation
 
 `RelationCompiler.ZigzagKRel` and `RelationFact.zigzagK` retain the canonical
@@ -40,9 +69,9 @@ modules; the audited declarations use at most kernel3. Focused downstream
 K-rank modules and the four existing CP2 entry proofs also compile against the
 new relation module. Independent exact-commit semantic review passed.
 
-This is a shared semantic boundary, not arbitrary-K compiler acceptance. The
-K-entry certificate, matcher, materializer and singleton renderer remain the
-next slice; existing CP2 interfaces and compiler acceptance are unchanged.
+This is the shared semantic foundation for the singleton entry compiler above.
+Existing CP2 interfaces are unchanged; the broader K-prefix composition and
+ring-attention obligations remain separate.
 
 ## CP frontier: arbitrary-K single-sequence inverse
 
@@ -56,12 +85,13 @@ pinned nnScaler metadata equations. The tail can have zero volume.
 rank-order gather `[0,5,1,4,2,3]` from canonical order. Both modules build;
 the two core and six witness declarations have kernel3-or-less axioms.
 
-This is a mathematical prerequisite, **not CP/ring compiler closure**. Packed
-multi-sequence inverse, process-group ownership binding, generic-K relation
-certificates/renderers, and ring attention remain separate obligations.
-Compiler acceptance beyond CP2 is unchanged; CP>2 remains rejected. The synthetic
-BW_maybe_unshuffle substitution on YOCO topology supplied the RED reproduction
-for the CP2 entry slice above; it is not a new captured backward model graph.
+This is a mathematical prerequisite, **not CP/ring closure**. Packed
+multi-sequence inverse, general process-group ownership composition, and ring
+attention remain separate obligations. The K singleton entry compiler above
+uses its own explicit graph authority checks; the inverse alone does not widen
+compiler acceptance. The synthetic BW_maybe_unshuffle substitution on YOCO
+topology supplied the RED reproduction for the CP2 entry slice above; it is not
+a new captured backward model graph.
 
 ## Scope split
 

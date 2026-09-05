@@ -806,7 +806,9 @@ def _collective_shape_issue(
                 "BW_maybe_shuffle", "BW_maybe_unshuffle",
             } and len(input_shapes) == 2:
                 cp_size, cp_rank = (int(value) for value in (node.params or []))
-                if cp_size not in {1, 2} or cp_rank < 0 or cp_rank >= cp_size:
+                if (cp_size <= 0 or cp_rank < 0 or cp_rank >= cp_size
+                        or (node.op not in {"FW_maybe_shuffle", "BW_maybe_unshuffle"}
+                            and cp_size not in {1, 2})):
                     return Diagnostic(
                         DiagnosticCode.INVALID_SIGNATURE,
                         f"operator {node.op}: unsupported cpSize or invalid cpRank",
