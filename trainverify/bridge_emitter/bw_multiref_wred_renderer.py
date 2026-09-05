@@ -6,15 +6,12 @@ def render_closed_bw_multiref_wred_segment(ir, relation, segment_id: str) -> str
     try:
         from .composer import _node_text, _render_mixed_final_value, _select_exact_typed_certificate, _shape_text
         from .relation_compiler import KRankBWMultirefSumCertificate, KRankAllReduceReconstructionCertificate
+        from .bw_multiref_sum_renderer import render_multiref_gather_value
     except ImportError:
         from composer import _node_text, _render_mixed_final_value, _select_exact_typed_certificate, _shape_text
         from relation_compiler import KRankBWMultirefSumCertificate, KRankAllReduceReconstructionCertificate
+        from bw_multiref_sum_renderer import render_multiref_gather_value
     rule="bw-multiref-sum-sharded-k-rank"
-    contracts={
-        (1,2):"TrainVerify.Denote.tensorSum_gather_dim1_4_1_2_32_g181",
-        (1,3):"TrainVerify.Denote.tensorSum_triple_gather_dim1_4_1_8_32_g114",
-        (2,2):"TrainVerify.Denote.tensorSum_pair_split_dim2_4_1_8_32",
-    }
     chain=relation.dependent_chain_plan
     segment=next((s for s in chain.segments if s.segment_id==segment_id),None)
     if segment is None or len(segment.transition_ids)<2:
@@ -26,14 +23,10 @@ def render_closed_bw_multiref_wred_segment(ir, relation, segment_id: str) -> str
     if len(producers)!=1 or not wred_transitions or len(transitions)!=1+len(wred_transitions):
         raise ValueError("BW_multiref/WRED family cardinality is malformed")
     transition=producers[0]
-    typed=[c for c in relation.certificates if type(c) is KRankBWMultirefSumCertificate
-           and c.rule_id==transition.rule_id and c.lean_theorem==transition.lean_theorem
-           and tuple(sorted(c.input_facts))==transition.pre_facts and (c.output_fact,)==transition.post_facts]
-    if transition.rule_id!=rule or len(typed)!=1:
-        raise ValueError("BW_multiref sum requires one exact typed certificate")
-    cert=typed[0];arity=len(cert.input_facts)
-    if contracts.get((cert.gather_dim,arity))!=cert.lean_theorem:
-        raise ValueError("BW_multiref sum theorem/axis/arity identity mismatch")
+    cert=_select_exact_typed_certificate(relation,transition,rule,
+        "TrainVerify.Denote.tensorSum_allGather_dim_K", KRankBWMultirefSumCertificate,
+        lambda c: (tuple(sorted(set(c.input_facts))), (c.output_fact,)))
+    arity=len(cert.input_facts)
     wred_certs=[]
     for item in wred_transitions:
         wred_certs.append((item,_select_exact_typed_certificate(
@@ -54,7 +47,12 @@ def render_closed_bw_multiref_wred_segment(ir, relation, segment_id: str) -> str
     if not set(after.fact_ids)<=(fresh|set(before.fact_ids)):
         raise ValueError("BW_multiref sum post-state introduces an unproved fact")
     k=len(output.pm_tids)
-    if (k!=4 or cert.rank_count!=k or arity not in (2,3) or output.kind!="sharded"
+    if (k<=0 or cert.rank_count!=k or arity<=0 or output.kind!="sharded"
+            or cert.full_shape!=output.full_shape or cert.shard_shape!=output.shard_shape
+            or cert.gather_dim!=output.gather_dim
+            or len(output.shard_shape)!=3 or cert.gather_dim not in (1,2)
+            or any(type(d) is not int or d<=0 for d in output.shard_shape)
+            or output.full_shape!=tuple(d*k if i==cert.gather_dim else d for i,d in enumerate(output.shard_shape))
             or any(r.kind!="sharded" or len(r.pm_tids)!=k for r in inputs)
             or any((r.full_shape,r.shard_shape,r.gather_dim)!=(output.full_shape,output.shard_shape,output.gather_dim) for r in inputs)):
         raise ValueError("BW_multiref sum metadata is not exact")
@@ -139,44 +137,7 @@ def render_closed_bw_multiref_wred_segment(ir, relation, segment_id: str) -> str
     for r,(helper,node) in enumerate(zip(ph,pms)):
         lines.extend([f"    have hPmWriter{r} : pmFinal {output.pm_tids[r]} = tensorSum [{', '.join(f'pmFinal {x.pm_tids[r]}' for x in inputs)}] :=",f"      {helper} pmStore",
                       f"    have hOutShape{r} : (pmFinal {output.pm_tids[r]}).shape = {shard} := by",f"      rw [hPmWriter{r}, tensorSum_shape]",f"      exact hi0.shard_shapes _ (by simp)"])
-    if arity == 2 and dim == 2:
-        for j in range(arity):
-            for r in range(k):
-                lines.extend([
-                    f"    have hChunk{j}_{r} : chunkPrimDimN {dim} {k} {r} (smFinal {inputs[j].sm_tid}) = pmFinal {inputs[j].pm_tids[r]} := by",
-                    f"      rw [hv{j}]",
-                    "      simpa only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some] using",
-                    f"        (chunkPrimDimN_allGatherPrimDimN_dim2_4_1_8_8 {lists[j]} {r} (by native_decide) (by simp only [List.length_cons, List.length_nil]) hi{j}.shard_shapes)",
-                ])
-        lines.extend([f"    have hcomm := {cert.lean_theorem} (smFinal {inputs[0].sm_tid}) (smFinal {inputs[1].sm_tid}) hi0.full_shape hi1.full_shape",
-                      f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {k} 0 {olist} := by",
-                      "      rw [hSmWriter, hcomm, "+", ".join(f"hChunk{j}_{r}" for j in range(arity) for r in range(k))+"]",
-                      "      rw ["+", ".join(f"← hPmWriter{r}" for r in range(k))+"]"])
-    elif arity == 2:
-        lines.extend([f"    have hcomm := {cert.lean_theorem}",
-                      *(f"      (pmFinal {t})" for rec in inputs for t in rec.pm_tids),
-                      *(f"      (hi{j}.shard_shapes (pmFinal {inputs[j].pm_tids[r]}) (by simp))"
-                        for j in range(arity) for r in range(k)),
-                      f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {k} 0 {olist} := by",
-                      "      rw [hSmWriter, hv0, hv1, hcomm]",
-                      "      rw ["+", ".join(f"← hPmWriter{r}" for r in range(k))+"]"])
-    else:
-        for r in range(k):
-            lines.extend([
-                f"    have hChunk{r} : chunkPrimDimN {dim} {k} {r} (smFinal {inputs[2].sm_tid}) = pmFinal {inputs[2].pm_tids[r]} := by",
-                "      rw [hv2]",
-                f"      simpa only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some] using",
-                f"        (chunkPrimDimN_allGatherPrimDimN_dim1_4_1_2_32 {lists[2]} {r} (by native_decide) (by simp only [List.length_cons, List.length_nil]) hi2.shard_shapes)",
-            ])
-        lines.extend([f"    have hcomm := {cert.lean_theorem}",
-                      *(f"      (pmFinal {t})" for rec in inputs[:2] for t in rec.pm_tids),
-                      f"      (smFinal {inputs[2].sm_tid})",
-                      *(f"      (hi{j}.shard_shapes (pmFinal {inputs[j].pm_tids[r]}) (by simp))"
-                        for j in range(2) for r in range(k)),
-                      "      hi2.full_shape",
-                      f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {k} 0 {olist} := by",
-                      "      rw [hSmWriter, hv0, hv1, hcomm, "+", ".join(f"hChunk{r}" for r in range(k))+"]",
-                      "      rw ["+", ".join(f"← hPmWriter{r}" for r in range(k))+"]"])
+    lines.extend(render_multiref_gather_value(cert, inputs, output, lists, olist, shard))
     lines.extend([f"    have hOutValueList : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {olist}.length 0 {olist} := by",
                   "      simpa only [List.length_cons, List.length_nil] using hOutValue",f"    have hFullShape : (smFinal {output.sm_tid}).shape = {full} := by",
                   "      rw [hSmWriter, tensorSum_shape]","      exact hi0.full_shape",f"    have hout : {output.fact_id}.Holds smFinal pmFinal := by",

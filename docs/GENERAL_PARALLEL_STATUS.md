@@ -102,10 +102,50 @@ Incremental evidence for this slice:
 
 These are focused research receipts, not a new full-suite/three-model publication.
 
+## Completed vertical slice: dynamic-K / variadic `BW_multiref` sum
+
+`bw-multiref-sum-sharded-k-rank` now uses `tensorSum_allGather_dim_K`
+from `denote.KRankBWMultiref`, shared by singleton and WRED compound renderers.
+The value theorem supports any positive K and nonempty ordered operand list,
+with homogeneous shard shapes. It preserves the scalar fold's order and
+multiplicity; it does not expand one theorem per K or per arity.
+
+The matcher currently accepts positive rank-3 shards along dim 1 or dim 2,
+with K >= 2 and exact rank order, input shapes, writer parameters and projection.
+K=1 remains ambiguous at this shape-inferred frontier, so it fails closed
+rather than guessing an ownership axis. The theorem itself has no K=2 lower bound.
+Typed certificates now bind full/shard shapes; selectors authenticate the exact
+payload, and production compound imports include the new theorem module.
+
+A real repeated-operand boundary `sum(a,a)` exposed two separate failures:
+transition dependency sets deduplicate facts while operand payloads must not;
+and sequential Lean rewrites of the same SM value fail on the second rewrite.
+Selectors now match the dependency set without changing the operand payload,
+and the shared value proof builds positional list congruence before rewriting.
+
+Incremental evidence:
+
+- `137 passed in 16.44s`, including matcher/metadata/digest mutations, actual
+  transition-builder repeated-input regression, production WRED import header,
+  existing LayerNorm/BW_sum and actual GPT Goal 107 integration.
+- Lake built the new theorem and committed K=3 / arity=5 generated witness.
+- Exact-source Lean and axiom checks passed for K=5, arity=1, shard width=1,
+  repeated operands and the WRED compound path.
+- All 12 real Goal 107 affected segments passed fresh exact-source Lean and
+  axiom audit in 61.89s: `202,231,233,243,277,279,292,324,327,338,363,366`.
+- General theorem has only `propext`, `Classical.choice`, `Quot.sound`;
+  generated witnesses additionally carry the established `native_decide` items.
+- Canonical GPT bundle remains byte-identical (97 files / 1,968,291 bytes).
+- Independent closure review passed after the repeated-input fix.
+
+These are conditional segment and focused regression receipts, not a new
+three-model whole-publication run.
+
 ## Remaining ordinary TP and other axes
 
-Fixed-layout/fixed-rank BW_linear families, BW_layernorm parameter reductions,
-and BW_multiref sum backends still require their own semantic migrations.
+Fixed-layout/fixed-rank BW_linear families and BW_layernorm parameter reductions
+still require their own semantic migrations. The next checked boundary is the
+column-sharded BW_linear dX family (real Goal 107 segment 195).
 Then proceed to CP/ring, EP/MoE, DP, PP and only compose independently closed
 axes. Arbitrary `DP×TP×PP×CP×EP` configuration support is not implemented.
 

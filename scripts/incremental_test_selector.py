@@ -20,6 +20,7 @@ FULL_PYTHON_TESTS = (
     "scripts/tests/test_compound_rule_dispatch.py",
     "scripts/tests/test_k_rank_gelu_renderer.py",
     "scripts/tests/test_k_rank_bw_layernorm.py",
+    "scripts/tests/test_k_rank_bw_multiref.py",
     "scripts/tests/test_k_rank_bw_sum.py",
     "scripts/tests/test_sharded_contiguous_propagation.py",
     "scripts/tests/test_proof_compiler.py",
@@ -99,6 +100,30 @@ BW_LINEAR_DX_PATHS = frozenset((
     "scripts/tests/test_proof_compiler.py",
     "scripts/incremental_test_selector.py",
     "scripts/tests/test_incremental_test_selector.py",
+))
+
+BW_MULTIREF_TESTS = (
+    "scripts/tests/test_k_rank_bw_multiref.py",
+    "scripts/tests/test_proof_compiler.py::test_gpt_goal107_mixed_linear_collective_tuple_is_atomic",
+    "scripts/tests/test_compound_rule_dispatch.py",
+    "scripts/tests/test_k_rank_gelu_renderer.py::test_bw_and_collective_singleton_backends_are_registry_driven",
+    "scripts/tests/test_mixed_linear_transition_sequence_renderer.py",
+    "scripts/tests/test_closed_segment_import_policy.py",
+    "scripts/tests/test_incremental_test_selector.py",
+)
+BW_MULTIREF_PATHS = frozenset((
+    "trainverify/bridge_emitter/relation_compiler.py",
+    "trainverify/bridge_emitter/bw_multiref_sum_renderer.py",
+    "trainverify/bridge_emitter/bw_multiref_wred_renderer.py",
+    "trainverify/bridge_emitter/closed_segment_import_policy.py",
+    "trainverify/denote/KRankBWMultiref.lean",
+    "trainverify/denote/GeneratedKRankBWMultirefWitness.lean",
+    "scripts/tests/test_k_rank_bw_multiref.py",
+    "scripts/tests/test_proof_compiler.py",
+    "scripts/tests/test_k_rank_gelu_renderer.py",
+    "scripts/incremental_test_selector.py",
+    "scripts/tests/test_incremental_test_selector.py",
+    "docs/GENERAL_PARALLEL_STATUS.md",
 ))
 
 BW_LAYERNORM_DX_TESTS = (
@@ -186,6 +211,19 @@ def select_gates(
         return _full_plan("release mode requires the complete Python and formal transaction")
 
     if family is not None:
+        if family == "k-rank-bw-multiref":
+            outside = tuple(path for path in paths if path not in BW_MULTIREF_PATHS)
+            if outside:
+                return _full_plan("paths outside k-rank-bw-multiref family scope: " + ", ".join(outside))
+            return GatePlan(
+                pytest_nodes=BW_MULTIREF_TESTS, exact_models=("gpt2",),
+                lean_modules=("denote.KRankBWMultiref", "denote.GeneratedKRankBWMultirefWitness"),
+                staged_lean=True, axiom_audit=True, formal_publication=True,
+                explanations=(
+                    "BW_multiref ordered sum/gather changes affect GPT Goal 107 including WRED compound frames",
+                    "canonical GPT targets exclude Goal 107; compile affected exact segments separately",
+                ),
+            )
         if family == "k-rank-bw-layernorm-dx":
             outside = tuple(path for path in paths if path not in BW_LAYERNORM_DX_PATHS)
             if outside:

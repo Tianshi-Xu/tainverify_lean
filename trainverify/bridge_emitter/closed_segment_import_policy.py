@@ -49,6 +49,8 @@ def plan_closed_segment_imports(
             module = "denote.KRankTranspose23Extra"
         elif ".fw_matmul_query_axis_rank4" in theorem:
             module = "denote.KRankMatmulQueryAxis"
+        elif theorem == "TrainVerify.Denote.tensorSum_allGather_dim_K":
+            module = "denote.KRankBWMultiref"
         elif theorem == "TrainVerify.Denote.bw_layernorm_dx_allGatherPrimDimN_dim1_3d":
             module = "denote.KRankBWLayernorm"
         else:

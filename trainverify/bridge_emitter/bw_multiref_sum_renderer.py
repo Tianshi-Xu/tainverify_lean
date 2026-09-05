@@ -10,25 +10,15 @@ def render_closed_k_rank_bw_multiref_sum_segment(ir, relation, segment_id: str) 
         from composer import _node_text, _render_mixed_final_value, _select_exact_typed_certificate, _shape_text
         from relation_compiler import get_closed_rule_spec
     spec=get_closed_rule_spec("bw-multiref-sum-sharded-k-rank");rule=spec.rule_id
-    contracts={
-        (1,2):spec.lean_theorems[1],
-        (1,3):spec.lean_theorems[2],
-        (2,2):spec.lean_theorems[0],
-    }
     chain=relation.dependent_chain_plan
     segment=next((s for s in chain.segments if s.segment_id==segment_id),None)
     if segment is None or len(segment.transition_ids)!=1:
         raise ValueError("BW_multiref sum requires one atomic transition")
     transition={t.transition_id:t for t in relation.transition_specs}.get(segment.transition_ids[0])
     if transition is None: raise ValueError("BW_multiref sum transition is missing")
-    typed=[c for c in relation.certificates if type(c) is spec.certificate_type
-           and c.rule_id==transition.rule_id and c.lean_theorem==transition.lean_theorem
-           and tuple(sorted(c.input_facts))==transition.pre_facts and (c.output_fact,)==transition.post_facts]
-    if transition.rule_id!=rule or len(typed)!=1:
-        raise ValueError("BW_multiref sum requires one exact typed certificate")
-    cert=typed[0];arity=len(cert.input_facts)
-    if contracts.get((cert.gather_dim,arity))!=cert.lean_theorem:
-        raise ValueError("BW_multiref sum theorem/axis/arity identity mismatch")
+    cert=_select_exact_typed_certificate(relation,transition,rule,spec.lean_theorems[0],
+        spec.certificate_type,lambda c: (tuple(sorted(set(c.input_facts))), (c.output_fact,)))
+    arity=len(cert.input_facts)
     records={r.source:r for r in chain.relation_facts}
     try: inputs=tuple(records[f] for f in cert.input_facts);output=records[cert.output_fact]
     except KeyError as exc: raise ValueError("BW_multiref sum fact is not materialized") from exc
@@ -38,7 +28,12 @@ def render_closed_k_rank_bw_multiref_sum_segment(ir, relation, segment_id: str) 
     if not set(after.fact_ids)<=({output.fact_id}|set(before.fact_ids)):
         raise ValueError("BW_multiref sum post-state introduces an unproved fact")
     k=len(output.pm_tids)
-    if (k!=4 or cert.rank_count!=k or arity not in (2,3) or output.kind!="sharded"
+    if (k<=0 or cert.rank_count!=k or arity<=0 or output.kind!="sharded"
+            or cert.full_shape!=output.full_shape or cert.shard_shape!=output.shard_shape
+            or cert.gather_dim!=output.gather_dim
+            or len(output.shard_shape)!=3 or cert.gather_dim not in (1,2)
+            or any(type(d) is not int or d<=0 for d in output.shard_shape)
+            or output.full_shape!=tuple(d*k if i==cert.gather_dim else d for i,d in enumerate(output.shard_shape))
             or any(r.kind!="sharded" or len(r.pm_tids)!=k for r in inputs)
             or any((r.full_shape,r.shard_shape,r.gather_dim)!=(output.full_shape,output.shard_shape,output.gather_dim) for r in inputs)):
         raise ValueError("BW_multiref sum metadata is not exact")
@@ -89,44 +84,7 @@ def render_closed_k_rank_bw_multiref_sum_segment(ir, relation, segment_id: str) 
     for r,(helper,node) in enumerate(zip(ph,pms)):
         lines.extend([f"    have hPmWriter{r} : pmFinal {output.pm_tids[r]} = tensorSum [{', '.join(f'pmFinal {x.pm_tids[r]}' for x in inputs)}] :=",f"      {helper} pmStore",
                       f"    have hOutShape{r} : (pmFinal {output.pm_tids[r]}).shape = {shard} := by",f"      rw [hPmWriter{r}, tensorSum_shape]",f"      exact hi0.shard_shapes _ (by simp)"])
-    if arity == 2 and dim == 2:
-        for j in range(arity):
-            for r in range(k):
-                lines.extend([
-                    f"    have hChunk{j}_{r} : chunkPrimDimN {dim} {k} {r} (smFinal {inputs[j].sm_tid}) = pmFinal {inputs[j].pm_tids[r]} := by",
-                    f"      rw [hv{j}]",
-                    "      simpa only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some] using",
-                    f"        (chunkPrimDimN_allGatherPrimDimN_dim2_4_1_8_8 {lists[j]} {r} (by native_decide) (by simp only [List.length_cons, List.length_nil]) hi{j}.shard_shapes)",
-                ])
-        lines.extend([f"    have hcomm := {cert.lean_theorem} (smFinal {inputs[0].sm_tid}) (smFinal {inputs[1].sm_tid}) hi0.full_shape hi1.full_shape",
-                      f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {k} 0 {olist} := by",
-                      "      rw [hSmWriter, hcomm, "+", ".join(f"hChunk{j}_{r}" for j in range(arity) for r in range(k))+"]",
-                      "      rw ["+", ".join(f"← hPmWriter{r}" for r in range(k))+"]"])
-    elif arity == 2:
-        lines.extend([f"    have hcomm := {cert.lean_theorem}",
-                      *(f"      (pmFinal {t})" for rec in inputs for t in rec.pm_tids),
-                      *(f"      (hi{j}.shard_shapes (pmFinal {inputs[j].pm_tids[r]}) (by simp))"
-                        for j in range(arity) for r in range(k)),
-                      f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {k} 0 {olist} := by",
-                      "      rw [hSmWriter, hv0, hv1, hcomm]",
-                      "      rw ["+", ".join(f"← hPmWriter{r}" for r in range(k))+"]"])
-    else:
-        for r in range(k):
-            lines.extend([
-                f"    have hChunk{r} : chunkPrimDimN {dim} {k} {r} (smFinal {inputs[2].sm_tid}) = pmFinal {inputs[2].pm_tids[r]} := by",
-                "      rw [hv2]",
-                f"      simpa only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some] using",
-                f"        (chunkPrimDimN_allGatherPrimDimN_dim1_4_1_2_32 {lists[2]} {r} (by native_decide) (by simp only [List.length_cons, List.length_nil]) hi2.shard_shapes)",
-            ])
-        lines.extend([f"    have hcomm := {cert.lean_theorem}",
-                      *(f"      (pmFinal {t})" for rec in inputs[:2] for t in rec.pm_tids),
-                      f"      (smFinal {inputs[2].sm_tid})",
-                      *(f"      (hi{j}.shard_shapes (pmFinal {inputs[j].pm_tids[r]}) (by simp))"
-                        for j in range(2) for r in range(k)),
-                      "      hi2.full_shape",
-                      f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {k} 0 {olist} := by",
-                      "      rw [hSmWriter, hv0, hv1, hcomm, "+", ".join(f"hChunk{r}" for r in range(k))+"]",
-                      "      rw ["+", ".join(f"← hPmWriter{r}" for r in range(k))+"]"])
+    lines.extend(render_multiref_gather_value(cert, inputs, output, lists, olist, shard))
     lines.extend([f"    have hOutValueList : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {olist}.length 0 {olist} := by",
                   "      simpa only [List.length_cons, List.length_nil] using hOutValue",f"    have hFullShape : (smFinal {output.sm_tid}).shape = {full} := by",
                   "      rw [hSmWriter, tensorSum_shape]","      exact hi0.full_shape",f"    have hout : {output.fact_id}.Holds smFinal pmFinal := by",
@@ -139,3 +97,32 @@ def render_closed_k_rank_bw_multiref_sum_segment(ir, relation, segment_id: str) 
                   "    simp only [List.mem_append] at covered","    rcases covered with fresh | old","    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh","      rcases fresh with rfl","      exact hout","    · exact hframe fact old","",
                   "set_option maxRecDepth 8192 in",f"private def {segment_id} :",f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",f"  smNodes := {smn}",f"  pmNodes := {pmn}","  sound := by","    intro smStore pmStore hstate",f"    exact {segment_id}_sound smStore pmStore hstate",""])
     return "\n".join(lines)
+
+
+def render_multiref_gather_value(cert, inputs, output, lists, olist, shard):
+    """Shared value proof for singleton and atomic WRED frames."""
+    k=cert.rank_count;dim=cert.gather_dim
+    columns="["+", ".join(lists)+"]"
+    cases=" | ".join("rfl" for _ in inputs)
+    lines=[f"    have hcomm := {cert.lean_theorem} {dim} {k} {shard} {columns}",
+        "      (by decide) (by simp) (by decide)",
+        "      (by", "        intro xs hxs",
+        "        simp only [List.mem_cons, List.not_mem_nil, or_false] at hxs",
+        f"        rcases hxs with {cases} <;> rfl)",
+        "      (by", "        intro xs hxs",
+        "        simp only [List.mem_cons, List.not_mem_nil, or_false] at hxs",
+        f"        rcases hxs with {cases}"]
+    lines.extend(f"        · exact hi{j}.shard_shapes" for j in range(len(inputs)))
+    lines[-1]+= ")"
+    input_eq="rfl"
+    for j in reversed(range(len(inputs))):
+        input_eq=f"(congrArg₂ List.cons hv{j} {input_eq})"
+    lines.extend([
+        f"    have hInputs : [{', '.join(f'smFinal {r.sm_tid}' for r in inputs)}] =",
+        f"        [{', '.join(f'allGatherPrimDimN {dim} {k} 0 {lst}' for lst in lists)}] :=",
+        f"      {input_eq}",
+        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN {dim} {k} 0 {olist} := by",
+        "      rw [hSmWriter, hInputs]",
+        "      rw ["+", ".join(f"hPmWriter{r}" for r in range(k))+"]",
+        "      simpa [tensorSumRanks, List.ofFn_succ] using hcomm"])
+    return lines

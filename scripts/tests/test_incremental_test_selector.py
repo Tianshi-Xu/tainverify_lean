@@ -172,3 +172,13 @@ def test_bw_layernorm_dx_family_selects_real_goal107_and_exact_lean():
     assert plan.staged_lean and plan.axiom_audit and plan.formal_publication
     outside=selector.select_gates(("trainverify/denote/Denote.lean",),family="k-rank-bw-layernorm-dx")
     assert outside.full_python
+
+
+def test_multiref_family_selects_actual_gpt_and_formal_gates():
+    plan=selector.select_gates(("trainverify/denote/KRankBWMultiref.lean",),family="k-rank-bw-multiref")
+    assert not plan.full_python
+    assert "scripts/tests/test_k_rank_bw_multiref.py" in plan.pytest_nodes
+    assert "scripts/tests/test_proof_compiler.py::test_gpt_goal107_mixed_linear_collective_tuple_is_atomic" in plan.pytest_nodes
+    assert plan.lean_modules == ("denote.KRankBWMultiref","denote.GeneratedKRankBWMultirefWitness")
+    assert plan.staged_lean and plan.axiom_audit and plan.formal_publication
+    assert selector.select_gates(("trainverify/denote/Denote.lean",),family="k-rank-bw-multiref").full_python

@@ -1783,7 +1783,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
         "bw-multiref-sum-sharded-k-rank",
     )
     assert transitions[dim2_pair_sum.transition_ids[0]].lean_theorem == (
-        "TrainVerify.Denote.tensorSum_pair_split_dim2_4_1_8_32"
+        "TrainVerify.Denote.tensorSum_allGather_dim_K"
     )
     dim2_pair_sum_source = render_closed_segment(
         ir, relation, dim2_pair_sum.segment_id

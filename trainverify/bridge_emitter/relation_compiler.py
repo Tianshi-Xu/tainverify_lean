@@ -7637,6 +7637,8 @@ class KRankBWMultirefSumCertificate:
     sm_step_id: str
     pm_step_ids: tuple[str, ...]
     lean_theorem: str
+    full_shape: tuple[int, ...] = ()
+    shard_shape: tuple[int, ...] = ()
 
 
 def advance_k_rank_bw_multiref_sum_frontiers(plan, frontiers, layouts):
@@ -7651,36 +7653,35 @@ def advance_k_rank_bw_multiref_sum_frontiers(plan, frontiers, layouts):
         if sm.op!="BW_multiref" or sm.side!="sm" or any(x.op!="BW_multiref" or x.side!="pm" for x in pms):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         k=len(pms);arity=len(sm.input_bindings)
+        if sm.rank!=0 or any(x.parameters or x.output_projection for x in (sm,*pms)):
+            raise RelationCompositionError("K-rank BW_multiref writer rank/params/projection mismatch")
         if arity<=0 or any(len(x.input_bindings)!=arity for x in pms) or tuple(int(x.rank) for x in pms)!=tuple(range(k)):
             raise RelationCompositionError("K-rank BW_multiref input/rank arity mismatch")
         full=tuple(sm.output_shape);shards=tuple(tuple(x.output_shape) for x in pms);shard=shards[0]
+        if len(full)!=3 or any(len(x)!=3 or any(type(d) is not int or d<=0 for d in x) for x in (full,*shards)):
+            raise RelationCompositionError("K-rank BW_multiref requires positive rank3 shapes")
         candidates=[d for d in range(len(full)) if full[d]==shard[d]*k and all(full[i]==shard[i] for i in range(len(full)) if i!=d)]
         if any(x!=shard for x in shards) or len(candidates)!=1:
             raise RelationCompositionError("K-rank BW_multiref output sharding is ambiguous")
         dim=candidates[0];inputs=[]
+        if dim not in (1,2):
+            raise RelationCompositionError("K-rank BW_multiref requires dim1/dim2 authority")
         for arg in range(arity):
             refs=(sm.input_bindings[arg],*(x.input_bindings[arg] for x in pms))
             try: steps=(by_id[refs[0]],*(by_id[x] for x in refs[1:]))
             except KeyError as exc: raise RelationCompositionError("K-rank BW_multiref input writer unresolved") from exc
+            if steps[0].side!="sm" or steps[0].rank!=0 or any(x.side!="pm" or x.rank!=r for r,x in enumerate(steps[1:])):
+                raise RelationCompositionError("K-rank BW_multiref input writer rank order mismatch")
             if tuple(steps[0].output_shape)!=full or any(tuple(x.output_shape)!=shard for x in steps[1:]):
                 raise RelationCompositionError("K-rank BW_multiref input shapes disagree with output sharding")
             inputs.append(RelationFactSpec("sharded",refs,gather_dim=dim))
         output=RelationFactSpec("sharded",tuple(frontier),gather_dim=dim)
-        theorem_by_family = {
-            (2, 2): "TrainVerify.Denote.tensorSum_pair_split_dim2_4_1_8_32",
-            (1, 2): "TrainVerify.Denote.tensorSum_gather_dim1_4_1_2_32_g181",
-            (1, 3): "TrainVerify.Denote.tensorSum_triple_gather_dim1_4_1_8_32_g114",
-        }
-        try:
-            lean_theorem = theorem_by_family[(dim, arity)]
-        except KeyError as exc:
-            raise RelationCompositionError(
-                f"BW_multiref has no checked theorem for axis/arity {(dim, arity)}"
-            ) from exc
+        lean_theorem = "TrainVerify.Denote.tensorSum_allGather_dim_K"
         certs.append(KRankBWMultirefSumCertificate(
             rule_id="bw-multiref-sum-sharded-k-rank",rank_count=k,gather_dim=dim,
             input_facts=tuple(inputs),output_fact=output,sm_step_id=sm.step_id,
-            pm_step_ids=tuple(x.step_id for x in pms),lean_theorem=lean_theorem))
+            pm_step_ids=tuple(x.step_id for x in pms),lean_theorem=lean_theorem,
+            full_shape=full,shard_shape=shard))
         rewritten.extend(x.step_triple for x in inputs);rewritten_layouts.extend("sharded" for _ in inputs)
     return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
 
@@ -10130,13 +10131,9 @@ _register_closed_rule_specs(
     ),
     ClosedRuleSpec(
         "bw-multiref-sum-sharded-k-rank", KRankBWMultirefSumCertificate,
-        (
-            "TrainVerify.Denote.tensorSum_pair_split_dim2_4_1_8_32",
-            "TrainVerify.Denote.tensorSum_gather_dim1_4_1_2_32_g181",
-            "TrainVerify.Denote.tensorSum_triple_gather_dim1_4_1_8_32_g114",
-        ),
+        ("TrainVerify.Denote.tensorSum_allGather_dim_K",),
         "BW_multiref", "bw_multiref_sum_renderer:render_closed_k_rank_bw_multiref_sum_segment",
-        (),
+        ("denote.KRankBWMultiref",),
     ),
     ClosedRuleSpec(
         "bw-sum-scalar-broadcast-dim2-k-rank", KRankBWSumCertificate,
