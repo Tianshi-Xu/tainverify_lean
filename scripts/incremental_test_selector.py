@@ -84,7 +84,7 @@ BW_SUM_PATHS = frozenset((
 ))
 BW_LINEAR_DX_TESTS = (
     "scripts/tests/test_k_rank_bw_sum.py",
-    "scripts/tests/test_proof_compiler.py::test_real_goals_compile_fail_closed_relation_plans",
+    "scripts/tests/test_proof_compiler.py::test_gpt_goal107_mixed_linear_collective_tuple_is_atomic",
     "scripts/tests/test_mixed_linear_transition_sequence_renderer.py",
     "scripts/tests/test_closed_segment_import_policy.py",
     "scripts/tests/test_incremental_test_selector.py",

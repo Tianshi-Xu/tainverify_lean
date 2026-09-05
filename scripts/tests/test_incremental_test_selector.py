@@ -75,6 +75,10 @@ def test_bw_linear_dx_family_selects_goal107_dynamic_k_gates():
     assert plan.axiom_audit is True
     assert plan.formal_publication is True
     assert "scripts/tests/test_k_rank_bw_sum.py" in plan.pytest_nodes
+    assert (
+        "scripts/tests/test_proof_compiler.py::test_gpt_goal107_mixed_linear_collective_tuple_is_atomic"
+        in plan.pytest_nodes
+    )
     assert any("Goal 107" in reason for reason in plan.explanations)
 
 
