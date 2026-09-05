@@ -4,11 +4,11 @@ from scripts.tests.test_cp_k_entry import entry_ir, compile_entry
 from trainverify.bridge_emitter import composer
 
 
-def witness_source(op, *, prefix=False):
+def witness_source(op, *, prefix=False, prefix_reordered=False):
     if prefix:
         from scripts.tests.test_cp_k_prefix import prefix_ir, shared_prefix
         from trainverify.bridge_emitter.model_authority import materialize_target_ir
-        model, dag = shared_prefix(prefix_ir(op=op))
+        model, dag = shared_prefix(prefix_ir(op=op, prefix_reordered=prefix_reordered))
         ir = materialize_target_ir(model, 1)
         relation = dag.global_relation
     else:
@@ -88,13 +88,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--prefix", action="store_true", help="emit shared contiguous-prefix/entry witnesses")
+    parser.add_argument("--prefix-reordered", action="store_true", help="execute prefix ranks in order [2, 0, 1]")
     args = parser.parse_args()
+    if args.prefix_reordered and not args.prefix:
+        parser.error("--prefix-reordered requires --prefix")
     if not args.output_dir.is_absolute():
         parser.error("--output-dir must be absolute")
     args.output_dir.mkdir(parents=True,exist_ok=True)
     for op, name in (("FW_maybe_shuffle","CPKEntryFW.lean"),("BW_maybe_unshuffle","CPKEntryBW.lean")):
         if args.prefix:
             name = name.replace("Entry", "Prefix")
+        if args.prefix_reordered:
+            name = name.replace("Prefix", "PrefixReordered")
         path = args.output_dir / name
-        path.write_text(witness_source(op, prefix=args.prefix))
+        path.write_text(witness_source(op, prefix=args.prefix, prefix_reordered=args.prefix_reordered))
         print(path)

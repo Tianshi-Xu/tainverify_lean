@@ -13,13 +13,15 @@ from trainverify.bridge_emitter.parser import LineageGoal, Node
 from trainverify.bridge_emitter.proof_compiler import build_default_registry, compile_proof_plan
 
 
-def prefix_ir(k=3, op="FW_maybe_shuffle", reordered=False):
+def prefix_ir(k=3, op="FW_maybe_shuffle", reordered=False, *, prefix_reordered=False):
     ir = entry_ir(k, op)
     ir.sm_nodes[0].ins[0] = 30
     for r, node in enumerate(ir.pm_nodes):
         node.ins[0] = 110+r
     ir.sm_nodes.insert(0, Node(0, "FW_contiguous", [10], [30], None))
     prefix = [Node(r, "FW_contiguous", [100+r], [110+r], None) for r in range(k)]
+    if prefix_reordered:
+        prefix = prefix[-1:] + prefix[:-1]
     if reordered:
         ir.pm_nodes = ir.pm_nodes[-1:] + ir.pm_nodes[:-1]
     ir.pm_nodes = prefix + ir.pm_nodes
@@ -43,9 +45,10 @@ def shared_prefix(ir):
 
 
 @pytest.mark.parametrize("op", ["FW_maybe_shuffle", "BW_maybe_unshuffle"])
-@pytest.mark.parametrize("k,reordered", [(3, False), (5, False), (3, True)])
-def test_prefix_entry_share_exact_two_closed_segments(op, k, reordered):
-    ir = prefix_ir(k, op, reordered)
+@pytest.mark.parametrize("k", [3, 5])
+@pytest.mark.parametrize("reordered,prefix_reordered", [(False, False), (True, False), (False, True), (True, True)])
+def test_prefix_entry_share_exact_two_closed_segments(op, k, reordered, prefix_reordered):
+    ir = prefix_ir(k, op, reordered, prefix_reordered=prefix_reordered)
     assert 30 not in ir.init_lineages
     assert not {30, *range(110, 110+k)} & {tid for tid, _ in ir.sm_shapes + ir.pm_shapes}
     model, dag = shared_prefix(ir)
@@ -75,6 +78,17 @@ def test_prefix_entry_share_exact_two_closed_segments(op, k, reordered):
     assert prefix.pm_node_indices == tuple(range(k)) and entry.pm_node_indices == tuple(range(k, 2*k))
     target_ir = materialize_target_ir(model, 1)
     bodies = [composer.render_closed_segment(target_ir, relation, s.segment_id) for s in chain.segments]
+    cert = next(c for c in relation.certificates if c.rule_id == prefix.rule_id)
+    ordered_indices = tuple(next(i for i, n in enumerate(ir.pm_nodes[:k]) if n.rank == rank) for rank in range(k))
+    assert cert.pm_step_ids == tuple(f"pm:{i}:0" for i in ordered_indices)
+    segment_id = chain.segments[0].segment_id
+    frame = ", ".join(composer._node_text(n) for n in ir.pm_nodes[:k])
+    assert f"private def {segment_id}_pm_nodes : List NodeDecl := [{frame}]" in bodies[0]
+    for rank, pos in enumerate(ordered_indices):
+        assert f"pmNodes.take {pos} ++ [{segment_id}_pm_node_{rank}] ++ pmNodes.drop {pos + 1}" in bodies[0]
+    assert bodies[0].count("foldl_faithful_middle_writer") == k + 1
+    assert bodies[0].count("foldl_applyNodeDistributedFaithful_at_not_written") == k + 1
+    assert "RelationState.Holds.fold_frame" in bodies[0]
     assert "ShardedRel.fw_contiguous" in bodies[0]
     assert "ZigzagKRel.of_sharded" in bodies[1]
     assert all("sorry" not in b and "axiom" not in b for b in bodies)
@@ -164,10 +178,13 @@ def test_k1_prefix_stays_outside_existing_contiguous_renderer(op):
 
 
 @pytest.mark.parametrize("op,name", [("FW_maybe_shuffle", "CPKPrefixFW.lean"), ("BW_maybe_unshuffle", "CPKPrefixBW.lean")])
-def test_exact_prefix_composed_witness(op, name):
+@pytest.mark.parametrize("prefix_reordered", [False, True])
+def test_exact_prefix_composed_witness(op, name, prefix_reordered):
     from scripts.tests.cp_k_entry_witness import witness_source
-    source = witness_source(op, prefix=True)
-    ir = prefix_ir(op=op)
+    if prefix_reordered:
+        name = name.replace("Prefix", "PrefixReordered")
+    source = witness_source(op, prefix=True, prefix_reordered=prefix_reordered)
+    ir = prefix_ir(op=op, prefix_reordered=prefix_reordered)
     model, dag = shared_prefix(ir)
     relation = dag.global_relation
     assert relation is not None and relation.dependent_chain_plan is not None

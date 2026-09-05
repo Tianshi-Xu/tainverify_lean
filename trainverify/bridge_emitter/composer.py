@@ -8760,14 +8760,30 @@ def render_closed_k_rank_contiguous_segment(
         raise ValueError("K-rank contiguous relation metadata is not exact")
     if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
         raise ValueError("K-rank contiguous transition footprint is not exact 1xK")
+    if ir.sm_num_ranks != 1 or ir.pm_num_ranks != k:
+        raise ValueError("K-rank contiguous graph rank headers disagree with certificate")
+    if any(re.fullmatch(r"pm:(0|[1-9][0-9]*):0", step) is None
+           for step in certificate.pm_step_ids):
+        raise ValueError("K-rank contiguous PM step IDs must be canonical pm:index:0")
+    # Certificate roles are rank ordered; the complete frame stays graph ordered.
+    ordered_pm_indices = tuple(int(step.split(":")[1]) for step in certificate.pm_step_ids)
+    if (len(ordered_pm_indices) != k or len(set(ordered_pm_indices)) != k
+            or sorted(ordered_pm_indices) != sorted(transition.pm_node_indices)
+            or any(index >= len(ir.pm_nodes) for index in ordered_pm_indices)):
+        raise ValueError("K-rank contiguous certificate footprint disagrees with transition")
+    sm_writer_index = transition.sm_node_indices[0]
+    if certificate.sm_step_id != f"sm:{sm_writer_index}:0":
+        raise ValueError("K-rank contiguous certificate SM step disagrees with transition")
     sm_start, sm_end = segment.sm_range
     pm_start, pm_end = segment.pm_range
+    if (not 0 <= sm_start <= sm_end <= len(ir.sm_nodes)
+            or not 0 <= pm_start <= pm_end <= len(ir.pm_nodes)):
+        raise ValueError("K-rank contiguous complete frame bounds are invalid")
     if (not set(transition.sm_node_indices) <= set(range(sm_start, sm_end))
             or not set(transition.pm_node_indices) <= set(range(pm_start, pm_end))):
         raise ValueError("K-rank contiguous writers lie outside the complete frame")
-    sm_writer_index = transition.sm_node_indices[0]
     sm_node = ir.sm_nodes[sm_writer_index]
-    pm_nodes = tuple(ir.pm_nodes[index] for index in transition.pm_node_indices)
+    pm_nodes = tuple(ir.pm_nodes[index] for index in ordered_pm_indices)
     sm_frame = tuple(ir.sm_nodes[index] for index in range(sm_start, sm_end))
     pm_frame = tuple(ir.pm_nodes[index] for index in range(pm_start, pm_end))
     if sm_node.rank != 0 or sm_node.op not in ("FW_contiguous", "BW_contiguous", "FW_float"):
@@ -8857,7 +8873,7 @@ def render_closed_k_rank_contiguous_segment(
         f"    change ShardedRel (smStore {pre.sm_tid}) {in_list} {pre.gather_dim} {_shape_text(list(pre.full_shape))} {_shape_text(list(pre.shard_shape))} at hin",
     ]
     lines += writer_lines("hSmWriter", "sm", sm_writer_index - sm_start, sm_node, sm_node_name)
-    for rank, (writer_index, node) in enumerate(zip(transition.pm_node_indices, pm_nodes)):
+    for rank, (writer_index, node) in enumerate(zip(ordered_pm_indices, pm_nodes)):
         lines += writer_lines(f"hPmWriter{rank}", "pm", writer_index - pm_start, node, pm_node_names[rank])
     lines += [
         "    have htransport := ShardedRel.fw_contiguous hin",

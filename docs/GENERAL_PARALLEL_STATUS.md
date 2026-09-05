@@ -61,11 +61,25 @@ All retain the generated native-decision baseline with no other nonstandard
 axioms. Corrupting a prefix producer or skipping its state transition is rejected
 by Lean.
 
-Two boundaries remain explicit: K1 prefix is not yet supported by the existing
-contiguous backend (K1 singleton entry is unchanged); permuting contiguous writer
-node order away from semantic rank order still fails in the contiguous renderer.
-Reordered-entry acceptance does not imply reordered-prefix acceptance. No
-ring/attention or compound expansion is inferred from this two-segment closure.
+The contiguous renderer now separates semantic certificate rank order from graph
+execution order. Canonical writer identities, exact transition ownership and
+rank headers are checked before lookup; complete frames and all take/drop
+positions retain actual graph order, including sparse nonzero-start frames.
+
+Parent verification passes 149 focused tests and two existing float/backward
+regressions. Five independent guard-removal mutations are detected. Nine exact
+Lean positives pass: FW/BW CP3 reordered-prefix and doubly-reordered inhabited
+compositions, CP5 doubly-reordered conditional compositions, and sparse standalone
+FW/BW contiguous plus float segments. Three negative sources are rejected for
+prefix input clobber, suffix output clobber, and retained-fact clobber. Positive
+axioms remain within the existing generated native-decision baseline. Six
+canonical renderer outputs and all four earlier entry/prefix fixtures remain
+byte-identical; independent exact-commit review passed.
+
+K1 prefix remains outside the existing contiguous backend (K1 singleton entry is
+unchanged). A K-exit bridge back to ordinary sharding, packed multi-sequence
+closure, and ring/attention are separate remaining obligations; the current
+entry/prefix results do not imply them.
 
 ## Ordered-K shared relation foundation
 
