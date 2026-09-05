@@ -160,3 +160,15 @@ def test_cli_explain_and_json_outputs_are_machine_readable(capsys):
     assert "pytest:" in explanation
     assert "exact-model: gpt2" in explanation
     assert "lean-module: denote.KRankBWSum" in explanation
+
+
+def test_bw_layernorm_dx_family_selects_real_goal107_and_exact_lean():
+    plan=selector.select_gates(("trainverify/denote/KRankBWLayernorm.lean", "scripts/tests/test_k_rank_bw_layernorm.py"),family="k-rank-bw-layernorm-dx")
+    assert not plan.full_python
+    assert plan.exact_models == ("gpt2",)
+    assert plan.lean_modules == ("denote.KRankBWLayernorm", "denote.GeneratedKRankBWLayernormWitness")
+    assert "scripts/tests/test_k_rank_bw_layernorm.py" in plan.pytest_nodes
+    assert "scripts/tests/test_proof_compiler.py::test_gpt_goal107_mixed_linear_collective_tuple_is_atomic" in plan.pytest_nodes
+    assert plan.staged_lean and plan.axiom_audit and plan.formal_publication
+    outside=selector.select_gates(("trainverify/denote/Denote.lean",),family="k-rank-bw-layernorm-dx")
+    assert outside.full_python

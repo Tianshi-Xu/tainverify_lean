@@ -211,7 +211,7 @@ def test_bw_and_collective_singleton_backends_are_registry_driven():
         "bw-embedding-sequence-reduction-rank4",
         "bw-embedding-vocab-sharded-k-rank",
         "bw-gelu-pointwise-sharded-k-rank",
-        "bw-layernorm-dx-dim1-rank4-1-2-32",
+        "bw-layernorm-dx-dim1-k-rank",
         "bw-linear-dx-column-sharded-rank4",
         "bw-linear-dx-row-reduction-rank4",
         "bw-linear-dx-sequence-sharded-rank4",

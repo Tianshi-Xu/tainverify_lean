@@ -145,7 +145,7 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
     if family and all(item == "bw-add-identity-sharded-k-rank" for item in family):
         return "bw_add_identity_renderer:render_closed_k_rank_bw_add_identity_segment"
     if (set(family) == {
-            "bw-layernorm-dx-dim1-rank4-1-2-32",
+            "bw-layernorm-dx-dim1-k-rank",
             "bw-layernorm-dgamma-reduction-rank4",
             "bw-layernorm-dbeta-reduction-rank4",
         } and len(family) == 3):

@@ -7563,15 +7563,17 @@ class KRankBWLayernormDxCertificate:
     sm_step_id: str
     pm_step_ids: tuple[str, ...]
     lean_theorem: str
+    full_shape: tuple[int, ...] = ()
+    shard_shape: tuple[int, ...] = ()
 
 
 def advance_k_rank_bw_layernorm_dx_frontiers(plan, ir, frontiers, layouts):
-    """Apply the public rank-4 dim-1 BW_layernorm dx commute theorem."""
+    """Transport last-axis LayerNorm dX through an ordered dim-1 gather."""
     if len(frontiers) != len(layouts):
         raise RelationCompositionError("K-rank BW_layernorm frontier/layout arity mismatch")
     by_id={s.step_id:s for s in plan.steps};certs=[];rewritten=[];rewritten_layouts=[]
     for frontier,layout in zip(frontiers,layouts):
-        if layout!="sharded" or len(frontier)!=5:
+        if layout!="sharded" or len(frontier)<2:
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         try: sm=by_id[frontier[0]];pms=tuple(by_id[x] for x in frontier[1:])
         except KeyError:
@@ -7580,16 +7582,23 @@ def advance_k_rank_bw_layernorm_dx_frontiers(plan, ir, frontiers, layouts):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         if sm.output_projection != ".1" or any(x.output_projection != ".1" for x in pms):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if tuple(int(x.rank) for x in pms)!=(0,1,2,3) or len(sm.input_bindings)!=4 or any(len(x.input_bindings)!=4 for x in pms):
-            raise RelationCompositionError("rank-4 BW_layernorm dx writer/input authority mismatch")
-        if tuple(sm.output_shape)!=(1,8,32) or any(tuple(x.output_shape)!=(1,2,32) for x in pms):
-            raise RelationCompositionError("BW_layernorm dx is outside the checked [1,8,32]/[1,2,32] theorem domain")
+        k = len(pms)
+        if (sm.rank != 0 or sm.parameters or any(x.parameters for x in pms)
+                or tuple(x.rank for x in pms) != tuple(range(k))
+                or len(sm.input_bindings) != 4 or len(sm.input_shapes) != 4
+                or any(len(x.input_bindings) != 4 or len(x.input_shapes) != 4 for x in pms)):
+            raise RelationCompositionError("K-rank BW_layernorm dx writer/input authority mismatch")
+        full, shard = tuple(sm.output_shape), tuple(pms[0].output_shape)
+        if (len(full) != 3 or len(shard) != 3 or any(d <= 0 for d in shard)
+                or full != (shard[0], shard[1] * k, shard[2])):
+            raise RelationCompositionError("BW_layernorm dx dim-1 shape contract mismatch")
+        d = shard[2]
+        if (tuple(sm.input_shapes) != (full, full, (d,), (d,))
+                or any(tuple(x.output_shape) != shard
+                       or tuple(x.input_shapes) != (shard, shard, (d,), (d,)) for x in pms)):
+            raise RelationCompositionError("BW_layernorm dx input shapes violate the theorem domain")
         gradient_refs=(sm.input_bindings[0],*(x.input_bindings[0] for x in pms))
         activation_refs=(sm.input_bindings[1],*(x.input_bindings[1] for x in pms))
-        if tuple(sm.input_shapes[0])!=(1,8,32) or tuple(sm.input_shapes[1])!=(1,8,32) or any(
-            tuple(x.input_shapes[0])!=(1,2,32) or tuple(x.input_shapes[1])!=(1,2,32) for x in pms
-        ):
-            raise RelationCompositionError("BW_layernorm dx input shapes violate the checked theorem domain")
         shared=[]
         for argument,label in ((2,"gamma"),(3,"beta")):
             refs=(sm.input_bindings[argument],*(x.input_bindings[argument] for x in pms))
@@ -7599,18 +7608,20 @@ def advance_k_rank_bw_layernorm_dx_frontiers(plan, ir, frontiers, layouts):
             if lineage is None:
                 raise RelationCompositionError(f"BW_layernorm dx {label} InitGoal is missing")
             fact=init_lineage_relation_fact(lineage)
-            if len(lineage.tps)!=1 or fact.step_triple!=(refs[0],refs[0]):
+            if (len(lineage.tps)!=1 or fact.step_triple!=(refs[0],refs[0])
+                    or tuple(lineage.tsShape)!=(d,) or tuple(map(tuple,lineage.tpShapes))!=((d,),)):
                 raise RelationCompositionError(f"BW_layernorm dx {label} is not singleton public authority")
             shared.append(fact)
         gradient_fact=RelationFactSpec("sharded",gradient_refs,gather_dim=1)
         activation_fact=RelationFactSpec("sharded",activation_refs,gather_dim=1)
         output_fact=RelationFactSpec("sharded",tuple(frontier),gather_dim=1)
         certs.append(KRankBWLayernormDxCertificate(
-            rule_id="bw-layernorm-dx-dim1-rank4-1-2-32",rank_count=4,gather_dim=1,
+            rule_id="bw-layernorm-dx-dim1-k-rank",rank_count=k,gather_dim=1,
             gradient_fact=gradient_fact,activation_fact=activation_fact,
             gamma_fact=shared[0],beta_fact=shared[1],output_fact=output_fact,
             sm_step_id=sm.step_id,pm_step_ids=tuple(x.step_id for x in pms),
-            lean_theorem="TrainVerify.Denote.bw_layernorm_dx_dp_split_dim1_4_1_2_32"))
+            lean_theorem="TrainVerify.Denote.bw_layernorm_dx_allGatherPrimDimN_dim1_3d",
+            full_shape=full, shard_shape=shard))
         rewritten.extend((gradient_refs,activation_refs,shared[0].step_triple,shared[1].step_triple))
         rewritten_layouts.extend(("sharded","sharded",shared[0].layout,shared[1].layout))
     return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
@@ -10078,10 +10089,10 @@ _register_closed_rule_specs(
         (),
     ),
     ClosedRuleSpec(
-        "bw-layernorm-dx-dim1-rank4-1-2-32", KRankBWLayernormDxCertificate,
-        ("TrainVerify.Denote.bw_layernorm_dx_dp_split_dim1_4_1_2_32",),
+        "bw-layernorm-dx-dim1-k-rank", KRankBWLayernormDxCertificate,
+        ("TrainVerify.Denote.bw_layernorm_dx_allGatherPrimDimN_dim1_3d",),
         "BW_layernorm", "bw_layernorm_dx_renderer:render_closed_k_rank_bw_layernorm_dx_segment",
-        (),
+        ("denote.KRankBWLayernorm",),
     ),
     ClosedRuleSpec(
         "bw-linear-dx-column-sharded-rank4", KRankBWLinearDxCertificate,

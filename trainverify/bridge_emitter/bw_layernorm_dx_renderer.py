@@ -16,7 +16,7 @@ def render_closed_k_rank_bw_layernorm_dx_segment(ir, relation, segment_id: str) 
         )
         from relation_compiler import get_closed_rule_spec
 
-    spec = get_closed_rule_spec("bw-layernorm-dx-dim1-rank4-1-2-32")
+    spec = get_closed_rule_spec("bw-layernorm-dx-dim1-k-rank")
     rule = spec.rule_id
     theorem = spec.lean_theorems[0]
     chain = relation.dependent_chain_plan
@@ -54,21 +54,30 @@ def render_closed_k_rank_bw_layernorm_dx_segment(ir, relation, segment_id: str) 
         raise ValueError("BW_layernorm dX post-state introduces an unproved fact")
 
     k = len(gradient.pm_tids)
-    if (k != 4 or certificate.rank_count != k or certificate.gather_dim != 1
+    if len(certificate.shard_shape) != 3 or any(x <= 0 for x in certificate.shard_shape):
+        raise ValueError("BW_layernorm dX certificate shape contract is not exact")
+    batch, seq, width = certificate.shard_shape
+    if (certificate.full_shape != (batch, seq * k, width)
+            or gradient.full_shape != certificate.full_shape
+            or gradient.shard_shape != certificate.shard_shape):
+        raise ValueError("BW_layernorm dX certificate/fact shape contract mismatch")
+    if (k == 0 or certificate.rank_count != k or certificate.gather_dim != 1
             or gradient.kind != "sharded" or gradient.gather_dim != 1
             or activation.kind != "sharded" or activation.gather_dim != 1
             or output.kind != "sharded" or output.gather_dim != 1
-            or gradient.full_shape != (1, 8, 32)
-            or gradient.shard_shape != (1, 2, 32)
             or (activation.full_shape, activation.shard_shape)
                != (gradient.full_shape, gradient.shard_shape)
             or (output.full_shape, output.shard_shape)
                != (gradient.full_shape, gradient.shard_shape)
             or len(activation.pm_tids) != k or len(output.pm_tids) != k
-            or gamma.kind != "sharded" or gamma.gather_dim != 0
-            or beta.kind != "sharded" or beta.gather_dim != 0
-            or gamma.full_shape != (32,) or gamma.shard_shape != (32,)
-            or beta.full_shape != (32,) or beta.shard_shape != (32,)
+            or any(
+                not ((f.kind == "sharded" and f.gather_dim == 0)
+                     or (width == 1 and f.kind == "reduction" and f.gather_dim is None))
+                or f.kind != f.source.layout
+                for f in (gamma, beta)
+            )
+            or gamma.full_shape != (width,) or gamma.shard_shape != (width,)
+            or beta.full_shape != (width,) or beta.shard_shape != (width,)
             or len(gamma.pm_tids) != 1 or len(beta.pm_tids) != 1):
         raise ValueError("BW_layernorm dX metadata is not exact")
 
@@ -166,12 +175,12 @@ def render_closed_k_rank_bw_layernorm_dx_segment(ir, relation, segment_id: str) 
 
     lines.extend([
         f"private theorem {segment_id}_dx_shape (g x w b : Tensor) (s : Nat)",
-        "    (hx : x.shape = [1, s, 32]) :",
-        "    (bw_layernorm g x w b).1.shape = [1, s, 32] := by",
+        f"    (hx : x.shape = [{batch}, s, {width}]) :",
+        f"    (bw_layernorm g x w b).1.shape = [{batch}, s, {width}] := by",
         "  calc",
         "    (bw_layernorm g x w b).1.shape = x.shape :=",
-        "      bw_layernorm_dx_shape g x w b 32 [s, 1] (by rw [hx]; rfl)",
-        "    _ = [1, s, 32] := hx",
+        f"      bw_layernorm_dx_shape g x w b {width} [s, {batch}] (by rw [hx]; rfl)",
+        f"    _ = [{batch}, s, {width}] := hx",
         "",
     ])
 
@@ -180,7 +189,26 @@ def render_closed_k_rank_bw_layernorm_dx_segment(ir, relation, segment_id: str) 
     olist = "[" + ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) + "]"
     full_shape = _shape_text(list(output.full_shape))
     shard_shape = _shape_text(list(output.shard_shape))
-    param_shape = _shape_text([32])
+    param_shape = _shape_text([width])
+    def parameter_value(fact, label):
+        name = label.lower()
+        result = [f"    have h{name} : {fact.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)"]
+        if fact.kind == "reduction":
+            result += [
+                f"    change ReductionRel (smFinal {fact.sm_tid}) [pmFinal {fact.pm_tids[0]}] {param_shape} at h{name}",
+                f"    have h{label}Value : smFinal {fact.sm_tid} = pmFinal {fact.pm_tids[0]} := h{name}.singleton_value",
+            ]
+        else:
+            result += [
+                f"    change ShardedRel (smFinal {fact.sm_tid}) [pmFinal {fact.pm_tids[0]}] 0 {param_shape} {param_shape} at h{name}",
+                f"    have h{label}Value : smFinal {fact.sm_tid} = pmFinal {fact.pm_tids[0]} := by",
+                f"      rw [h{name}.full_value]",
+                "      simpa only [List.length_cons, List.length_nil] using",
+                f"        (allGatherPrimDimN_singleton_eq 0 (pmFinal {fact.pm_tids[0]}) (by",
+                f"          rw [h{name}.shard_shapes (pmFinal {fact.pm_tids[0]}) (by simp)]; decide))",
+            ]
+        return result
+
     lines.extend([
         "set_option maxHeartbeats 500000 in",
         f"private theorem {segment_id}_sound (smStore pmStore : Store)",
@@ -196,26 +224,12 @@ def render_closed_k_rank_bw_layernorm_dx_segment(ir, relation, segment_id: str) 
         f"    change ShardedRel (smFinal {gradient.sm_tid}) {glist} 1 {full_shape} {shard_shape} at hg",
         f"    have hx : {activation.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
         f"    change ShardedRel (smFinal {activation.sm_tid}) {xlist} 1 {full_shape} {shard_shape} at hx",
-        f"    have hgamma : {gamma.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
-        f"    change ShardedRel (smFinal {gamma.sm_tid}) [pmFinal {gamma.pm_tids[0]}] 0 {param_shape} {param_shape} at hgamma",
-        f"    have hbeta : {beta.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
-        f"    change ShardedRel (smFinal {beta.sm_tid}) [pmFinal {beta.pm_tids[0]}] 0 {param_shape} {param_shape} at hbeta",
-        f"    have hgValue : smFinal {gradient.sm_tid} = allGatherPrimDimN 1 4 0 {glist} := by",
+        *parameter_value(gamma, "Gamma"),
+        *parameter_value(beta, "Beta"),
+        f"    have hgValue : smFinal {gradient.sm_tid} = allGatherPrimDimN 1 {k} 0 {glist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hg.full_value",
-        f"    have hxValue : smFinal {activation.sm_tid} = allGatherPrimDimN 1 4 0 {xlist} := by",
+        f"    have hxValue : smFinal {activation.sm_tid} = allGatherPrimDimN 1 {k} 0 {xlist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hx.full_value",
-        f"    have hGammaValue : smFinal {gamma.sm_tid} = pmFinal {gamma.pm_tids[0]} := by",
-        "      rw [hgamma.full_value]",
-        "      simpa only [List.length_cons, List.length_nil] using",
-        f"        (allGatherPrimDimN_singleton_eq 0 (pmFinal {gamma.pm_tids[0]}) (by",
-        f"          rw [hgamma.shard_shapes (pmFinal {gamma.pm_tids[0]}) (by simp)]",
-        "          decide))",
-        f"    have hBetaValue : smFinal {beta.sm_tid} = pmFinal {beta.pm_tids[0]} := by",
-        "      rw [hbeta.full_value]",
-        "      simpa only [List.length_cons, List.length_nil] using",
-        f"        (allGatherPrimDimN_singleton_eq 0 (pmFinal {beta.pm_tids[0]}) (by",
-        f"          rw [hbeta.shard_shapes (pmFinal {beta.pm_tids[0]}) (by simp)]",
-        "          decide))",
         f"    have hSmWriter : smFinal {sm_node.outs[0]} =",
         f"        (bw_layernorm (smFinal {sm_node.ins[0]}) (smFinal {sm_node.ins[1]})",
         f"          (smFinal {sm_node.ins[2]}) (smFinal {sm_node.ins[3]})).1 :=",
@@ -231,25 +245,24 @@ def render_closed_k_rank_bw_layernorm_dx_segment(ir, relation, segment_id: str) 
             f"    have hxShape{rank} := hx.shard_shapes (pmFinal {activation.pm_tids[rank]}) (by simp)",
             f"    have hOutShape{rank} : (pmFinal {output.pm_tids[rank]}).shape = {shard_shape} := by",
             f"      rw [hPmWriter{rank}]",
-            f"      exact {segment_id}_dx_shape _ _ _ _ 2 hxShape{rank}",
+            f"      exact {segment_id}_dx_shape _ _ _ _ {seq} hxShape{rank}",
         ])
     lines.extend([
-        f"    have hcomm := {theorem}",
-        *(f"      (pmFinal {tid})" for tid in gradient.pm_tids),
-        *(f"      (pmFinal {tid})" for tid in activation.pm_tids),
-        f"      (pmFinal {gamma.pm_tids[0]}) (pmFinal {beta.pm_tids[0]})",
-        *(f"      hgShape{rank}" for rank in range(k)),
-        *(f"      hxShape{rank}" for rank in range(k)),
-        "      (hgamma.shard_shapes _ (by simp))",
-        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 1 4 0 {olist} := by",
+        f"    have hcomm := {theorem} {k} {batch} {seq} {width}",
+        f"      {glist} {xlist} (pmFinal {gamma.pm_tids[0]}) (pmFinal {beta.pm_tids[0]})",
+        "      (by decide) (by decide) (by decide) (by decide) (by simp) (by simp)",
+        "      (by simp [" + ", ".join(f"hgShape{r}" for r in range(k)) + "])",
+        "      (by simp [" + ", ".join(f"hxShape{r}" for r in range(k)) + "])",
+        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 1 {k} 0 {olist} := by",
         "      rw [hSmWriter, hgValue, hxValue, hGammaValue, hBetaValue, hcomm]",
+        "      simp only [List.zipWith]",
         "      rw [" + ", ".join(f"← hPmWriter{rank}" for rank in range(k)) + "]",
         f"    have hOutValueList : smFinal {output.sm_tid} =",
         f"        allGatherPrimDimN 1 {olist}.length 0 {olist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hOutValue",
         f"    have hFullShape : (smFinal {output.sm_tid}).shape = {full_shape} := by",
         "      rw [hSmWriter]",
-        f"      exact {segment_id}_dx_shape _ _ _ _ 8 hx.full_shape",
+        f"      exact {segment_id}_dx_shape _ _ _ _ {seq * k} hx.full_shape",
         f"    have hout : {output.fact_id}.Holds smFinal pmFinal := by",
         f"      change ShardedRel (smFinal {output.sm_tid}) {olist} 1 {full_shape} {shard_shape}",
         "      refine {",

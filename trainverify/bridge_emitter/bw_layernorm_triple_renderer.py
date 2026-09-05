@@ -22,8 +22,8 @@ def render_closed_k_rank_bw_layernorm_triple_segment(ir, relation, segment_id: s
             KRankBWLayernormParamReductionCertificate,
         )
 
-    rule = "bw-layernorm-dx-dim1-rank4-1-2-32"
-    theorem = "TrainVerify.Denote.bw_layernorm_dx_dp_split_dim1_4_1_2_32"
+    rule = "bw-layernorm-dx-dim1-k-rank"
+    theorem = "TrainVerify.Denote.bw_layernorm_dx_allGatherPrimDimN_dim1_3d"
     chain = relation.dependent_chain_plan
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
     if segment is None or len(segment.transition_ids) != 3:
@@ -85,6 +85,7 @@ def render_closed_k_rank_bw_layernorm_triple_segment(ir, relation, segment_id: s
 
     k = len(gradient.pm_tids)
     if (k != 4 or certificate.rank_count != k or certificate.gather_dim != 1
+            or certificate.full_shape != (1, 8, 32) or certificate.shard_shape != (1, 2, 32)
             or gradient.kind != "sharded" or gradient.gather_dim != 1
             or activation.kind != "sharded" or activation.gather_dim != 1
             or output.kind != "sharded" or output.gather_dim != 1
@@ -270,15 +271,14 @@ def render_closed_k_rank_bw_layernorm_triple_segment(ir, relation, segment_id: s
             f"    rw [hPm{rank}]", f"    exact {segment_id}_dx_shape _ _ _ _ 2 hxShape{rank}",
         ])
     lines.extend([
-        f"  have hComm := {theorem}",
-        *(f"    (pmFinal {tid})" for tid in gradient.pm_tids),
-        *(f"    (pmFinal {tid})" for tid in activation.pm_tids),
-        f"    (pmFinal {gamma.pm_tids[0]}) (pmFinal {beta.pm_tids[0]})",
-        *(f"    hgShape{rank}" for rank in range(k)),
-        *(f"    hxShape{rank}" for rank in range(k)),
-        "    (hgamma.shard_shapes _ (by simp))",
+        f"  have hComm := {theorem} 4 1 2 32",
+        f"    {glist} {xlist} (pmFinal {gamma.pm_tids[0]}) (pmFinal {beta.pm_tids[0]})",
+        "    (by decide) (by decide) (by decide) (by decide) (by simp) (by simp)",
+        "    (by simp [" + ", ".join(f"hgShape{r}" for r in range(k)) + "])",
+        "    (by simp [" + ", ".join(f"hxShape{r}" for r in range(k)) + "])",
         f"  have hValue : smFinal {output.sm_tid} = allGatherPrimDimN 1 4 0 {olist} := by",
         "    rw [hSm, hgValue, hxValue, hGammaValue, hBetaValue, hComm]",
+        "    simp only [List.zipWith]",
         "    rw [" + ", ".join(f"← hPm{rank}" for rank in range(k)) + "]",
         f"  have hValueList : smFinal {output.sm_tid} = allGatherPrimDimN 1 {olist}.length 0 {olist} := by",
         "    simpa only [List.length_cons, List.length_nil] using hValue",
