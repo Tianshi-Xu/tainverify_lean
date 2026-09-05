@@ -16,21 +16,23 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         )
         from relation_compiler import get_closed_rule_spec
 
-    rule_spec = get_closed_rule_spec("bw-linear-dx-column-sharded-rank4")
+    chain = relation.dependent_chain_plan
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    selected_rules = {t.rule_id for t in relation.transition_specs
+                      if segment is not None and t.transition_id in segment.transition_ids}
+    dynamic = "bw-linear-dx-column-sharded-k-rank" in selected_rules
+    rule_spec = get_closed_rule_spec("bw-linear-dx-column-sharded-k-rank" if dynamic
+                                    else "bw-linear-dx-column-sharded-rank4")
+    legacy_spec = get_closed_rule_spec("bw-linear-dx-column-sharded-rank4")
     view_rule_spec = get_closed_rule_spec("bw-view-joined")
     rule = rule_spec.rule_id
     theorem_specs = {
-        rule_spec.lean_theorems[0]: {
-            "gradient": (1, 8, 32), "activation": ((1, 8, 128), (1, 8, 32)),
-            "weight": ((32, 128), (32, 32)),
-            "output": ((1, 8, 128), (1, 8, 32)), "full_x_arg": True,
-        },
-        rule_spec.lean_theorems[1]: {
+        legacy_spec.lean_theorems[0]: {
             "gradient": (1, 8, 128), "activation": ((1, 8, 32), (1, 8, 8)),
             "weight": ((128, 32), (128, 8)),
             "output": ((1, 8, 32), (1, 8, 8)), "full_x_arg": False,
         },
-        rule_spec.lean_theorems[2]: {
+        legacy_spec.lean_theorems[1]: {
             "gradient": (1, 8, 32), "activation": ((1, 8, 32), (1, 8, 8)),
             "weight": ((32, 32), (32, 8)),
             "output": ((1, 8, 32), (1, 8, 8)), "full_x_arg": False,
@@ -46,6 +48,13 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     view_transition = next((item for item in segment_transitions if item.rule_id == view_rule_spec.rule_id), None)
     if transition is None or (len(segment_transitions) == 2 and view_transition is None):
         raise ValueError("BW_linear column dX transition authority is missing")
+    if dynamic:
+        k = len(transition.pm_node_indices)
+        theorem_specs = {rule_spec.lean_theorems[0]: {
+            "gradient": (1,8,32), "activation": ((1,8,32*k),(1,8,32)),
+            "weight": ((32,32*k),(32,32)), "output": ((1,8,32*k),(1,8,32)),
+            "full_x_arg": True,
+        }}
     spec = theorem_specs.get(transition.lean_theorem)
     if spec is None:
         raise ValueError("BW_linear column dX theorem identity is unsupported")
@@ -83,7 +92,7 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     if not set(after.fact_ids) <= (fresh | set(before.fact_ids)):
         raise ValueError("BW_linear column dX post-state introduces an unproved fact")
     k = len(output.pm_tids)
-    if (k != 4 or certificate.rank_count != k or certificate.output_layout != "sharded"
+    if ((k < 1 if dynamic else k != 4) or certificate.rank_count != k or certificate.output_layout != "sharded"
             or certificate.gather_dim != 2
             or gradient.kind != "joined" or gradient.pm_tids != ()
             or gradient.joined_pm_tid is None
@@ -227,9 +236,9 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         f"    change ShardedRel (smFinal {activation.sm_tid}) {xlist} 2 {afull} {ashard} at hx",
         f"    have hw : {weight.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
         f"    change ShardedRel (smFinal {weight.sm_tid}) {wlist} 1 {wfull} {wshard} at hw",
-        f"    have hxValue : smFinal {activation.sm_tid} = allGatherPrimDimN 2 4 0 {xlist} := by",
+        f"    have hxValue : smFinal {activation.sm_tid} = allGatherPrimDimN 2 {k} 0 {xlist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hx.full_value",
-        f"    have hwValue : smFinal {weight.sm_tid} = allGatherPrimDimN 1 4 0 {wlist} := by",
+        f"    have hwValue : smFinal {weight.sm_tid} = allGatherPrimDimN 1 {k} 0 {wlist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hw.full_value",
         f"    have hSmWriter : smFinal {output.sm_tid} =",
         f"        (bw_linear (smFinal {sm_node.ins[0]}) (smFinal {sm_node.ins[1]}) (smFinal {sm_node.ins[2]})).1 :=",
@@ -262,13 +271,15 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         hcomm_lines.append("      hx.full_shape")
     hcomm_lines.extend(f"      hxShape{rank}" for rank in range(k))
     hcomm_lines.extend(f"      hwShape{rank}" for rank in range(k))
+    if dynamic:
+        hcomm_lines = render_dynamic_column_commute(theorem, gradient, activation, weight)
     value_rewrites = "hSmWriter, hg.1, hwValue"
     if not spec["full_x_arg"]:
         value_rewrites += ", hxValue"
     value_rewrites += ", hcomm"
     lines.extend([
         *hcomm_lines,
-        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 2 4 0 {olist} := by",
+        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 2 {k} 0 {olist} := by",
         f"      rw [{value_rewrites}]",
         "      rw [" + ", ".join(f"← hPmWriter{rank}" for rank in range(k)) + "]",
         f"    have hOutValueList : smFinal {output.sm_tid} =",
@@ -307,3 +318,13 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         f"    exact {segment_id}_sound smStore pmStore hstate", "",
     ])
     return "\n".join(lines)
+
+
+def render_dynamic_column_commute(theorem, gradient, activation, weight):
+    """Common list ABI for singleton and shared dX/dW column frames."""
+    xs="["+", ".join(f"pmFinal {t}" for t in activation.pm_tids)+"]"
+    ws="["+", ".join(f"pmFinal {t}" for t in weight.pm_tids)+"]"
+    return [f"    have hcomm := {theorem} (pmFinal {gradient.joined_pm_tid})",
+            f"      (smFinal {activation.sm_tid}) {xs} {ws}",
+            "      (by simp) (by simp) hg.2.2 hx.full_shape hx.shard_shapes hw.shard_shapes",
+            "    simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hcomm"]

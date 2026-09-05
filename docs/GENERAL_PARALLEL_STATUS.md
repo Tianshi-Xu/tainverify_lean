@@ -141,11 +141,37 @@ Incremental evidence:
 These are conditional segment and focused regression receipts, not a new
 three-model whole-publication run.
 
+## Completed vertical slice: dynamic-K weight-column `BW_linear dX`
+
+The 32-wide column case now uses `bw-linear-dx-column-sharded-k-rank` and
+`TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3`
+from module `denote.KRankBWLinearDxColumn`. The theorem uses
+ordered `zipWith`, arbitrary positive K, joined gradient `[1,8,32]`, local
+activation `[1,8,32]` and weight `[32,32]`, and reconstructed feature width `32*K`.
+Its conclusion is value-level dX gather, not reduction or a shape-only identity.
+The old `g213` theorem dispatch is removed. The dynamic theorem is shared with
+the dX/dW dual renderer; dW itself deliberately retains its K4 boundary.
+
+Validation:
+- K1/2/3/4/5 matcher, typed/digest/shape/rank/parameter negative cases,
+  production dual header and ordinary-Python golden comparison.
+- **167 focused tests passed (16.38 s)**.
+- Fresh leaf/witness Lake build; exact generated K1, K3, K5 and K4 dual Lean
+  executions; theorem/segment axiom audits with no forbidden axioms.
+- Actual GPT Goal107 affected segments `000195` and `000236` compiled together
+  from current rendered bytes (32.88 s), both axiom reports checked.
+- Canonical GPT 97-file comparison remains byte-identical; that is separate from
+  the noncanonical Goal107 execution above. No new full-suite/publication claim.
+- Independent source review PASS; noncanonical artifacts are outside the repo at
+  `/home/v-zhouziyu/trainverify-audits/parallel-linear-column/`.
+
 ## Remaining ordinary TP and other axes
 
-Fixed-layout/fixed-rank BW_linear families and BW_layernorm parameter reductions
-still require their own semantic migrations. The next checked boundary is the
-column-sharded BW_linear dX family (real Goal 107 segment 195).
+The remaining 8-wide column dX shapes, other fixed-layout/fixed-rank BW_linear
+families, and BW_layernorm parameter reductions still require semantic migrations.
+Next extend the same column dX index theorem across positive gradient/feature
+widths and retire the remaining `g245`/`g276` dX dispatch, while preserving the
+separate dW and collective authority boundaries.
 Then proceed to CP/ring, EP/MoE, DP, PP and only compose independently closed
 axes. Arbitrary `DP×TP×PP×CP×EP` configuration support is not implemented.
 

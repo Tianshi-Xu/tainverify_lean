@@ -22,9 +22,20 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
             JoinedBWViewCertificate,
         )
 
-    rule = "bw-linear-dx-column-sharded-rank4"
+    try:
+        from .relation_compiler import get_closed_rule_spec
+        from .bw_linear_dx_column_renderer import render_dynamic_column_commute
+    except ImportError:
+        from relation_compiler import get_closed_rule_spec
+        from bw_linear_dx_column_renderer import render_dynamic_column_commute
+    chain = relation.dependent_chain_plan
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    selected_rules = {t.rule_id for t in relation.transition_specs
+                      if segment is not None and t.transition_id in segment.transition_ids}
+    dynamic = "bw-linear-dx-column-sharded-k-rank" in selected_rules
+    rule = "bw-linear-dx-column-sharded-k-rank" if dynamic else "bw-linear-dx-column-sharded-rank4"
     theorem_specs = {
-        "TrainVerify.Denote.bw_linear_dx_wsplit_dim1_4_g213": {
+        "TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3": {
             "gradient": (1, 8, 32), "activation": ((1, 8, 128), (1, 8, 32)),
             "weight": ((32, 128), (32, 32)),
             "output": ((1, 8, 128), (1, 8, 32)), "full_x_arg": True,
@@ -56,7 +67,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
             or (len(segment_transitions) == 3 and view_transition is None)):
         raise ValueError("column BW_linear dual transition authority is malformed")
     spec = theorem_specs.get(transition.lean_theorem)
-    if spec is None:
+    if spec is None or transition.lean_theorem not in get_closed_rule_spec(rule).lean_theorems:
         raise ValueError("BW_linear column dX theorem identity is unsupported")
     theorem = transition.lean_theorem
     certificate = _select_exact_typed_certificate(
@@ -320,6 +331,8 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
         hcomm_lines.append("      hx.full_shape")
     hcomm_lines.extend(f"      hxShape{rank}" for rank in range(k))
     hcomm_lines.extend(f"      hwShape{rank}" for rank in range(k))
+    if dynamic:
+        hcomm_lines = render_dynamic_column_commute(theorem, gradient, activation, weight)
     value_rewrites = "hSmWriter, hg.1, hwValue"
     if not spec["full_x_arg"]:
         value_rewrites += ", hxValue"

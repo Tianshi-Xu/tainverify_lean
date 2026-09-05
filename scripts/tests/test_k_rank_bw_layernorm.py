@@ -89,7 +89,9 @@ def fixture_source(ir, rel, render):
     for side, nodes, n in (("sm",ir.sm_nodes,1),("pm",ir.pm_nodes,k)):
         lines.append(f"def {side}Graph : GraphDecl := {{ numRanks := {n}, nodes := [{', '.join(_node_text(x) for x in nodes)}] }}")
     for f in rel.dependent_chain_plan.relation_facts:
-        if f.kind == "reduction":
+        if f.kind == "joined":
+            lines.append(f"def {f.fact_id} : RelationFact := .joined {f.sm_tid} {f.joined_pm_tid} {list(f.full_shape)}")
+        elif f.kind == "reduction":
             lines.append(f"def {f.fact_id} : RelationFact := .reduction {f.sm_tid} {list(f.pm_tids)} {list(f.full_shape)}")
         else:
             lines.append(f"def {f.fact_id} : RelationFact := .sharded {f.sm_tid} {list(f.pm_tids)} {f.gather_dim} {list(f.full_shape)} {list(f.shard_shape)}")

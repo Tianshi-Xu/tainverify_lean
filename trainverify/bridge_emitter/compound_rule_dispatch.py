@@ -116,19 +116,21 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
                 "cross-dp-wred-reconstruction-k-rank",
             }):
         return "bw_multiref_wred_renderer:render_closed_bw_multiref_wred_segment"
-    if (family.count("bw-linear-dx-column-sharded-rank4") == 1
+    if (family.count("bw-linear-dx-column-sharded-rank4")
+            + family.count("bw-linear-dx-column-sharded-k-rank") == 1
             and family.count("bw-linear-dw-input-column-sharded-rank4") == 1
             and family.count("bw-view-joined") <= 1
             and set(family) <= {
                 "bw-linear-dx-column-sharded-rank4",
+                "bw-linear-dx-column-sharded-k-rank",
                 "bw-linear-dw-input-column-sharded-rank4",
                 "bw-view-joined",
             }):
         return "bw_linear_column_dual_renderer:render_closed_k_rank_bw_linear_column_dual_segment"
-    if family == (
-        "bw-linear-dx-column-sharded-rank4",
-        "bw-view-joined",
-    ):
+    if family in {
+        ("bw-linear-dx-column-sharded-rank4", "bw-view-joined"),
+        ("bw-linear-dx-column-sharded-k-rank", "bw-view-joined"),
+    }:
         return "bw_linear_dx_column_renderer:render_closed_k_rank_bw_linear_dx_column_segment"
     if (len(family) == 2 and set(family) == {
         "bw-embedding-sequence-reduction-rank4",

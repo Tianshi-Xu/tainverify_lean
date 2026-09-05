@@ -7393,11 +7393,9 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
         k=len(pms)
         if (sm.rank!=0 or sm.parameters or any(x.parameters for x in pms)
                 or tuple(int(x.rank) for x in pms)!=tuple(range(k))
-                or len(sm.input_bindings)!=3
-                or any(len(x.input_bindings)!=3 for x in pms)):
+                or len(sm.input_bindings)!=3 or len(sm.input_shapes)!=3
+                or any(len(x.input_bindings)!=3 or len(x.input_shapes)!=3 for x in pms)):
             raise RelationCompositionError("K-rank BW_linear dX writer/input authority mismatch")
-        if layout=="sharded" and k!=4:
-            raise RelationCompositionError("sharded BW_linear dX families remain rank-4")
         grefs=(sm.input_bindings[0],*(x.input_bindings[0] for x in pms))
         xrefs=(sm.input_bindings[1],*(x.input_bindings[1] for x in pms))
         wsm=sm.input_bindings[2];wpms=tuple(x.input_bindings[2] for x in pms)
@@ -7409,12 +7407,34 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
             raise RelationCompositionError("BW_linear dX PM shapes disagree across ranks")
         input_facts=[];input_frontiers=[];input_layouts=[]
         if layout=="sharded" and full_out[:2]==(1,8) and piece_out[:2]==(1,2) and full_out[2]==piece_out[2] and pm_g[0]==(1,2,32) and pm_w[0]==tuple(sm.input_shapes[2]):
+            if k != 4:
+                raise RelationCompositionError("sequence-sharded BW_linear dX remains rank-4")
             family="sequence-sharded";dim=1
             input_facts=[RelationFactSpec("sharded",grefs,gather_dim=1),RelationFactSpec("sharded",xrefs,gather_dim=1),initial_fact(wsm,wpms)]
             input_frontiers=[x.step_triple for x in input_facts];input_layouts=[x.layout for x in input_facts]
             theorem=("TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g169" if full_out[2]==32
                      else "TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g143")
-        elif layout=="sharded" and piece_out in ((1,8,8),(1,8,32)) and pm_g[0]==tuple(sm.input_shapes[0]) and pm_w[0][0]==tuple(sm.input_shapes[2])[0]:
+        elif (layout=="sharded" and piece_out==(1,8,32)
+                and full_out==(1,8,32*k) and pm_g[0]==(1,8,32)
+                and tuple(sm.input_shapes[0])==(1,8,32)
+                and tuple(sm.input_shapes[1])==full_out and pm_x[0]==piece_out
+                and tuple(sm.input_shapes[2])==(32,32*k) and pm_w[0]==(32,32)):
+            family="column-sharded";dim=2
+            gfact,gfront,glayout=joined(grefs[0],grefs[1:])
+            xfact=RelationFactSpec("sharded",xrefs,gather_dim=2)
+            wfact=initial_fact(wsm,wpms,expected_dim=1)
+            lineage=ir.init_lineages[int(wsm.split(":",1)[1])]
+            if (tuple(lineage.tsShape)!=(32,32*k)
+                    or tuple(tuple(s) for s in lineage.tpShapes)!=((32,32),)*k
+                    or tuple(r for r,_ in lineage.tps)!=tuple(range(k))):
+                raise RelationCompositionError("BW_linear column dX weight lineage shape/rank mismatch")
+            input_facts=[gfact,xfact,wfact]
+            input_frontiers=[gfront,xfact.step_triple,wfact.step_triple]
+            input_layouts=[glayout,"sharded",wfact.layout]
+            theorem="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
+        elif layout=="sharded" and piece_out==(1,8,8) and pm_g[0]==tuple(sm.input_shapes[0]) and pm_w[0][0]==tuple(sm.input_shapes[2])[0]:
+            if k != 4:
+                raise RelationCompositionError("8-wide column BW_linear dX remains rank-4")
             family="column-sharded";dim=2
             gfact,gfront,glayout=joined(grefs[0],grefs[1:])
             xfact=RelationFactSpec("sharded",xrefs,gather_dim=2)
@@ -7423,7 +7443,6 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
             column_theorems = {
                 (32, 32, 8): "TrainVerify.Denote.bw_linear_dx_csplit_dim1_4_1_8_8_g276",
                 (128, 32, 8): "TrainVerify.Denote.bw_linear_dx_csplit_dim1_4_1_8_8_g245",
-                (32, 128, 32): "TrainVerify.Denote.bw_linear_dx_wsplit_dim1_4_g213",
             }
             try:
                 theorem = column_theorems[
@@ -7474,6 +7493,8 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
         output=RelationFactSpec(layout,tuple(frontier),gather_dim=dim)
         rule_id=("bw-linear-dx-row-reduction-k-rank"
                  if theorem=="TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3"
+                 else "bw-linear-dx-column-sharded-k-rank"
+                 if theorem=="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
                  else f"bw-linear-dx-{family}-rank4")
         certs.append(KRankBWLinearDxCertificate(
             rule_id=rule_id,family=family,rank_count=k,
@@ -10096,9 +10117,14 @@ _register_closed_rule_specs(
         ("denote.KRankBWLayernorm",),
     ),
     ClosedRuleSpec(
+        "bw-linear-dx-column-sharded-k-rank", KRankBWLinearDxCertificate,
+        ("TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3",),
+        "BW_linear", "bw_linear_dx_column_renderer:render_closed_k_rank_bw_linear_dx_column_segment",
+        ("denote.KRankBWLinearDxColumn",),
+    ),
+    ClosedRuleSpec(
         "bw-linear-dx-column-sharded-rank4", KRankBWLinearDxCertificate,
         (
-            "TrainVerify.Denote.bw_linear_dx_wsplit_dim1_4_g213",
             "TrainVerify.Denote.bw_linear_dx_csplit_dim1_4_1_8_8_g245",
             "TrainVerify.Denote.bw_linear_dx_csplit_dim1_4_1_8_8_g276",
         ),
