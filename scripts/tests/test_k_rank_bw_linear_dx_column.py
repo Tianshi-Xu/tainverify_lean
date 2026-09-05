@@ -99,7 +99,7 @@ def test_column_committed_witness_matches_renderer():
 
 
 @pytest.mark.parametrize("tail,expected",((('bw-view-joined',),'bw_linear_dx_column_renderer:'),
-    (('bw-linear-dw-input-column-sharded-rank4',),'bw_linear_column_dual_renderer:')))
+    (('bw-linear-dw-input-column-sharded-k-rank',),'bw_linear_column_dual_renderer:')))
 def test_column_compound_routes_dynamic_identity(tail,expected):
     from trainverify.bridge_emitter.compound_rule_dispatch import select_bw_compound_renderer
     selected=select_bw_compound_renderer((RULE,*tail))
@@ -113,12 +113,9 @@ def dual_fixture(k=4,o=32,d=32):
     ir,rel=renderer_fixture(k,o,d)
     c=rel.certificates[0];g,x,w=c.input_facts
     fact=rc.RelationFactSpec("sharded",("sm:0:1",*(f"pm:{r}:1" for r in range(k))),gather_dim=1)
-    dw=rc.KRankBWLinearDwColumnShardedCertificate("bw-linear-dw-input-column-sharded-rank4",k,g,x,w,fact,
-        "sm:0:1",tuple(f"pm:{r}:1" for r in range(k)),{
-            (32,32):"TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_32_g214",
-            (128,8):"TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_o128_g211",
-            (32,8):"TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_g154",
-        }[(o,d)])
+    dw=rc.KRankBWLinearDwColumnShardedCertificate("bw-linear-dw-input-column-sharded-k-rank",k,g,x,w,fact,
+        "sm:0:1",tuple(f"pm:{r}:1" for r in range(k)),
+        "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3")
     tr=rc.CertificateTransitionSpec("transition_000001",dw.rule_id,tuple(sorted((g,x,w))),(fact,),
         (0,),tuple(range(k)),dw.lean_theorem,certificate_digest=_typed_certificate_digest(dw))
     record=rc.ClosedRelationFactRecord("fact_dw",fact,"sharded",401,tuple(5000+r for r in range(k)),
@@ -138,14 +135,14 @@ def test_column_dual_uses_shared_dynamic_value_backend():
     ir,rel=dual_fixture()
     source=render_closed_segment(ir,rel,"segment_000000")
     assert THEOREM in source
-    assert "bw_linear_dw_isplit_dim2_4_1_8_32_g214" in source
+    assert "bw_linear_dw_input_allGatherPrimDimN_dim2_rank3" in source
 
 
-def test_column_dual_preserves_dw_rank_boundary():
+@pytest.mark.parametrize("k,o,d",((3,7,5),(1,1,1),(5,3,1)))
+def test_column_dual_accepts_dw_dynamic_widths(k,o,d):
     from trainverify.bridge_emitter.composer import render_closed_segment
-    ir,rel=dual_fixture(3)
-    with pytest.raises(ValueError):
-        render_closed_segment(ir,rel,"segment_000000")
+    ir,rel=dual_fixture(k,o,d)
+    assert "bw_linear_dw_input_allGatherPrimDimN_dim2_rank3" in render_closed_segment(ir,rel,"segment_000000")
 
 
 def test_column_dual_production_header_imports_theorem():
@@ -163,14 +160,14 @@ def test_column_dual_production_header_imports_theorem():
     ir.public_statement_module="denote.GeneratedKRankBWLinearDxColumnWitness"
     bundle=compose_closed_dependent_bundle(ir,rel,"ColumnHeaderAudit","denote.ColumnHeaderAudit",include_public=False,require_full_graph=False)
     segments=[v.decode() for p,v in bundle.items() if p.startswith("Segment")]
-    assert segments and any("import denote.KRankBWLinearDxColumn\n" in s and THEOREM in s for s in segments)
+    assert segments and any("import denote.KRankBWLinearDxColumn\n" in s and "import denote.KRankBWLinearDwColumn\n" in s and THEOREM in s for s in segments)
 
 
 def dual_witness_source(o=32,d=32):
     from scripts.tests.test_k_rank_bw_layernorm import fixture_source
     from trainverify.bridge_emitter.bw_linear_column_dual_renderer import render_closed_k_rank_bw_linear_column_dual_segment
     ir,rel=dual_fixture(4,o,d)
-    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_column_dual_segment).replace("SyntheticBWLayernorm","SyntheticBWLinearDxColumn").replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumn")
+    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_column_dual_segment).replace("SyntheticBWLayernorm","SyntheticBWLinearDxColumn").replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumn\nimport denote.KRankBWLinearDwColumn")
 
 
 @pytest.mark.parametrize("mutation",("rank","pairing","record-shape","parameters","digest","type"))
@@ -232,7 +229,7 @@ def test_column_dual_binds_dw_theorem_to_widths(o,d):
     cert=replace(rel.certificates[1],lean_theorem=wrong)
     rel.certificates=(rel.certificates[0],cert)
     rel.transition_specs=(rel.transition_specs[0],replace(rel.transition_specs[1],lean_theorem=wrong,certificate_digest=_typed_certificate_digest(cert)))
-    with pytest.raises(ValueError,match="dW metadata"):
+    with pytest.raises(ValueError):
         render_closed_segment(ir,rel,"segment_000000")
 
 

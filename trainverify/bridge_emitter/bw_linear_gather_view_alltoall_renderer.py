@@ -13,10 +13,12 @@ def render_closed_bw_linear_gather_view_alltoall_segment(ir, relation, segment_i
             KRankAllGatherReconstructionCertificate, JoinedBWViewCertificate, KRankAllToAllRelationCertificate)
     try:
         from .bw_linear_dx_column_renderer import column_dx_shape_spec, render_dynamic_column_commute
+        from .bw_linear_column_dual_renderer import render_dynamic_column_dw_commute
     except ImportError:
         from bw_linear_dx_column_renderer import column_dx_shape_spec, render_dynamic_column_commute
+        from bw_linear_column_dual_renderer import render_dynamic_column_dw_commute
     rules=("bw-linear-dx-column-sharded-k-rank","allgather-reconstruction-k-rank","bw-view-joined","alltoall-k-rank-layout-transport")
-    dual_rules=("bw-linear-dx-column-sharded-k-rank","bw-linear-dw-input-column-sharded-rank4","allgather-reconstruction-k-rank","bw-view-joined","alltoall-k-rank-layout-transport")
+    dual_rules=("bw-linear-dx-column-sharded-k-rank","bw-linear-dw-input-column-sharded-k-rank","allgather-reconstruction-k-rank","bw-view-joined","alltoall-k-rank-layout-transport")
     thL="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
     thG="TrainVerify.Denote.RelationCompiler.ShardedRel.to_joined_allGather"
     thV="TrainVerify.Denote.RelationCompiler.JoinedRel.fw_view"
@@ -26,12 +28,12 @@ def render_closed_bw_linear_gather_view_alltoall_segment(ir, relation, segment_i
     byid={t.transition_id:t for t in relation.transition_specs}; ts=tuple(byid[x] for x in seg.transition_ids)
     family=tuple(t.rule_id for t in ts)
     if family not in (rules,dual_rules): raise ValueError("mixed backward collective typed family mismatch")
-    D=next((t for t in ts if t.rule_id=="bw-linear-dw-input-column-sharded-rank4"),None)
+    D=next((t for t in ts if t.rule_id=="bw-linear-dw-input-column-sharded-k-rank"),None)
     L=next(t for t in ts if t.rule_id==rules[0]);G=next(t for t in ts if t.rule_id==rules[1]);V=next(t for t in ts if t.rule_id==rules[2]);A=next(t for t in ts if t.rule_id==rules[3])
     if (L.lean_theorem,G.lean_theorem,V.lean_theorem,A.lean_theorem)!=(thL,thG,thV,thA): raise ValueError("mixed backward collective theorem identity mismatch")
     cL=_select_exact_typed_certificate(relation,L,rules[0],thL,KRankBWLinearDxCertificate,lambda c:(tuple(sorted(c.input_facts)),(c.output_fact,)))
     cD=None if D is None else _select_exact_typed_certificate(relation,D,dual_rules[1],D.lean_theorem,KRankBWLinearDwColumnShardedCertificate,lambda c:(tuple(sorted((c.gradient_fact,c.activation_fact,c.weight_fact))),(c.output_fact,)))
-    if cD and D.lean_theorem!="TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_g154": raise ValueError("mixed backward dW theorem identity mismatch")
+    if cD and D.lean_theorem!="TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3": raise ValueError("mixed backward dW theorem identity mismatch")
     cG=_select_exact_typed_certificate(relation,G,rules[1],thG,KRankAllGatherReconstructionCertificate,lambda c:((c.input_fact,),(c.output_fact,)))
     cV=_select_exact_typed_certificate(relation,V,rules[2],thV,JoinedBWViewCertificate,lambda c:((c.input_fact,),(c.output_fact,)))
     cA=_select_exact_typed_certificate(relation,A,rules[3],thA,KRankAllToAllRelationCertificate,lambda c:((c.input_fact,),(c.output_fact,)))
@@ -123,7 +125,8 @@ def render_closed_bw_linear_gather_view_alltoall_segment(ir, relation, segment_i
     if cD:
         lines += [f" have hDs:={hDs} smStore",f" change smFinal {outD.sm_tid}=(bw_linear (smFinal {nLs.ins[0]}) (smFinal {nLs.ins[1]}) (smFinal {nLs.ins[2]})).2 at hDs"]
         for r in range(k): lines += [f" have hDp{r}:={hDp[r]} pmStore",f" change pmFinal {outD.pm_tids[r]}=(bw_linear (pmFinal {nLp[r].ins[0]}) (pmFinal {nLp[r].ins[1]}) (pmFinal {nLp[r].ins[2]})).2 at hDp{r}",f" have hdS{r}:(pmFinal {outD.pm_tids[r]}).shape={wsh}:=by rw [hDp{r}];exact bw_linear_3d_snd_shape 1 8 {grad.full_shape[2]} {act.shard_shape[2]} _ _ _ hg.2.2 hxS{r} hwS{r}"]
-        lines += [f" have hdcomm:={D.lean_theorem} (pmFinal {grad.joined_pm_tid}) "+" ".join(f"(pmFinal {u})" for u in act.pm_tids+weight.pm_tids)+" hg.2.2 "+" ".join(f"hxS{r}" for r in range(k))+" "+" ".join(f"hwS{r}" for r in range(k)),f" have hdV:smFinal {outD.sm_tid}=allGatherPrimDimN 1 4 0 {dlist}:=by rw [hDs,hg.1,hxV,hwV,hdcomm];rw ["+", ".join(f"←hDp{r}" for r in range(k))+"]",f" have hdVL:smFinal {outD.sm_tid}=allGatherPrimDimN 1 {dlist}.length 0 {dlist}:=by simpa only [List.length_cons,List.length_nil] using hdV",f" have hdF:(smFinal {outD.sm_tid}).shape={wf}:=by rw [hDs];exact bw_linear_3d_snd_shape 1 8 {grad.full_shape[2]} {act.full_shape[2]} _ _ _ hg.2.1 hx.full_shape hw.full_shape",f" have houtD:{outD.fact_id}.Holds smFinal pmFinal:=by",f"  change ShardedRel (smFinal {outD.sm_tid}) {dlist} 1 {wf} {wsh}","  refine {full_value:=hdVL,full_shape:=hdF,shards_nonempty:=by simp,gather_dim_lt:=by native_decide,shard_shapes:=?_,shape_contract:=by simp only [List.length_cons,List.length_nil];native_decide}","  intro shard hs; simp only [List.mem_cons,List.not_mem_nil,or_false] at hs;rcases hs with h0|h1|h2|h3"]
+        lines += [line[3:].replace("hDwComm","hdcomm") for line in render_dynamic_column_dw_commute(D.lean_theorem,grad,act,weight)]
+        lines += [f" have hdV:smFinal {outD.sm_tid}=allGatherPrimDimN 1 4 0 {dlist}:=by rw [hDs,hg.1,hxV,hwV,hdcomm];rw ["+", ".join(f"←hDp{r}" for r in range(k))+"]",f" have hdVL:smFinal {outD.sm_tid}=allGatherPrimDimN 1 {dlist}.length 0 {dlist}:=by simpa only [List.length_cons,List.length_nil] using hdV",f" have hdF:(smFinal {outD.sm_tid}).shape={wf}:=by rw [hDs];exact bw_linear_3d_snd_shape 1 8 {grad.full_shape[2]} {act.full_shape[2]} _ _ _ hg.2.1 hx.full_shape hw.full_shape",f" have houtD:{outD.fact_id}.Holds smFinal pmFinal:=by",f"  change ShardedRel (smFinal {outD.sm_tid}) {dlist} 1 {wf} {wsh}","  refine {full_value:=hdVL,full_shape:=hdF,shards_nonempty:=by simp,gather_dim_lt:=by native_decide,shard_shapes:=?_,shape_contract:=by simp only [List.length_cons,List.length_nil];native_decide}","  intro shard hs; simp only [List.mem_cons,List.not_mem_nil,or_false] at hs;rcases hs with h0|h1|h2|h3"]
         for r in range(k): lines += ["  · subst shard",f"    exact hdS{r}"]
     lines += [line[3:] for line in render_dynamic_column_commute(thL,grad,act,weight)]
     lines += [f" have hLV:smFinal {outL.sm_tid}=allGatherPrimDimN 2 4 0 {olist}:=by rw [hLs,hg.1,hwV,hcomm];rw ["+", ".join(f"←hLp{r}" for r in range(k))+"]",f" have hLVL:smFinal {outL.sm_tid}=allGatherPrimDimN 2 {olist}.length 0 {olist}:=by simpa only [List.length_cons,List.length_nil] using hLV",f" have hLF:(smFinal {outL.sm_tid}).shape={of}:=by rw [hLs];exact {segment_id}_dx_shape _ _ _ {grad.full_shape[2]} {outL.full_shape[2]} hg.2.1 hx.full_shape hw.full_shape",f" have hLShapes:∀ shard∈{olist},shard.shape={osh}:=by\n  simp only [List.forall_mem_cons]\n  exact ⟨"+", ".join(f"hoS{r}" for r in range(k))+", List.forall_mem_nil _⟩",f" have houtL:{outL.fact_id}.Holds smFinal pmFinal:=by exact {{full_value:=hLVL,full_shape:=hLF,shards_nonempty:=List.cons_ne_nil _ _,gather_dim_lt:=by native_decide,shard_shapes:=hLShapes,shape_contract:=by simp only [List.map, List.length_cons,List.length_nil];native_decide}}"]

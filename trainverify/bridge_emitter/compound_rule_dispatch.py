@@ -47,7 +47,7 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
     if family in {
         (
             "bw-linear-dx-column-sharded-k-rank",
-            "bw-linear-dw-input-column-sharded-rank4",
+            "bw-linear-dw-input-column-sharded-k-rank",
             "allgather-reconstruction-k-rank",
             "bw-view-joined",
             "alltoall-k-rank-layout-transport",
@@ -117,11 +117,11 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
             }):
         return "bw_multiref_wred_renderer:render_closed_bw_multiref_wred_segment"
     if (family.count("bw-linear-dx-column-sharded-k-rank") == 1
-            and family.count("bw-linear-dw-input-column-sharded-rank4") == 1
+            and family.count("bw-linear-dw-input-column-sharded-k-rank") == 1
             and family.count("bw-view-joined") <= 1
             and set(family) <= {
                 "bw-linear-dx-column-sharded-k-rank",
-                "bw-linear-dw-input-column-sharded-rank4",
+                "bw-linear-dw-input-column-sharded-k-rank",
                 "bw-view-joined",
             }):
         return "bw_linear_column_dual_renderer:render_closed_k_rank_bw_linear_column_dual_segment"

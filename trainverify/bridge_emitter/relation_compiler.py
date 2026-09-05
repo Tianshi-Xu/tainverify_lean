@@ -7141,63 +7141,59 @@ class KRankBWLinearDwColumnShardedCertificate:
 
 
 def advance_k_rank_bw_linear_dw_column_sharded_frontiers(plan, ir, frontiers, layouts):
+    """Input-column dW: shared g; ordered dim-2 x and dim-1 w/output shards."""
+    import re
     if len(frontiers)!=len(layouts):
-        raise RelationCompositionError("BW_linear dW column frontier/layout arity mismatch")
+        raise RelationCompositionError("BW_linear dW frontier/layout arity mismatch")
     by_id={s.step_id:s for s in plan.steps};certs=[];rewritten=[];rewritten_layouts=[]
     for frontier,layout in zip(frontiers,layouts):
-        if layout!="sharded" or len(frontier)!=5:
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        try: sm=by_id[frontier[0]];pms=tuple(by_id[x] for x in frontier[1:])
-        except KeyError:
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if sm.op!="BW_linear" or sm.output_projection!=".2" or sm.side!="sm" or any(
-            x.op!="BW_linear" or x.output_projection!=".2" or x.side!="pm" for x in pms
-        ):
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if tuple(int(x.rank) for x in pms)!=(0,1,2,3):
-            raise RelationCompositionError("rank-4 BW_linear dW column rank authority mismatch")
-        gfull,xfull,wfull=map(tuple,sm.input_shapes);outfull=tuple(sm.output_shape)
-        if wfull!=outfull or len(gfull)!=3 or len(xfull)!=3 or len(outfull)!=2:
-            raise RelationCompositionError("BW_linear dW column full shapes are malformed")
-        output_rows,input_cols=outfull
-        if input_cols%4:
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        expected_x=(1,8,input_cols//4);expected_piece=(output_rows,input_cols//4)
-        if (any(tuple(x.input_shapes[0])!=gfull for x in pms)
-                or any(tuple(x.input_shapes[1])!=expected_x for x in pms)
-                or any(tuple(x.input_shapes[2])!=expected_piece for x in pms)
-                or any(tuple(x.output_shape)!=expected_piece for x in pms)):
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        grefs=tuple(x.input_bindings[0] for x in pms)
-        if len(set(grefs))!=1:
-            raise RelationCompositionError("BW_linear dW column gradient is not joined/shared")
-        gradient_fact=RelationFactSpec("joined",(sm.input_bindings[0],),joined_pm_step=grefs[0])
-        gradient_frontier=(sm.input_bindings[0],grefs[0])
-        xrefs=(sm.input_bindings[1],*(x.input_bindings[1] for x in pms))
-        activation_fact=RelationFactSpec("sharded",xrefs,gather_dim=2)
-        weight_ref=sm.input_bindings[2];weight_refs=tuple(x.input_bindings[2] for x in pms)
-        if not weight_ref.startswith("init:") or any(not x.startswith("init:") for x in weight_refs):
-            raise RelationCompositionError("BW_linear dW column weight is not initial authority")
-        weight_tid=int(weight_ref.split(":",1)[1])
-        try: weight_fact=init_lineage_relation_fact(ir.init_lineages[weight_tid])
-        except KeyError as exc: raise RelationCompositionError("BW_linear dW column weight InitGoal is missing") from exc
-        if weight_fact.step_triple!=(weight_ref,*weight_refs) or weight_fact.gather_dim!=1:
-            raise RelationCompositionError("BW_linear dW weight is not exact ordered dim-1 authority")
-        theorem_by_shape={
-            (32,32): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_g154",
-            (128,32): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_o128_g211",
-            (32,128): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_32_g214",
-        }
-        try: theorem=theorem_by_shape[outfull]
-        except KeyError as exc: raise RelationCompositionError("BW_linear dW column sharding lacks checked theorem shape") from exc
-        output=RelationFactSpec("sharded",tuple(frontier),gather_dim=1)
+        def keep():
+            rewritten.append(frontier);rewritten_layouts.append(layout)
+        if layout!="sharded" or len(frontier)<2 or not all(ref in by_id for ref in frontier):
+            keep();continue
+        sm,*pms=[by_id[ref] for ref in frontier];k=len(pms)
+        if not (sm.side=="sm" and sm.op=="BW_linear" and sm.output_projection==".2"
+                and all(p.side=="pm" and p.op==sm.op and p.output_projection==".2" for p in pms)):
+            keep();continue
+        if any(len(s.input_shapes)!=3 or len(s.input_bindings)!=3 for s in (sm,*pms)):
+            raise RelationCompositionError("BW_linear dW column input arity mismatch")
+        gfull,xfull,wfull=sm.input_shapes;outfull=sm.output_shape
+        if not (len(gfull)==len(xfull)==3 and len(wfull)==len(outfull)==2
+                and gfull[:2]==xfull[:2]==(1,8)):
+            keep();continue
+        # Axis provenance distinguishes this family even when K=1 and shapes coincide.
+        refs=(sm.input_bindings[2],*(p.input_bindings[2] for p in pms))
+        if not all(re.fullmatch(r"init:[0-9]+",r) for r in refs):
+            keep();continue
+        goal=ir.init_lineages.get(int(refs[0][5:]))
+        if goal is None or goal.gatherDim!=1:
+            keep();continue
+        o,full_i=wfull
+        if (type(o) is not int or type(full_i) is not int or o<=0 or full_i<=0
+                or full_i%k or outfull!=wfull or gfull!=(1,8,o)
+                or xfull!=(1,8,full_i)):
+            raise RelationCompositionError("BW_linear dW column full shape mismatch")
+        d=full_i//k;shard=(o,d)
+        if any(p.input_shapes!=(gfull,(1,8,d),shard) or p.output_shape!=shard for p in pms):
+            raise RelationCompositionError("BW_linear dW column local shape mismatch")
+        if sm.rank!=0 or tuple(p.rank for p in pms)!=tuple(range(k)) or any(s.parameters for s in (sm,*pms)):
+            raise RelationCompositionError("BW_linear dW column rank/parameter mismatch")
+        if len({p.input_bindings[0] for p in pms})!=1:
+            raise RelationCompositionError("BW_linear dW column gradient is not shared")
+        if tuple(goal.tsShape)!=wfull or tuple(tuple(s) for s in goal.tpShapes)!=(shard,)*k:
+            raise RelationCompositionError("BW_linear dW column weight lineage shape mismatch")
+        weight=init_lineage_relation_fact(goal)
+        if weight.layout!="sharded" or weight.step_triple!=refs or weight.gather_dim!=1:
+            raise RelationCompositionError("BW_linear dW column weight lineage mismatch")
+        grad=RelationFactSpec("joined",(sm.input_bindings[0],),joined_pm_step=pms[0].input_bindings[0])
+        act=RelationFactSpec("sharded",(sm.input_bindings[1],*(p.input_bindings[1] for p in pms)),gather_dim=2)
+        output=RelationFactSpec("sharded",frontier,gather_dim=1)
         certs.append(KRankBWLinearDwColumnShardedCertificate(
-            rule_id="bw-linear-dw-input-column-sharded-rank4",rank_count=4,
-            gradient_fact=gradient_fact,activation_fact=activation_fact,
-            weight_fact=weight_fact,output_fact=output,sm_step_id=sm.step_id,
-            pm_step_ids=tuple(x.step_id for x in pms),lean_theorem=theorem))
-        rewritten.extend((gradient_frontier,xrefs,weight_fact.step_triple))
-        rewritten_layouts.extend(("joined","sharded",weight_fact.layout))
+            rule_id="bw-linear-dw-input-column-sharded-k-rank",rank_count=k,
+            gradient_fact=grad,activation_fact=act,weight_fact=weight,output_fact=output,
+            sm_step_id=sm.step_id,pm_step_ids=tuple(p.step_id for p in pms),
+            lean_theorem="TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"))
+        rewritten.extend(((*grad.step_triple,grad.joined_pm_step),act.step_triple,weight.step_triple));rewritten_layouts.extend(("joined","sharded","sharded"))
     return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
 
 

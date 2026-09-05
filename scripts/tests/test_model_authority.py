@@ -1725,7 +1725,7 @@ def test_gpt_goal150_bw_linear_dw_shards_input_columns(monkeypatch):
     assert len(certs) == 1
     assert certs[0].output_fact.gather_dim == 1
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_g154"
+        "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
     )
     assert not relation.unresolved_frontiers
 
@@ -1740,10 +1740,10 @@ def test_gpt_goal214_bw_linear_dw_uses_direct_input_column_shards(monkeypatch):
     certs = [item for item in relation.certificates
              if type(item).__name__ == "KRankBWLinearDwColumnShardedCertificate"
              and item.output_fact.gather_dim == 1
-             and item.lean_theorem.endswith("g214")]
+             and next(s.output_shape for s in proof.steps if s.step_id==item.sm_step_id)==(32,128)]
     assert len(certs) == 1
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_32_g214"
+        "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
     )
     assert not relation.unresolved_frontiers
 

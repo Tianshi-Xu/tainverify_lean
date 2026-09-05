@@ -51,6 +51,8 @@ def plan_closed_segment_imports(
             module = "denote.KRankMatmulQueryAxis"
         elif theorem == "TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3":
             module = "denote.KRankBWLinearDxColumn"
+        elif theorem == "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3":
+            module = "denote.KRankBWLinearDwColumn"
         elif theorem == "TrainVerify.Denote.tensorSum_allGather_dim_K":
             module = "denote.KRankBWMultiref"
         elif theorem == "TrainVerify.Denote.bw_layernorm_dx_allGatherPrimDimN_dim1_3d":

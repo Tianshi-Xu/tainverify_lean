@@ -37,9 +37,9 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
     segment_transitions = tuple(transition_map[item] for item in segment.transition_ids)
     transition = next((item for item in segment_transitions if item.rule_id == rule), None)
     dw_transition = next((item for item in segment_transitions
-                          if item.rule_id == "bw-linear-dw-input-column-sharded-rank4"), None)
+                          if item.rule_id == "bw-linear-dw-input-column-sharded-k-rank"), None)
     view_transition = next((item for item in segment_transitions if item.rule_id == "bw-view-joined"), None)
-    known = {rule, "bw-linear-dw-input-column-sharded-rank4", "bw-view-joined"}
+    known = {rule, "bw-linear-dw-input-column-sharded-k-rank", "bw-view-joined"}
     if (transition is None or dw_transition is None
             or any(item.rule_id not in known for item in segment_transitions)
             or (len(segment_transitions) == 3 and view_transition is None)):
@@ -54,7 +54,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
     if certificate.family != "column-sharded" or len(certificate.input_facts) != 3:
         raise ValueError("BW_linear column dX certificate family/arity mismatch")
     dw_certificate = _select_exact_typed_certificate(
-        relation, dw_transition, "bw-linear-dw-input-column-sharded-rank4",
+        relation, dw_transition, "bw-linear-dw-input-column-sharded-k-rank",
         dw_transition.lean_theorem, KRankBWLinearDwColumnShardedCertificate,
         lambda cert: (tuple(sorted((cert.gradient_fact, cert.activation_fact,
                                     cert.weight_fact))), (cert.output_fact,)),
@@ -91,7 +91,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
         raise ValueError("BW_linear column dX post-state introduces an unproved fact")
     k = len(output.pm_tids)
     spec = column_dx_shape_spec(gradient, activation, weight, output, k)
-    if (k != 4 or certificate.rank_count != k or certificate.output_layout != "sharded"
+    if (certificate.rank_count != k or certificate.output_layout != "sharded"
             or certificate.gather_dim != 2
             or gradient.kind != "joined" or gradient.pm_tids != ()
             or gradient.joined_pm_tid is None
@@ -104,11 +104,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
             or (output.full_shape, output.shard_shape) != spec["output"]
             or len(activation.pm_tids) != k or len(weight.pm_tids) != k):
         raise ValueError("BW_linear column dX metadata is not exact")
-    dw_theorem = {
-        (32,32): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_32_g214",
-        (128,8): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_o128_g211",
-        (32,8): "TrainVerify.Denote.bw_linear_dw_isplit_dim2_4_1_8_8_g154",
-    }.get((gradient.full_shape[2],activation.shard_shape[2]))
+    dw_theorem = "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
 
     if (dw_transition.lean_theorem != dw_theorem
             or dw_certificate.rank_count != k or dw_output.kind != "sharded"
@@ -267,9 +263,9 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
         f"    change ShardedRel (smFinal {activation.sm_tid}) {xlist} 2 {afull} {ashard} at hx",
         f"    have hw : {weight.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
         f"    change ShardedRel (smFinal {weight.sm_tid}) {wlist} 1 {wfull} {wshard} at hw",
-        f"    have hxValue : smFinal {activation.sm_tid} = allGatherPrimDimN 2 4 0 {xlist} := by",
+        f"    have hxValue : smFinal {activation.sm_tid} = allGatherPrimDimN 2 {k} 0 {xlist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hx.full_value",
-        f"    have hwValue : smFinal {weight.sm_tid} = allGatherPrimDimN 1 4 0 {wlist} := by",
+        f"    have hwValue : smFinal {weight.sm_tid} = allGatherPrimDimN 1 {k} 0 {wlist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hw.full_value",
         f"    have hSmWriter : smFinal {output.sm_tid} =",
         f"        (bw_linear (smFinal {sm_node.ins[0]}) (smFinal {sm_node.ins[1]}) (smFinal {sm_node.ins[2]})).1 :=",
@@ -303,7 +299,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
     value_rewrites = "hSmWriter, hg.1, hwValue, hcomm"
     lines.extend([
         *hcomm_lines,
-        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 2 4 0 {olist} := by",
+        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 2 {k} 0 {olist} := by",
         f"      rw [{value_rewrites}]",
         "      rw [" + ", ".join(f"← hPmWriter{rank}" for rank in range(k)) + "]",
         f"    have hOutValueList : smFinal {output.sm_tid} =",
@@ -327,14 +323,8 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
     for rank in range(k):
         lines.extend(["      · subst shard", f"        exact hOutShape{rank}"])
     lines.extend([
-        f"    have hDwComm := {dw_transition.lean_theorem}",
-        f"      (pmFinal {gradient.joined_pm_tid})",
-        *(f"      (pmFinal {tid})" for tid in activation.pm_tids),
-        *(f"      (pmFinal {tid})" for tid in weight.pm_tids),
-        "      hg.2.2",
-        *(f"      hxShape{rank}" for rank in range(k)),
-        *(f"      hwShape{rank}" for rank in range(k)),
-        f"    have hDwValue : smFinal {dw_output.sm_tid} = allGatherPrimDimN 1 4 0 {dwlist} := by",
+        *render_dynamic_column_dw_commute(dw_theorem, gradient, activation, weight),
+        f"    have hDwValue : smFinal {dw_output.sm_tid} = allGatherPrimDimN 1 {k} 0 {dwlist} := by",
         "      rw [hSmDwWriter, hg.1, hxValue, hwValue, hDwComm]",
         "      rw [" + ", ".join(f"← hPmDwWriter{rank}" for rank in range(k)) + "]",
         f"    have hDwValueList : smFinal {dw_output.sm_tid} =",
@@ -380,3 +370,13 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
         "    exact h", "",
     ])
     return "\n".join(lines)
+
+
+def render_dynamic_column_dw_commute(theorem, gradient, activation, weight):
+    """Independent dW value theorem: reconstruct both activation and weight roles."""
+    xs="["+", ".join(f"pmFinal {t}" for t in activation.pm_tids)+"]"
+    ws="["+", ".join(f"pmFinal {t}" for t in weight.pm_tids)+"]"
+    return [f"    have hDwComm := {theorem} (pmFinal {gradient.joined_pm_tid})",
+            f"      {xs} {ws} {gradient.full_shape[2]} {activation.shard_shape[2]} (by decide) (by decide)",
+            "      (by simp) (by simp) hg.2.2 hx.shard_shapes hw.shard_shapes",
+            "    simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hDwComm"]

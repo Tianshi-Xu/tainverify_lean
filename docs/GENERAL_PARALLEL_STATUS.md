@@ -210,3 +210,12 @@ Then proceed to CP/ring, EP/MoE, DP, PP and only compose independently closed
 axes. Arbitrary `DP×TP×PP×CP×EP` configuration support is not implemented.
 
 YOCO's two-rank zigzag/ring rules are a separate CP/EP topology problem and are not evidence that ordinary TP remains limited to two ranks.
+
+
+## Input-column dW dynamic K / positive O-I slice
+
+- `KRankBWLinearDwColumn.lean` proves input-column dW for arbitrary positive K/O/I at batch1/sequence8. It gathers dW along weight dim1 from activation dim2 shards; it is not a reduction theorem. The three former g154/g211/g214 cases are specializations of this one statement.
+- The existing dW certificate now names `bw-linear-dw-input-column-sharded-k-rank`. Matching binds the complete ordered activation and weight tuples to exact dim2/dim1 authority, including K1 axis metadata, and preserves the joined gradient's SM/PM frontier pair during normalization.
+- Existing column dX+dW dual and dual+view callers use the list theorem for arbitrary positive K/O/I. Their mathematical statement is not restricted to the former three shape pairs. The mixed collective caller retains K4, axes2→1, and its existing optional-dW shape boundary. No standalone dW closed backend or broader collective support is claimed by this slice.
+- Fresh exact-source Lean and axiom checks passed for K3/O7/I5, K1/unit widths, K5/I1, all three legacy width pairs, dual+view, the generic theorem, and the 10 reachable GPT107 column segments. GPT150/214 relation tests cover the new dW matcher; these are not claimed as new standalone end-to-end Lean closures.
+- Incremental selection includes both column derivative modules/witnesses, their focused tests, and relevant dW family regressions. Publication/full-suite gates remain separate. Focused gate: **200 passed (52.50 s)**; module and committed witness `lake build` passed. The commute theorem has kernel3 axioms; generated callers use the existing kernel-plus-per-caller-native_decide baseline, not a kernel3-only claim.

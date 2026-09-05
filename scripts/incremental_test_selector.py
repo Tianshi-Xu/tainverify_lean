@@ -22,6 +22,7 @@ FULL_PYTHON_TESTS = (
     "scripts/tests/test_k_rank_bw_layernorm.py",
     "scripts/tests/test_k_rank_bw_multiref.py",
     "scripts/tests/test_k_rank_bw_linear_dx_column.py",
+    "scripts/tests/test_k_rank_bw_linear_dw_column.py",
     "scripts/tests/test_k_rank_bw_sum.py",
     "scripts/tests/test_sharded_contiguous_propagation.py",
     "scripts/tests/test_proof_compiler.py",
@@ -104,8 +105,13 @@ BW_LINEAR_DX_PATHS = frozenset((
 ))
 
 BW_LINEAR_COLUMN_TESTS = (
+    "scripts/tests/test_model_authority.py::test_gpt_goal150_bw_linear_dw_shards_input_columns",
+    "scripts/tests/test_model_authority.py::test_gpt_goal214_bw_linear_dw_uses_direct_input_column_shards",
+    "scripts/tests/test_model_authority.py::test_gpt_goal179_bw_linear_dw_shards_wide_output_rows",
+    "scripts/tests/test_model_authority.py::test_gpt_goal144_bw_linear_dw_reduces_wide_sequence_shards",
     "scripts/tests/test_model_authority.py::test_gpt_goal107_bw_linear_dx_classifies_three_relation_families",
     "scripts/tests/test_k_rank_bw_linear_dx_column.py",
+    "scripts/tests/test_k_rank_bw_linear_dw_column.py",
     "scripts/tests/test_k_rank_bw_layernorm.py",
     "scripts/tests/test_proof_compiler.py::test_gpt_goal107_mixed_linear_collective_tuple_is_atomic",
     "scripts/tests/test_compound_rule_dispatch.py",
@@ -125,7 +131,10 @@ BW_LINEAR_COLUMN_PATHS = frozenset((
     "scripts/tests/test_k_rank_bw_layernorm.py",
     "trainverify/denote/KRankBWLinearDxColumn.lean",
     "trainverify/denote/GeneratedKRankBWLinearDxColumnWitness.lean",
+    "trainverify/denote/KRankBWLinearDwColumn.lean",
+    "trainverify/denote/GeneratedKRankBWLinearDwColumnWitness.lean",
     "scripts/tests/test_k_rank_bw_linear_dx_column.py",
+    "scripts/tests/test_k_rank_bw_linear_dw_column.py",
     "scripts/tests/test_proof_compiler.py",
     "scripts/tests/test_k_rank_gelu_renderer.py",
     "scripts/incremental_test_selector.py",
@@ -248,7 +257,7 @@ def select_gates(
                 return _full_plan("paths outside k-rank-bw-linear-dx-column family scope: " + ", ".join(outside))
             return GatePlan(
                 pytest_nodes=BW_LINEAR_COLUMN_TESTS, exact_models=("gpt2",),
-                lean_modules=("denote.KRankBWLinearDxColumn", "denote.GeneratedKRankBWLinearDxColumnWitness"),
+                lean_modules=("denote.KRankBWLinearDxColumn", "denote.GeneratedKRankBWLinearDxColumnWitness", "denote.KRankBWLinearDwColumn", "denote.GeneratedKRankBWLinearDwColumnWitness"),
                 staged_lean=True, axiom_audit=True, formal_publication=True,
                 explanations=(
                     "BW_linear column dX ordered weight gather affects GPT Goal 107 and dX/dW compound frames",

@@ -190,5 +190,5 @@ def test_bw_linear_column_selects_focused_python_and_real_gpt():
     assert "scripts/tests/test_k_rank_bw_linear_dx_column.py" in plan.pytest_nodes
     assert "scripts/tests/test_proof_compiler.py::test_gpt_goal107_mixed_linear_collective_tuple_is_atomic" in plan.pytest_nodes
     assert plan.exact_models == ("gpt2",)
-    assert plan.lean_modules == ("denote.KRankBWLinearDxColumn","denote.GeneratedKRankBWLinearDxColumnWitness")
+    assert plan.lean_modules == ("denote.KRankBWLinearDxColumn","denote.GeneratedKRankBWLinearDxColumnWitness", "denote.KRankBWLinearDwColumn", "denote.GeneratedKRankBWLinearDwColumnWitness")
     assert plan.staged_lean and plan.axiom_audit and plan.formal_publication
