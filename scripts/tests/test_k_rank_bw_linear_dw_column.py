@@ -90,3 +90,72 @@ def test_dw_column_selects_incremental_gates():
     assert not gates.full_python
     assert "scripts/tests/test_k_rank_bw_linear_dw_column.py" in gates.pytest_nodes
     assert "denote.KRankBWLinearDwColumn" in gates.lean_modules
+
+
+def standalone_fixture(k=3,o=7,d=5):
+    from dataclasses import replace
+    from scripts.tests.test_k_rank_bw_linear_dx_column import dual_fixture
+    ir,rel=dual_fixture(k,o,d)
+    chain=rel.dependent_chain_plan
+    dx,dw=rel.certificates
+    dx_id=next(f.fact_id for f in chain.relation_facts if f.source==dx.output_fact)
+    chain.relation_facts=tuple(f for f in chain.relation_facts if f.fact_id!=dx_id)
+    chain.states=tuple(replace(s,fact_ids=tuple(f for f in s.fact_ids if f!=dx_id)) for s in chain.states)
+    transition=rel.transition_specs[1]
+    chain.segments=(replace(chain.segments[0],transition_ids=(transition.transition_id,)),)
+    rel.transition_specs=(transition,);rel.certificates=(dw,)
+    chain.complete=True
+    return ir,rel
+
+
+@pytest.mark.parametrize("k,o,d",((3,7,5),(1,1,1),(5,3,1)))
+def test_dw_standalone_closed_backend(k,o,d):
+    from trainverify.bridge_emitter.composer import render_closed_segment
+    ir,rel=standalone_fixture(k,o,d)
+    source=render_closed_segment(ir,rel,"segment_000000")
+    assert THEOREM in source
+    assert "applyNode_bw_linear_snd_out" in source
+    assert "applyNode_bw_linear_fst_out" not in source
+    assert "ClosedDepSegmentCertificate" in source
+
+
+def test_dw_standalone_registry_identity():
+    spec=rc.get_closed_rule_spec(RULE)
+    assert spec.certificate_type is rc.KRankBWLinearDwColumnShardedCertificate
+    assert spec.lean_theorems==(THEOREM,)
+    assert spec.lean_imports==("denote.KRankBWLinearDwColumn",)
+    from trainverify.bridge_emitter.closed_segment_import_policy import plan_closed_segment_imports
+    assert plan_closed_segment_imports((RULE,),(THEOREM,),rc.CLOSED_RULE_REGISTRY)==spec.lean_imports
+    with pytest.raises(ValueError):
+        plan_closed_segment_imports((RULE,),("wrong_theorem",),rc.CLOSED_RULE_REGISTRY)
+
+
+@pytest.mark.parametrize("mutation",("role-swap","projection","digest","pm-order","output-axis","unproved-post"))
+def test_dw_standalone_rejects_inconsistent_authority(mutation):
+    from dataclasses import replace
+    from trainverify.bridge_emitter.composer import render_closed_segment,_typed_certificate_digest
+    ir,rel=standalone_fixture()
+    assert THEOREM in render_closed_segment(ir,rel,"segment_000000")
+    c=rel.certificates[0];t=rel.transition_specs[0];chain=rel.dependent_chain_plan
+    if mutation=="role-swap": c=replace(c,activation_fact=c.weight_fact,weight_fact=c.activation_fact)
+    elif mutation=="projection": c=replace(c,sm_step_id="sm:0:0")
+    elif mutation=="digest": t=replace(t,certificate_digest="stale")
+    elif mutation=="pm-order": ir.pm_nodes[1].rank=0
+    elif mutation=="output-axis":
+        chain.relation_facts=tuple(replace(f,gather_dim=2) if f.source==c.output_fact else f for f in chain.relation_facts)
+    else:
+        before,after=chain.states
+        chain.states=(before,replace(after,fact_ids=after.fact_ids+("unproved",)))
+    rel.certificates=(c,)
+    rel.transition_specs=(t if mutation=="digest" else replace(t,certificate_digest=_typed_certificate_digest(c)),)
+    with pytest.raises(ValueError): render_closed_segment(ir,rel,"segment_000000")
+
+
+def standalone_source(k=3,o=7,d=5):
+    from scripts.tests.test_k_rank_bw_layernorm import fixture_source
+    from trainverify.bridge_emitter.composer import render_closed_segment
+    ir,rel=standalone_fixture(k,o,d)
+    return (fixture_source(ir,rel,render_closed_segment)
+        .replace("SyntheticBWLayernorm","SyntheticBWLinearDwStandalone")
+        .replace("SyntheticBWLinearDxColumn","SyntheticBWLinearDwStandalone")
+        .replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDwColumn"))

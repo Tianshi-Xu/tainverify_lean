@@ -1,8 +1,20 @@
-"""Closed sparse/full-frame renderer for column-sharded BW_linear dX."""
+"""Shared single-output frame renderer for column-sharded BW_linear dX/dW."""
 from __future__ import annotations
 
 
 def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: str) -> str:
+    return _render_column_single_output(ir, relation, segment_id, dw=False)
+
+
+def render_closed_k_rank_bw_linear_dw_column_segment(ir, relation, segment_id: str) -> str:
+    return _render_column_single_output(ir, relation, segment_id, dw=True)
+
+
+def _render_column_single_output(ir, relation, segment_id: str, *, dw: bool) -> str:
+    projection_index = 1 if dw else 0
+    projection = ".2" if dw else ".1"
+    output_dim = 1 if dw else 2
+    derivative = "dw" if dw else "dx"
     try:
         from .composer import (
             _node_text, _render_mixed_final_value, _select_exact_typed_certificate,
@@ -16,7 +28,11 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         )
         from relation_compiler import get_closed_rule_spec
 
-    rule_spec = get_closed_rule_spec("bw-linear-dx-column-sharded-k-rank")
+    rule_spec = get_closed_rule_spec(
+        "bw-linear-dw-input-column-sharded-k-rank" if dw else "bw-linear-dx-column-sharded-k-rank"
+    )
+    def input_facts(cert):
+        return (cert.gradient_fact, cert.activation_fact, cert.weight_fact) if dw else cert.input_facts
     view_rule_spec = get_closed_rule_spec("bw-view-joined")
     rule = rule_spec.rule_id
     chain = relation.dependent_chain_plan
@@ -34,9 +50,9 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     theorem = transition.lean_theorem
     certificate = _select_exact_typed_certificate(
         relation, transition, rule, theorem, rule_spec.certificate_type,
-        lambda cert: (tuple(sorted(cert.input_facts)), (cert.output_fact,)),
+        lambda cert: (tuple(sorted(input_facts(cert))), (cert.output_fact,)),
     )
-    if certificate.family != "column-sharded" or len(certificate.input_facts) != 3:
+    if not dw and (certificate.family != "column-sharded" or len(certificate.input_facts) != 3):
         raise ValueError("BW_linear column dX certificate family/arity mismatch")
     view_certificate = None
     if view_transition is not None:
@@ -49,7 +65,7 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     records = {item.source: item for item in chain.relation_facts}
     try:
         gradient, activation, weight = (
-            records[source] for source in certificate.input_facts
+            records[source] for source in input_facts(certificate)
         )
         output = records[certificate.output_fact]
         view_input = records[view_certificate.input_fact] if view_certificate else None
@@ -65,20 +81,14 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     if not set(after.fact_ids) <= (fresh | set(before.fact_ids)):
         raise ValueError("BW_linear column dX post-state introduces an unproved fact")
     k = len(output.pm_tids)
-    spec = column_dx_shape_spec(gradient, activation, weight, output, k)
-    if (k < 1 or certificate.rank_count != k or certificate.output_layout != "sharded"
-            or certificate.gather_dim != 2
-            or gradient.kind != "joined" or gradient.pm_tids != ()
-            or gradient.joined_pm_tid is None
-            or gradient.full_shape != spec["gradient"]
-            or activation.kind != "sharded" or activation.gather_dim != 2
-            or (activation.full_shape, activation.shard_shape) != spec["activation"]
-            or weight.kind != "sharded" or weight.gather_dim != 1
-            or (weight.full_shape, weight.shard_shape) != spec["weight"]
-            or output.kind != "sharded" or output.gather_dim != 2
-            or (output.full_shape, output.shard_shape) != spec["output"]
-            or len(activation.pm_tids) != k or len(weight.pm_tids) != k):
-        raise ValueError("BW_linear column dX metadata is not exact")
+    column_dx_shape_spec(gradient, activation, weight, output, k, dw=dw)
+    if certificate.rank_count != k:
+        raise ValueError("BW_linear column derivative rank count mismatch")
+    if dw:
+        if certificate.output_fact.layout != "sharded" or certificate.output_fact.gather_dim != 1:
+            raise ValueError("BW_linear column dW output descriptor mismatch")
+    elif certificate.output_layout != "sharded" or certificate.gather_dim != 2:
+        raise ValueError("BW_linear column dX output descriptor mismatch")
 
     if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
         raise ValueError("BW_linear column dX footprint is not exact 1+K")
@@ -89,14 +99,14 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     sm_frame = list(ir.sm_nodes[sm_start:sm_end]); pm_frame = list(ir.pm_nodes[pm_start:pm_end])
     sm_node = ir.sm_nodes[transition.sm_node_indices[0]]
     pm_nodes = tuple(ir.pm_nodes[index] for index in transition.pm_node_indices)
-    if (certificate.sm_step_id != f"sm:{transition.sm_node_indices[0]}:0"
+    if (certificate.sm_step_id != f"sm:{transition.sm_node_indices[0]}:{projection_index}"
             or certificate.pm_step_ids
-               != tuple(f"pm:{index}:0" for index in transition.pm_node_indices)):
+               != tuple(f"pm:{index}:{projection_index}" for index in transition.pm_node_indices)):
         raise ValueError("BW_linear column dX certificate footprint was tampered")
     if (sm_node.rank != 0 or sm_node.op != "BW_linear" or sm_node.params
             or len(sm_node.ins) != 3 or len(sm_node.outs) != 2
             or tuple(sm_node.ins) != (gradient.sm_tid, activation.sm_tid, weight.sm_tid)
-            or sm_node.outs[0] != output.sm_tid):
+            or sm_node.outs[projection_index] != output.sm_tid):
         raise ValueError("BW_linear column dX SM writer roles are not exact")
     if tuple(node.rank for node in pm_nodes) != tuple(range(k)):
         raise ValueError("BW_linear column dX PM ranks are not ordered")
@@ -106,7 +116,7 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
                 or tuple(node.ins) != (
                     gradient.joined_pm_tid, activation.pm_tids[rank], weight.pm_tids[rank],
                 )
-                or node.outs[0] != output.pm_tids[rank]):
+                or node.outs[projection_index] != output.pm_tids[rank]):
             raise ValueError("BW_linear column dX PM writer roles/order are not exact")
     view_sm_node=view_pm_node=None
     if view_transition is not None:
@@ -139,18 +149,18 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         theorem_name = f"{segment_id}_{name}"; final = f"({final_name} {initial})"
         expression = (
             f"(bw_linear ({{store}} {node.ins[0]}) ({{store}} {node.ins[1]}) "
-            f"({{store}} {node.ins[2]})).1"
+            f"({{store}} {node.ins[2]})){projection}"
         )
         lines.extend([
             f"private theorem {theorem_name} ({initial} : Store) :",
-            f"    {final} {node.outs[0]} = {expression.format(store=final)} := by",
+            f"    {final} {node.outs[projection_index]} = {expression.format(store=final)} := by",
             f"  have hfinal : {final} = {nodes_name}.foldl (applyNodeDistributedFaithful {graph}) {initial} := by",
             f"    unfold {final_name}", "    rfl",
         ])
         helper = _render_mixed_final_value(
             name="hout", graph=graph, initial_store=initial, final_store=final,
             final_equality="hfinal", nodes_name=nodes_name, nodes=frame,
-            position=position, output_tid=node.outs[0], input_tids=tuple(node.ins),
+            position=position, output_tid=node.outs[projection_index], input_tids=tuple(node.ins),
             written_tids={tid for item in frame for tid in item.outs},
             expression=expression,
             apply_lines=[
@@ -158,7 +168,7 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
                 "(hshuffle := by native_decide) (hunshuffle := by native_decide) "
                 "(hattn := by native_decide)]",
                 "simp [applyNodeDistributed, applyNodeRingAttn]",
-                f"exact applyNode_bw_linear_fst_out {graph} t {node.rank} "
+                f"exact applyNode_bw_linear_{'snd' if dw else 'fst'}_out {graph} t {node.rank} "
                 f"{node.ins[0]} {node.ins[1]} {node.ins[2]} "
                 f"{node.outs[0]} {node.outs[1]} (by native_decide)",
             ],
@@ -183,10 +193,10 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         view_sm_helper=view_writer("hViewSm",ir.sm_graph_ref,"smStore",sm_final_name,sm_nodes_name,sm_frame,view_transition.sm_node_indices[0]-sm_start,view_sm_node)
         view_pm_helper=view_writer("hViewPm",ir.pm_graph_ref,"pmStore",pm_final_name,pm_nodes_name,pm_frame,view_transition.pm_node_indices[0]-pm_start,view_pm_node)
     lines.extend([
-        f"private theorem {segment_id}_dx_shape (g x w : Tensor) (o i : Nat)",
+        f"private theorem {segment_id}_{derivative}_shape (g x w : Tensor) (o i : Nat)",
         "    (hg : g.shape = [1,8,o]) (hx : x.shape = [1,8,i])",
-        "    (hw : w.shape = [o,i]) : (bw_linear g x w).1.shape = [1,8,i] :=",
-        "  bw_linear_3d_fst_shape 1 8 o i g x w hg hx hw", "",
+        f"    (hw : w.shape = [o,i]) : (bw_linear g x w){projection}.shape = {'[o,i]' if dw else '[1,8,i]'} :=",
+        f"  bw_linear_3d_{'snd' if dw else 'fst'}_shape 1 8 o i g x w hg hx hw", "",
     ])
     xlist = "[" + ", ".join(f"pmFinal {tid}" for tid in activation.pm_tids) + "]"
     wlist = "[" + ", ".join(f"pmFinal {tid}" for tid in weight.pm_tids) + "]"
@@ -217,7 +227,7 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
         f"    have hwValue : smFinal {weight.sm_tid} = allGatherPrimDimN 1 {k} 0 {wlist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hw.full_value",
         f"    have hSmWriter : smFinal {output.sm_tid} =",
-        f"        (bw_linear (smFinal {sm_node.ins[0]}) (smFinal {sm_node.ins[1]}) (smFinal {sm_node.ins[2]})).1 :=",
+        f"        (bw_linear (smFinal {sm_node.ins[0]}) (smFinal {sm_node.ins[1]}) (smFinal {sm_node.ins[2]})){projection} :=",
         f"      {sm_helper} smStore",
     ])
     if view_transition is not None:
@@ -226,29 +236,38 @@ def render_closed_k_rank_bw_linear_dx_column_segment(ir, relation, segment_id: s
     for rank,(helper,node) in enumerate(zip(pm_helpers,pm_nodes)):
         lines.extend([
             f"    have hPmWriter{rank} : pmFinal {output.pm_tids[rank]} =",
-            f"        (bw_linear (pmFinal {node.ins[0]}) (pmFinal {node.ins[1]}) (pmFinal {node.ins[2]})).1 :=",
+            f"        (bw_linear (pmFinal {node.ins[0]}) (pmFinal {node.ins[1]}) (pmFinal {node.ins[2]})){projection} :=",
             f"      {helper} pmStore",
             f"    have hxShape{rank} := hx.shard_shapes (pmFinal {activation.pm_tids[rank]}) (by simp)",
             f"    have hwShape{rank} := hw.shard_shapes (pmFinal {weight.pm_tids[rank]}) (by simp)",
             f"    have hOutShape{rank} : (pmFinal {output.pm_tids[rank]}).shape = {oshard} := by",
             f"      rw [hPmWriter{rank}]",
-            f"      exact {segment_id}_dx_shape _ _ _ {gradient.full_shape[2]} {output.shard_shape[2]} hg.2.2 hxShape{rank} hwShape{rank}",
+            f"      exact {segment_id}_{derivative}_shape _ _ _ {gradient.full_shape[2]} {activation.shard_shape[2]} hg.2.2 hxShape{rank} hwShape{rank}",
         ])
-    hcomm_lines = render_dynamic_column_commute(theorem, gradient, activation, weight)
-    value_rewrites = "hSmWriter, hg.1, hwValue, hcomm"
+    if dw:
+        try:
+            from .bw_linear_column_dual_renderer import render_dynamic_column_dw_commute
+        except ImportError:
+            from bw_linear_column_dual_renderer import render_dynamic_column_dw_commute
+        hcomm_lines = [line.replace("hDwComm", "hcomm") for line in
+                       render_dynamic_column_dw_commute(theorem, gradient, activation, weight)]
+        value_rewrites = "hSmWriter, hg.1, hxValue, hwValue, hcomm"
+    else:
+        hcomm_lines = render_dynamic_column_commute(theorem, gradient, activation, weight)
+        value_rewrites = "hSmWriter, hg.1, hwValue, hcomm"
     lines.extend([
         *hcomm_lines,
-        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 2 {k} 0 {olist} := by",
+        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN {output_dim} {k} 0 {olist} := by",
         f"      rw [{value_rewrites}]",
         "      rw [" + ", ".join(f"← hPmWriter{rank}" for rank in range(k)) + "]",
         f"    have hOutValueList : smFinal {output.sm_tid} =",
-        f"        allGatherPrimDimN 2 {olist}.length 0 {olist} := by",
+        f"        allGatherPrimDimN {output_dim} {olist}.length 0 {olist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hOutValue",
         f"    have hFullShape : (smFinal {output.sm_tid}).shape = {ofull} := by",
         "      rw [hSmWriter]",
-        f"      exact {segment_id}_dx_shape _ _ _ {gradient.full_shape[2]} {output.full_shape[2]} hg.2.1 hx.full_shape hw.full_shape",
+        f"      exact {segment_id}_{derivative}_shape _ _ _ {gradient.full_shape[2]} {activation.full_shape[2]} hg.2.1 hx.full_shape hw.full_shape",
         f"    have hout : {output.fact_id}.Holds smFinal pmFinal := by",
-        f"      change ShardedRel (smFinal {output.sm_tid}) {olist} 2 {ofull} {oshard}",
+        f"      change ShardedRel (smFinal {output.sm_tid}) {olist} {output_dim} {ofull} {oshard}",
         "      refine {", "        full_value := hOutValueList",
         "        full_shape := hFullShape", "        shards_nonempty := by simp",
         "        gather_dim_lt := by decide", "        shard_shapes := ?_",
@@ -289,12 +308,13 @@ def render_dynamic_column_commute(theorem, gradient, activation, weight):
             "    simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hcomm"]
 
 
-def column_dx_shape_spec(gradient, activation, weight, output, k):
-    """Validate all role records against one positive-width column dX contract."""
+def column_dx_shape_spec(gradient, activation, weight, output, k, *, dw=False):
+    """Validate shared column roles and the selected dX/dW output contract."""
     if (k < 1 or len(gradient.full_shape) != 3 or gradient.full_shape[:2] != (1,8)
             or len(activation.shard_shape) != 3 or activation.shard_shape[:2] != (1,8)):
         raise ValueError("column dX tensor ranks or row shape are unsupported")
     o,d=gradient.full_shape[2],activation.shard_shape[2]
+    expected_output=((o,d*k),(o,d)) if dw else ((1,8,d*k),(1,8,d))
     if (o <= 0 or d <= 0 or gradient.kind != "joined" or gradient.pm_tids != ()
             or gradient.joined_pm_tid is None
             or activation.kind != "sharded" or activation.gather_dim != 2
@@ -302,9 +322,9 @@ def column_dx_shape_spec(gradient, activation, weight, output, k):
             or weight.kind != "sharded" or weight.gather_dim != 1
             or weight.full_shape != (o,d*k) or weight.shard_shape != (o,d)
             or len(weight.pm_tids) != k
-            or output.kind != "sharded" or output.gather_dim != 2
-            or output.full_shape != (1,8,d*k) or output.shard_shape != (1,8,d)
+            or output.kind != "sharded" or output.gather_dim != (1 if dw else 2)
+            or (output.full_shape,output.shard_shape) != expected_output
             or len(output.pm_tids) != k):
         raise ValueError("column dX role shapes/layouts are inconsistent")
     return {"gradient": (1,8,o), "activation": ((1,8,d*k),(1,8,d)),
-            "weight": ((o,d*k),(o,d)), "output": ((1,8,d*k),(1,8,d))}
+            "weight": ((o,d*k),(o,d)), "output": expected_output}

@@ -1727,6 +1727,14 @@ def test_gpt_goal150_bw_linear_dw_shards_input_columns(monkeypatch):
     assert certs[0].lean_theorem == (
         "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
     )
+    from trainverify.bridge_emitter.composer import render_closed_segment
+    transitions={item.transition_id:item for item in relation.transition_specs}
+    segments=[item for item in relation.dependent_chain_plan.segments
+              if tuple(transitions[t].rule_id for t in item.transition_ids)==(certs[0].rule_id,)]
+    assert len(segments)==1
+    source=render_closed_segment(ir,relation,segments[0].segment_id)
+    assert certs[0].lean_theorem in source
+    assert "applyNode_bw_linear_snd_out" in source
     assert not relation.unresolved_frontiers
 
 
@@ -1745,6 +1753,14 @@ def test_gpt_goal214_bw_linear_dw_uses_direct_input_column_shards(monkeypatch):
     assert certs[0].lean_theorem == (
         "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
     )
+    from trainverify.bridge_emitter.composer import render_closed_segment
+    transitions={item.transition_id:item for item in relation.transition_specs}
+    segments=[item for item in relation.dependent_chain_plan.segments
+              if tuple(transitions[t].rule_id for t in item.transition_ids)==(certs[0].rule_id,)]
+    assert len(segments)==1
+    source=render_closed_segment(ir,relation,segments[0].segment_id)
+    assert certs[0].lean_theorem in source
+    assert "applyNode_bw_linear_snd_out" in source
     assert not relation.unresolved_frontiers
 
 

@@ -10096,6 +10096,12 @@ _register_closed_rule_specs(
         ("denote.KRankBWLayernorm",),
     ),
     ClosedRuleSpec(
+        "bw-linear-dw-input-column-sharded-k-rank", KRankBWLinearDwColumnShardedCertificate,
+        ("TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3",),
+        "BW_linear", "bw_linear_dx_column_renderer:render_closed_k_rank_bw_linear_dw_column_segment",
+        ("denote.KRankBWLinearDwColumn",),
+    ),
+    ClosedRuleSpec(
         "bw-linear-dx-column-sharded-k-rank", KRankBWLinearDxCertificate,
         ("TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3",),
         "BW_linear", "bw_linear_dx_column_renderer:render_closed_k_rank_bw_linear_dx_column_segment",

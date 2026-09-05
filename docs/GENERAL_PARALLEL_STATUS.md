@@ -219,3 +219,11 @@ YOCO's two-rank zigzag/ring rules are a separate CP/EP topology problem and are 
 - Existing column dX+dW dual and dual+view callers use the list theorem for arbitrary positive K/O/I. Their mathematical statement is not restricted to the former three shape pairs. The mixed collective caller retains K4, axes2→1, and its existing optional-dW shape boundary. No standalone dW closed backend or broader collective support is claimed by this slice.
 - Fresh exact-source Lean and axiom checks passed for K3/O7/I5, K1/unit widths, K5/I1, all three legacy width pairs, dual+view, the generic theorem, and the 10 reachable GPT107 column segments. GPT150/214 relation tests cover the new dW matcher; these are not claimed as new standalone end-to-end Lean closures.
 - Incremental selection includes both column derivative modules/witnesses, their focused tests, and relevant dW family regressions. Publication/full-suite gates remain separate. Focused gate: **200 passed (52.50 s)**; module and committed witness `lake build` passed. The commute theorem has kernel3 axioms; generated callers use the existing kernel-plus-per-caller-native_decide baseline, not a kernel3-only claim.
+
+
+## Standalone input-column dW closed backend
+
+- The existing dynamic dW identity now has a registered singleton backend. It shares the column single-output frame/writer machinery with dX, selecting the actual `.2` writer and dim1 output gather; it does not introduce a fictitious dX fact or copy the complete frame proof template.
+- The dW certificate remains bound to ordered gradient/activation/weight roles, exact SM/PM output-projection IDs, ranks, shape/axis records, digest, and pre/post-state coverage. Compound grammar and collective domains are unchanged.
+- **210 focused tests passed (50.22 s)**. Fresh Lean and existing-baseline axiom checks passed for standalone K1/K3/K5 and actual GPT150 `segment_000313` / GPT214 `segment_000236`. Generated callers retain permitted native_decide axioms; no kernel3-only claim is made for them.
+- Previously checked dX/dual sources re-emit unchanged. These are exact-segment checks, not a new all-target public-closure claim.
