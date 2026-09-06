@@ -115,6 +115,34 @@ def test_replicated_lineage_uses_the_writer_that_survives_ordered_pm_fold():
     )
 
 
+def test_collective_normalization_preserves_observed_nonzero_output_ranks():
+    graph = Graph([
+        Node('OpName.AllReducePrim', (Tensor(10, (2,)), Tensor(11, (2,))),
+             (Tensor(20, (2,)),), rank=rank)
+        for rank in (2, 3)
+    ])
+    normalize = graph_to_lean.make_collective_lineage_normalizer(graph)
+    result = normalize(SelectedLineage(ts=1, tps=[(2, 10), (3, 11)]))
+    assert result.tps == [(2, 20), (3, 20)]
+    # Emission may retain only one shared-output collective. The writer must
+    # come from this emitted node schedule, not the pre-dedup expanded graph.
+    emitted = graph.nodes()[:1]
+    writers = final_writer_ranks_by_tid(graph, emitted)
+    assert compress_if_replicated(result, writers).tps == [(2, 20)]
+
+
+def test_collective_normalization_does_not_accept_unrelated_final_writer():
+    graph = Graph([
+        Node('OpName.AllReducePrim', (Tensor(10, (2,)), Tensor(11, (2,))),
+             (Tensor(20, (2,)),), rank=2),
+        Node('OpName.FW_view', (Tensor(99, (2,)),), (Tensor(20, (2,)),), rank=3),
+    ])
+    normalize = graph_to_lean.make_collective_lineage_normalizer(graph)
+    result = normalize(SelectedLineage(ts=1, tps=[(2, 10), (3, 11)]))
+    with pytest.raises(ValueError, match='absent from lineage ranks'):
+        compress_if_replicated(result, final_writer_ranks_by_tid(graph))
+
+
 def test_goal_faithful_evaluator_selection_is_collective_driven():
     plain = [Node("OpName.FW_inner_chunk_ce", (), ())]
     for op in (

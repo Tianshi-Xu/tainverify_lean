@@ -1441,10 +1441,10 @@ def pick_one_lineage_for_ts(lineages: Sequence[Any], ts_tid: int) -> Optional[Se
 	return candidates[0]
 
 
-def final_writer_ranks_by_tid(pm_graph: Any) -> Dict[int, int]:
+def final_writer_ranks_by_tid(pm_graph: Any, nodes: Optional[Sequence[Any]] = None) -> Dict[int, int]:
 	"""Return the rank whose write survives the emitted PM graph's ordered fold."""
 	result: Dict[int, int] = {}
-	for node in pm_graph.nodes():
+	for node in pm_graph.nodes() if nodes is None else nodes:
 		rank = int(_node_rank(node))
 		for output in pm_graph.node_outputs(node):
 			result[int(output.tid)] = rank
@@ -1482,7 +1482,7 @@ This avoids constructing a meaningless "allGather of identical full tensors" for
 
 def make_collective_lineage_normalizer(pm_graph: Any):
 	"""Build an indexed lineage normalizer for repeated lookups on the same PM graph."""
-	collective_outputs_by_inputs: Dict[Tuple[int, ...], int] = {}
+	collective_outputs_by_inputs: Dict[Tuple[int, ...], Tuple[str, int, set[int]]] = {}
 	for n in pm_graph.nodes():
 		op = _safe_str_op(pm_graph.node_opname(n))
 		if ("AllReducePrim" not in op) and ("AllGatherPrim" not in op) and ("CROSS_DP_WRED" not in op):
@@ -1490,16 +1490,19 @@ def make_collective_lineage_normalizer(pm_graph: Any):
 		ins = tuple(sorted(int(t.tid) for t in pm_graph.node_inputs(n)))
 		outs = [int(t.tid) for t in pm_graph.node_outputs(n)]
 		if len(outs) == 1:
-			collective_outputs_by_inputs.setdefault(ins, outs[0])
+			chosen_op, chosen_tid, ranks = collective_outputs_by_inputs.setdefault(ins, (op, outs[0], set()))
+			if (op, outs[0]) == (chosen_op, chosen_tid):
+				ranks.add(int(_node_rank(n)))
 
 	def normalize(lineage: SelectedLineage) -> SelectedLineage:
 		if not lineage.tps:
 			return lineage
 		lineage_tids = tuple(sorted(int(t) for (_r, t) in lineage.tps))
-		out_tid = collective_outputs_by_inputs.get(lineage_tids)
-		if out_tid is None:
+		output = collective_outputs_by_inputs.get(lineage_tids)
+		if output is None:
 			return lineage
-		return SelectedLineage(ts=lineage.ts, tps=[(0, out_tid)])
+		_op, out_tid, ranks = output
+		return SelectedLineage(ts=lineage.ts, tps=[(rank, out_tid) for rank in sorted(ranks)])
 
 	return normalize
 
@@ -4018,7 +4021,6 @@ def _generate(args: argparse.Namespace) -> None:
 		obs_tids = obs_tids[: int(args.max_goals)]
 
 	normalize_pm_lineage = make_collective_lineage_normalizer(GpE)
-	final_writer_ranks = final_writer_ranks_by_tid(GpE)
 
 	t0 = time.perf_counter()
 	selected: List[SelectedLineage] = []
@@ -4026,7 +4028,6 @@ def _generate(args: argparse.Namespace) -> None:
 		chosen = pick_one_lineage_for_ts(by_ts.get(int(ts), []), ts)
 		if chosen is not None:
 			chosen = normalize_pm_lineage(chosen)
-			chosen = compress_if_replicated(chosen, final_writer_ranks)
 			selected.append(chosen)
 
 	selected.sort(key=lambda g: g.ts)
@@ -4129,6 +4130,9 @@ def _generate(args: argparse.Namespace) -> None:
 	# Ensure the denotational fold is a true topological fold across ranks.
 	sm_nodes = _stable_toposort_nodes(GsE, sm_nodes)
 	pm_nodes = _stable_toposort_nodes(GpE, _dedup_shared_collectives(GpE, pm_nodes))
+	# Rank ownership is determined by the emitted fold, after collective dedup.
+	final_writer_ranks = final_writer_ranks_by_tid(GpE, pm_nodes)
+	selected = [compress_if_replicated(g, final_writer_ranks) for g in selected]
 	print(f"[graph_to_lean] filtered/toposorted graph nodes in {time.perf_counter() - t0:.2f}s", flush=True)
 
 	def _make_ordered_node_filter(G: Any, ordered_nodes: List[Any]):

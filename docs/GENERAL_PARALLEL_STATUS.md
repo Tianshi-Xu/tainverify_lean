@@ -18,12 +18,25 @@ complete `Main`, and a non-vacuous full output obligation checked by Lean.
 The input inhabitant is kernel3-only; the public result retains the existing
 native-decision baseline (88 native axioms plus kernel3 in this tracer).
 
-The actual saved YOCO authority still lacks these records and stops at
-`missing-collective-role: AllToAllPrim rank 0`. No fresh model capture was run;
-raw capture inputs were not found locally and the active Python lacks
-Torch/nnScaler. The capture launcher itself still couples two-rank settings.
-Correct subgroup metadata also remains blocked by full-graph backend assumptions.
-Thus mixed CP/EP, data-lane/runtime DP/ZeRO and pipeline training are **not closed**.
+Fresh real captures now exist: a dedicated Torch/nnScaler environment generated
+repository-GPT SM, TP2, TP4 and plan2/runtime4 graphs. After a private nnScaler
+softmax codegen fix, real 2/4-GPU training passed output and every parameter-shard
+gradient comparisons, including distinct data across two scale units. The same
+softmax failure was reproduced by actual compilation on current public nnScaler
+`1585c15d4ca99e23a410c90f9bad2664125524d4`. See
+[FRESH_CAPTURE_STATUS.md](FRESH_CAPTURE_STATUS.md) for evidence and reproduction.
+
+Real TP2/TP4 communication exports now reach the shared DAG (26 targets each),
+after fixing translator writer selection, fused collective direction and
+ReduceScatter input fusion. Relation closure still stops at BW-reduction /
+BW-embedding prerequisites. Multi-unit graph export still rejects unavailable
+subgroup scope. The legacy unsplit exporter emits sorry templates; successful
+elaboration is not fresh public-proof completion.
+
+The old saved YOCO authority still lacks the records, and unchanged fresh YOCO
+requires a compatible Torch plus its FlashAttention/BF16 backend, unavailable on
+V100. No fresh YOCO capture is claimed. Mixed CP/EP, data-lane/runtime DP/ZeRO and
+pipeline formal training closure remain **incomplete**.
 
 The focused checkpoint passed 293 tests and 116 subtests, plus six selected
 model-authority regressions; four targeted guard mutations were killed and

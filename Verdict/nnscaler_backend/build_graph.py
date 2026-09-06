@@ -252,12 +252,11 @@ def _set_node_opname(cells: List[Cell]) -> List[Cell]:
                 (PTypes.AllReduceAllReducePrim, False): OpName.AllReducePrim,
                 (PTypes.AllReducePrim, True): OpName.AllReducePrim,
                 (PTypes.AllReducePrim, False): OpName.AllReducePrim,
-                # These fused reducer paths publish per-rank shards.  Preserve that
-                # observable reduce-scatter semantics instead of mislabelling them
-                # as shape-preserving AllReduce; graph_to_lean records the shard dim.
+                # Fused autograd pairs have different forward/backward collectives.
+                # Match runtime.adapter.nn, not the primitive class name alone.
                 (PTypes.ReduceScatterAllGatherPrim, True): OpName.ReduceScatterPrim,
-                (PTypes.ReduceScatterAllGatherPrim, False): OpName.ReduceScatterPrim,
-                (PTypes.AllGatherReduceScatterPrim, True): OpName.ReduceScatterPrim,
+                (PTypes.ReduceScatterAllGatherPrim, False): OpName.AllGatherPrim,
+                (PTypes.AllGatherReduceScatterPrim, True): OpName.AllGatherPrim,
                 (PTypes.AllGatherReduceScatterPrim, False): OpName.ReduceScatterPrim,
                 (PTypes.IdentityAllreducePrim, True): OpName.IdentityPrim,
                 (PTypes.IdentityAllreducePrim, False): OpName.AllReducePrim,
@@ -588,6 +587,7 @@ def _set_collective_group_id(cells: List[Cell], W: World) -> List[Cell]:
         elif cell.opname in [
             OpName.AllGatherPrim,
             OpName.AllReducePrim,
+            OpName.ReduceScatterPrim,
             OpName.AllToAllPrim,
         ]:
             cell._collective_group_id = (

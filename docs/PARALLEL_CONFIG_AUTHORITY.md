@@ -172,10 +172,11 @@ Local receipts: `~/trainverify-audits/parallel-topology/` and
 ## Remaining system boundary
 
 The source-to-consumer metadata path is implemented; old saved Lean cannot
-recover source `kwargs.ranks` that was omitted at capture/export time. No raw
-capture pickle was found in the checked work area, and the active Python lacks
-Torch/nnScaler. This checkpoint therefore does **not** claim a fresh YOCO capture
-or a GPU execution. The existing capture launcher still couples a two-rank
+recover source `kwargs.ranks` that was omitted at capture/export time. The adapter
+checkpoint above used a synthetic fixture. Subsequently, a dedicated environment
+produced real repository-GPT captures and 2/4-GPU output/gradient checks, exposing
+translator and upstream codegen defects; see [FRESH_CAPTURE_STATUS.md](FRESH_CAPTURE_STATUS.md).
+Those results do not establish a fresh YOCO capture or complete formal closure. The existing capture launcher still couples a two-rank
 profile and capture settings; the new proof CLI does not itself generalize that
 launcher. Fresh configuration-driven captures, explicit token/expert/data-lane
 ownership, and group-local backends remain necessary for the requested general
