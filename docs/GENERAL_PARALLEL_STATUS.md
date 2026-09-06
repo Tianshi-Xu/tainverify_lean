@@ -16,7 +16,7 @@ Direct projections cannot drop these records to select the old planner. A
 synthetic embedding→AllToAll tracer reaches the real whole-model loader/builder,
 complete `Main`, and a non-vacuous full output obligation checked by Lean.
 The input inhabitant is kernel3-only; the public result retains the existing
-native-decision baseline (91 native axioms in this tracer).
+native-decision baseline (88 native axioms plus kernel3 in this tracer).
 
 The actual saved YOCO authority still lacks these records and stops at
 `missing-collective-role: AllToAllPrim rank 0`. No fresh model capture was run;

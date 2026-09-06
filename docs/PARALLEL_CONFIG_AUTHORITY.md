@@ -158,7 +158,7 @@ Local receipts: `~/trainverify-audits/parallel-topology/` and
   No loader mock is used for this tracer.
 - The generated complete `AdapterProof.Main.all_outputs` and instantiated full
   output obligation passed Lean. `AdapterFixture.publicInputs` is kernel3-only;
-  `inhabitedOutput` additionally carries 91 existing generated native-decision
+  `inhabitedOutput` additionally carries 88 existing generated native-decision
   axioms. The latter is not kernel3-only. No tensor-shape conjunct is dropped.
 - Independent review findings were reproduced before fixing: direct projection
   could drop capture metadata, absent nested fields changed old cache identity,
