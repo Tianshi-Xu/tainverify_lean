@@ -1033,11 +1033,24 @@ def _build_whole_model_bundle(
     module_prefix: str,
     aggregate_theorem_name: str,
     root: str = REPO,
+    parallel_topology=None,
+    parallel_graph_scope: str | None = None,
+    parallel_scale_unit: int = 0,
 ) -> dict[str, bytes]:
     """Compile the one strict whole-model authority into one closed bundle."""
     model = load_model_authority(
         target_ids, root, model_id=model_id, allow_partial=False
     )
+    if parallel_topology is not None:
+        from trainverify.bridge_emitter.model_authority import bind_parallel_authority
+        if parallel_graph_scope is None:
+            raise ValueError("parallel topology requires an explicit graph rank scope")
+        model = bind_parallel_authority(
+            model, parallel_topology, graph_scope=parallel_graph_scope,
+            scale_unit=parallel_scale_unit,
+        )
+    elif parallel_graph_scope is not None or parallel_scale_unit != 0:
+        raise ValueError("parallel rank scope requires a parallel topology")
     proof = compile_shared_proof_dag(model, build_default_registry())
     relation = compile_shared_relation_dag(model, proof)
     bundle = compose_shared_closed_bundle(
@@ -1049,6 +1062,14 @@ def _build_whole_model_bundle(
     )
     if "Main.lean" not in bundle:
         raise ValueError("whole-model production bundle must contain Main.lean")
+    if parallel_topology is not None:
+        from dataclasses import asdict
+        # Metadata is source/graph checked in Python; the Lean theorem remains
+        # about these GraphDecls, not runtime DP/ZeRO or a GPU/source execution.
+        header = ("/- Parallel graph authority (not a Lean topology theorem)\n"
+                  + json.dumps(asdict(model.parallel_authority), sort_keys=True)
+                  + "\n-/\n").encode()
+        bundle["Main.lean"] = header + bundle["Main.lean"]
     return bundle
 
 
@@ -1089,7 +1110,17 @@ def main():
     ap.add_argument("--namespace")
     ap.add_argument("--aggregate-theorem")
     ap.add_argument("--module-prefix", default=None)
+    ap.add_argument("--parallel-config", help="JSON ParallelConfig; source-derived, not a new graph capture")
+    ap.add_argument("--parallel-upstream-root", help="explicitly trusted llm-train repository")
+    ap.add_argument("--parallel-revision", help="immutable full commit ID")
+    ap.add_argument("--parallel-graph-scope", choices=("plan", "runtime"))
+    ap.add_argument("--parallel-scale-unit", type=int, default=0)
     args = ap.parse_args()
+    if any((args.parallel_config, args.parallel_upstream_root, args.parallel_revision,
+            args.parallel_graph_scope, args.parallel_scale_unit)):
+        if not args.whole_model or not all((args.parallel_config, args.parallel_upstream_root,
+                                           args.parallel_revision, args.parallel_graph_scope)):
+            ap.error("parallel configuration requires --whole-model plus config, upstream-root, revision and graph-scope")
     log = (lambda *a: None) if args.quiet else print
 
     if args.whole_model:
@@ -1109,6 +1140,17 @@ def main():
             )
         try:
             targets = _parse_target_inventory(args.targets)
+            parallel_kwargs = {}
+            if args.parallel_config:
+                from trainverify.parallel_topology import ParallelConfig, derive_topology
+                if args.out is None or Path(args.out).resolve().is_relative_to(whole_model_artifact_root(TV).resolve()):
+                    raise ValueError("configuration-bound runs require an explicit noncanonical --out; existing Whole snapshots are not configuration captures")
+                with open(args.parallel_config, encoding="utf-8") as handle:
+                    config = ParallelConfig(**json.load(handle))
+                topology = derive_topology(config, upstream_root=args.parallel_upstream_root, revision=args.parallel_revision)
+                parallel_kwargs = dict(parallel_topology=topology, parallel_graph_scope=args.parallel_graph_scope,
+                                       parallel_scale_unit=args.parallel_scale_unit)
+                log(f"[parallel] source-derived topology; graph_scope={args.parallel_graph_scope} scale_unit={args.parallel_scale_unit}; runtime-training verification not implied")
             canonical_output = False
             if args.out is None:
                 try:
@@ -1163,6 +1205,7 @@ def main():
                 module_prefix=args.module_prefix,
                 aggregate_theorem_name=args.aggregate_theorem,
                 root=REPO,
+                **parallel_kwargs,
             )
         except (OSError, TypeError, ValueError) as exc:
             log("[whole-model] render_complete=false kernel_checked=false proof_complete=false")

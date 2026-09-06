@@ -102,6 +102,8 @@ def _authority_digest(model: ModelAuthorityIR) -> str:
         ],
         "aggregate": None if model.aggregate is None else asdict(model.aggregate),
     }
+    if model.parallel_authority is not None:
+        payload["parallel_authority"] = asdict(model.parallel_authority)
     return hashlib.sha256(_canonical(payload)).hexdigest()
 
 
@@ -599,6 +601,11 @@ def compile_shared_relation_dag(
     model: ModelAuthorityIR, proof_dag: SharedProofDAG
 ) -> SharedRelationDAG:
     """Compile maximal relation closures once and project target-local sub-DAGs."""
+    if model.parallel_authority is not None:
+        from .parallel_authority import validate_model_parallel_authority
+        validate_model_parallel_authority(model)
+    if proof_dag.authority_digest != _authority_digest(model):
+        raise ValueError("shared proof authority mismatch: recompile after changing graph/configuration authority")
     if tuple(proof_dag.projections) != tuple(model.targets):
         raise ValueError("shared proof projections do not exactly cover model targets")
     facts: dict[str, RelationFactSpec] = {}

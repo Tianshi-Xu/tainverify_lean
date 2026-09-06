@@ -160,6 +160,12 @@ class TopologyTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.derive(**({"plan_ngpus": 8, "runtime_ngpus": 16} | changes))
 
+    def test_moe_fixed_partition_cannot_claim_pipeline_compatibility(self):
+        for dp in (False, True):
+            with self.subTest(dp=dp), self.assertRaisesRegex(ValueError, "fixed.partition"):
+                self.derive(plan_ngpus=8, runtime_ngpus=16, cp_size=1 if dp else 8,
+                            ep_size=4, dp_sharded=dp, moe_expert_num=16, pipeline_stages=2)
+
     def test_negative_bool_and_noninteger_fields(self):
         for name in ("plan_ngpus", "runtime_ngpus", "cp_size", "ep_size", "moe_expert_num", "zero_group_size", "pipeline_stages"):
             for value in (-1, True, False, 1.0, "1"):
@@ -262,7 +268,7 @@ class ActualPinnedSourceTests(unittest.TestCase):
         cases += [api.ParallelConfig(8, r, cp, ep, dp, 16)
                   for r in (8, 16) for cp, ep, dp in ((8, 4, False), (4, 8, False), (1, 8, True))]
         cases += [api.ParallelConfig(8, 16, 0, 0, dp) for dp in (False, True)]
-        cases += [api.ParallelConfig(8, 16, 8, 4, False, 16, 8, 2)]
+        cases += [api.ParallelConfig(8, 16, 8, 8, False, 16, 8, 2)]
         for config in cases:
             with self.subTest(config=config):
                 topology = api.derive_topology(config, upstream_root=root, revision=revision)

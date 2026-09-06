@@ -10,6 +10,10 @@ import hashlib
 import os
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .parallel_authority import ParallelGraphAuthority
 
 from . import parser as p
 
@@ -76,6 +80,7 @@ class ModelAuthorityIR:
     pm_replica_groups: tuple[p.ReplicaGroup, ...]
     targets: dict[int, TargetQuery]
     aggregate: PublicAggregateAuthority | None
+    parallel_authority: ParallelGraphAuthority | None = None
 
 
 @dataclass(frozen=True)
@@ -442,7 +447,16 @@ def load_model_authority(
     return model
 
 
+def bind_parallel_authority(model: ModelAuthorityIR, topology, *, graph_scope: str, scale_unit: int = 0) -> ModelAuthorityIR:
+    """Attach one source topology to all projections, without inferring subgroups."""
+    from .parallel_authority import bind_model
+    return bind_model(model, topology, graph_scope=graph_scope, scale_unit=scale_unit)
+
+
 def materialize_target_ir(model: ModelAuthorityIR, goal_id: int) -> p.GoalIR:
+    if model.parallel_authority is not None:
+        from .parallel_authority import validate_model_parallel_authority
+        validate_model_parallel_authority(model)
     try:
         query = model.targets[goal_id]
     except KeyError as exc:
@@ -476,4 +490,5 @@ def materialize_target_ir(model: ModelAuthorityIR, goal_id: int) -> p.GoalIR:
         pm_input_value_classes_ref=query.pm_input_value_classes_ref,
         init_lineages=dict(query.init_lineages),
         full_init_goal_ids=query.full_init_goal_ids,
+        parallel_authority=model.parallel_authority,
     )

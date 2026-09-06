@@ -13,6 +13,10 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .parallel_authority import ParallelGraphAuthority
 
 sys.path.insert(0, os.path.dirname(__file__))
 from target_config import DENOTE_DIR as _RELDIR
@@ -111,6 +115,7 @@ class GoalIR:
     pm_input_value_classes_ref: str = ""
     init_lineages: dict[int, LineageGoal] = field(default_factory=dict)
     full_init_goal_ids: tuple[int, ...] = ()
+    parallel_authority: "ParallelGraphAuthority | None" = None
 
 # ---------- low-level parsers ----------
 RANGE_MAP_VALUE_RE = (

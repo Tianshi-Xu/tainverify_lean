@@ -109,6 +109,10 @@ def _check_config(config: ParallelConfig, *, effective: bool) -> None:
         raise ValueError("non-sharded plan_ngpus must equal max(CP, EP)")
     if config.moe_expert_num is not None and config.moe_expert_num % ep:
         raise ValueError("moe_expert_num must be divisible by EP")
+    # llm-train nnscaler_train.py:941-947 emits fixed MoE partitions when
+    # EP < plan; companion nnScaler autodist_config.py:285 rejects these in PP.
+    if config.moe_expert_num is not None and ep < p and config.pipeline_stages > 1:
+        raise ValueError("MoE fixed_partition_descs require a single SPMD stage")
     if not config.dp_sharded and cp < ep and config.pipeline_stages > 1:
         raise ValueError("pipeline exploration unsupported for CP<EP")
 

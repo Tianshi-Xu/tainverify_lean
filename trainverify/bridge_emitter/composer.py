@@ -11023,6 +11023,9 @@ def render_public_aggregate(model, theorem_name: str) -> str:
     if tuple(model.targets) != aggregate.ordered_target_ids:
         raise ValueError("public aggregate target order differs from authority")
     if aggregate.form == "conjunction":
+        if len(aggregate.ordered_target_ids) == 1:
+            return (f"theorem {theorem_name} : {aggregate.statement_ref} := by\n"
+                    f"  exact prove_goal_{aggregate.ordered_target_ids[0]}_closed\n")
         holes = ", ".join("?_" for _ in aggregate.ordered_target_ids)
         return "\n".join([
             f"theorem {theorem_name} : {aggregate.statement_ref} := by",

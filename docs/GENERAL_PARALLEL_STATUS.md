@@ -1,5 +1,26 @@
 # General parallel-configuration status
 
+## Current system boundary: configuration-driven authority
+
+The deliverable is a configuration-driven whole-model verifier, not a collection
+of K-rank operator witnesses. `emit2 --whole-model --parallel-config ...` now runs
+pinned source topology derivation, binds ordered groups/rank scope to the shared
+model authority, and feeds the existing shared DAG/public-bundle path. See
+[PARALLEL_CONFIG_AUTHORITY.md](PARALLEL_CONFIG_AUTHORITY.md) for the exact CLI,
+evidence, and limitations. Topology metadata is Python/source checked, not a
+Lean topology theorem or a new GPU capture.
+
+The actual saved YOCO whole-model run currently stops at
+`missing-collective-role: AllToAllPrim rank 0`; primitive communication authority
+must be carried from the adapter capture rather than guessed from replica count.
+Correct subgroup metadata also remains blocked by full-graph backend assumptions.
+The source-derived topology/public integration tracer passed exact Lean through
+`Main`; this does not close mixed CP/EP, runtime DP/ZeRO or pipeline training.
+The focused checkpoint passed 241 tests and 116 subtests, plus six selected
+model-authority regressions. No new upstream bug was confirmed in the separate
+975-configuration source differential. Historical operator slices below are
+reusable components, not system-completion claims.
+
 ## CP2 entry compiler closure
 
 The shared ordinary-to-zigzag entry now accepts homogeneous FW_maybe_shuffle or
