@@ -190,6 +190,11 @@ def _target_relation_fact(proof: ProofPlan) -> RelationFactSpec | None:
     if getattr(proof.relation.kind, "value", proof.relation.kind) != "gather":
         return None
     by_step = {step.step_id: step for step in proof.steps}
+    if (len(proof.target_steps) != 3 and proof.target_steps
+            and all(ref in by_step for ref in proof.target_steps)
+            and {by_step[ref].op for ref in proof.target_steps} in
+                ({"FW_maybe_shuffle"}, {"BW_maybe_unshuffle"}, {"FW_attn_zigzag"})):
+        return RelationFactSpec("zigzag_k", tuple(proof.target_steps))
     joined = (
         len(proof.target_steps) == 2
         and len(proof.relation.pm_pieces) == 1

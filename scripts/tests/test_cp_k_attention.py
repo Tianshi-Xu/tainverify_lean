@@ -5,7 +5,9 @@ Default scale, zero dropout and no ALiBi are the restricted source interpretatio
 of this operator, not extra invented Node parameters. No intermediate InitGoal
 is supplied, and no numerical/source witness substitutes for graph compilation.
 """
-from dataclasses import fields
+from dataclasses import fields, replace
+
+import pytest
 
 from scripts.tests.test_cp_k_entry import entry_ir
 from trainverify.bridge_emitter import composer, parser
@@ -174,3 +176,124 @@ def test_cp3_attention_complete_shared_dag_from_ordinary_inputs():
     assert "sourceOutput_eq_collective" in rendered
     assert "to_sharded_unshuffle_single" in rendered
     assert "sorry" not in rendered and "axiom " not in rendered
+
+
+def _attention_plan(ir):
+    from trainverify.bridge_emitter.proof_compiler import compile_proof_plan
+    return compile_proof_plan(ir, build_default_registry())
+
+
+def _advance_attention(ir, proof):
+    from trainverify.bridge_emitter import relation_compiler as rc
+    return rc.advance_k_rank_attention_frontiers(
+        ir, proof, (("sm:1:0", "pm:4:0", "pm:5:0", "pm:3:0"),), ("zigzag_k",))
+
+
+@pytest.mark.parametrize("mutation", [
+    "missing_sm_group", "missing_pm_group", "reverse_group", "duplicate_buddy",
+    "wrong_group_op", "foreign_metadata", "no_packed", "wrong_tokens", "no_value_class",
+    "metadata_shape", "causal", "window", "extra_parameter", "nondivisible_gqa",
+    "kv_lineage_order", "kv_not_public", "kv_replicated", "kv_wrong_axis",
+])
+def test_cp3_attention_rejects_graph_authority_mutations(mutation):
+    from trainverify.bridge_emitter import relation_compiler as rc
+    ir = attention_ir()
+    group = ir.pm_replica_groups[1]
+    if mutation == "missing_sm_group":
+        ir.sm_replica_groups = (ir.sm_replica_groups[0], ir.sm_replica_groups[2])
+    elif mutation == "missing_pm_group":
+        ir.pm_replica_groups = (ir.pm_replica_groups[0], ir.pm_replica_groups[2])
+    elif mutation in {"reverse_group", "duplicate_buddy", "wrong_group_op"}:
+        change = (replace(group, members=tuple(reversed(group.members))) if mutation == "reverse_group"
+                  else replace(group, members=(group.members[0],) * 3) if mutation == "duplicate_buddy"
+                  else replace(group, irname="FW_maybe_shuffle"))
+        ir.pm_replica_groups = (ir.pm_replica_groups[0], change, ir.pm_replica_groups[2])
+    elif mutation == "foreign_metadata":
+        for n in ir.sm_nodes + ir.pm_nodes:
+            if n.op == "FW_attn_zigzag":
+                n.ins[4] = 91
+    elif mutation == "no_packed":
+        ir.packed_cu_contracts = ()
+    elif mutation == "wrong_tokens":
+        ir.packed_cu_contracts = (replace(ir.packed_cu_contracts[0], total_tokens=24),)
+    elif mutation == "no_value_class":
+        ir.pm_input_value_classes = ()
+    elif mutation == "metadata_shape":
+        ir.init_lineages[90] = replace(ir.init_lineages[90], tsShape=[3], tpShapes=[[3]])
+    elif mutation in {"causal", "window", "extra_parameter", "nondivisible_gqa"}:
+        for n in ir.sm_nodes + ir.pm_nodes:
+            if n.op == "FW_attn_zigzag":
+                if mutation == "causal": n.params[4] = 0
+                elif mutation == "window": n.params[5] = 1
+                elif mutation == "extra_parameter": n.params.append(0)
+                else: n.params[1] = 3
+    elif mutation == "kv_lineage_order":
+        ir.init_lineages[11] = replace(ir.init_lineages[11], tps=list(reversed(ir.init_lineages[11].tps)))
+    elif mutation == "kv_not_public":
+        ir.full_init_goal_ids = tuple(t for t in ir.full_init_goal_ids if t != 11)
+    elif mutation == "kv_replicated":
+        ir.init_lineages[11] = replace(ir.init_lineages[11], replicated=True)
+    elif mutation == "kv_wrong_axis":
+        ir.init_lineages[11] = replace(ir.init_lineages[11], gatherDim=1)
+    with pytest.raises(rc.RelationCompositionError):
+        _advance_attention(ir, _attention_plan(ir))
+
+
+@pytest.mark.parametrize("mutation", ["producer", "writer", "rank_order", "shape", "parameters"])
+def test_cp3_attention_rejects_forged_plan(mutation):
+    from trainverify.bridge_emitter import relation_compiler as rc
+    ir = attention_ir()
+    proof = _attention_plan(ir)
+    step = next(s for s in proof.steps if s.step_id == "pm:4:0")
+    if mutation == "producer":
+        changed = replace(step, input_bindings=(step.input_bindings[0], "init:100", *step.input_bindings[2:]))
+    elif mutation == "writer":
+        changed = replace(step, output_tid=999)
+    elif mutation == "rank_order":
+        changed = replace(step, rank=1)
+    elif mutation == "shape":
+        changed = replace(step, output_shape=(4, 2, 2))
+    else:
+        changed = replace(step, parameters=(2, 1, 2, 3, 0, 0))
+    forged = replace(proof, steps=tuple(changed if s.step_id == step.step_id else s for s in proof.steps))
+    with pytest.raises(rc.RelationCompositionError):
+        _advance_attention(ir, forged)
+
+
+@pytest.mark.parametrize("source", ["q_init", "q_entry"])
+def test_cp3_attention_rejects_k_reseed_even_when_shapes_match(source):
+    from trainverify.bridge_emitter import relation_compiler as rc
+    ir = attention_ir()
+    # Equal Q/K heads ensure rejection is about authority, not a shape mismatch.
+    full, local = [12, 1, 2], [4, 1, 2]
+    ir.sm_shapes[0] = (10, full)
+    ir.pm_shapes[:3] = [(100 + r, local) for r in range(3)]
+    ir.init_lineages[10] = replace(ir.init_lineages[10], tsShape=full, tpShapes=[local] * 3)
+    ir.lineage = replace(ir.lineage, tsShape=[12, 1, 3], tpShapes=[[4, 1, 3]] * 3)
+    for n in ir.sm_nodes + ir.pm_nodes:
+        if n.op == "FW_attn_zigzag":
+            n.params[0] = 1
+            n.ins[1] = (10 if n is ir.sm_nodes[1] else 100 + n.rank) if source == "q_init" else n.ins[0]
+    proof = _attention_plan(ir)
+    assert proof.supported
+    with pytest.raises(rc.RelationCompositionError, match="K/V may not reseed Q|K/V must be ordinary external"):
+        _advance_attention(ir, proof)
+
+
+def test_cp3_attention_certificate_and_exit_render_without_attention_backend():
+    from trainverify.bridge_emitter import relation_compiler as rc
+    ir = attention_ir()
+    proof = _attention_plan(ir)
+    certs, frontiers, layouts = _advance_attention(ir, proof)
+    assert len(certs) == 1
+    cert = certs[0]
+    assert cert.input_step_triples == frontiers
+    assert layouts == ("zigzag_k", "sharded", "sharded")
+    assert cert.parameters == (2, 1, 2, 3, 1, 0)
+    assert cert.input_full_shapes == ((12, 2, 2), (12, 1, 2), (12, 1, 3))
+    assert cert.full_shape == (12, 2, 3)
+    relation = rc.compile_relation_plan(ir, proof)
+    segment = relation.dependent_chain_plan.segments[-1]
+    rendered = composer.render_closed_segment(ir, relation, segment.segment_id)
+    assert "to_sharded_unshuffle_single" in rendered
+    assert "[12, 2, 3] [4, 2, 3]" in rendered
