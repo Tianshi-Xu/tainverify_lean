@@ -133,6 +133,33 @@ clobber, each FW/BW—fail in Lean and produce no `.olean`. Independent immutabl
 compiler review and focused parent-delta review pass. All three canonical model
 bundles and all six earlier entry/prefix fixtures remain byte-identical.
 
+## Ordered-K attention foundations (not compiler admission)
+
+The next computation is now proved under the existing global Denote model:
+`ZigzagKRel.attn_zigzag_sharded_kv_single` preserves the complete output relation
+for arbitrary positive K using ordinary K/V gathers and actual output chunks.
+The new CP3 GQA witness has concrete nonconstant Q/K/V and proves entry →
+attention → ordinary exit, reconstructing the full attention result, not Q.
+It is a collective theorem, not a new generated graph/public proof.
+
+A separate source track reads the pinned nnScaler front/end implementation.
+`ZigzagKAttentionSource` proves bottom-right causal prefix normalization and
+weighted-row equality and connects the row expression to `fw_attn_varlen`.
+Concrete CP3 GQA front/end rows and CP5 row callers compile. All four new leaf
+modules materialize `.olean`; their 20 public theorems use only kernel3.
+The source-derived CPU scalar oracle passes 26 tests for K=3/5 and local token
+counts 2/4/6. Removing bottom-right alignment or reversing the actual K gather
+independently breaks all six positive parameter cases. Noncausal source-prefix
+counterexamples demonstrate why that mode cannot be admitted.
+
+Tensor-level lifting of the pinned Q split/output scatter and ordered group
+inputs remains the next source-refinement obligation. Compiler K-attention
+acceptance is not widened. The restricted source domain additionally requires
+causal=true, no window, equal single-sequence lengths, default scale, dropout=0,
+no ALiBi and one explicitly ordered CP group; the broader existing-global-model
+lemma does not relax it. See `CP_K_ATTENTION_AUTHORITY.md` for exact formulas,
+receipts and the distinction from a FlashAttention/GPU implementation proof.
+
 ## Ordered-K shared relation foundation
 
 `RelationCompiler.ZigzagKRel` and `RelationFact.zigzagK` retain the canonical

@@ -59,18 +59,18 @@ theorem ShardedRel.attention_chunks
     full_value := ?_
     full_shape := hshape
     shards_nonempty := ?_
-    gather_dim_lt := by decide
+    gather_dim_lt := by simp only [List.length_cons, List.length_nil]; omega
     shard_shapes := ?_
     shape_contract := ?_
   }
   · change full = allGatherPrimDimN 0 chunks.length 0 chunks
     rw [hlen, hofFn]
     exact (allGatherPrimDimN_chunks_ofFn 0 K full hK
-      (by rw [hshape]; decide)
+      (by rw [hshape]; simp only [List.length_cons, List.length_nil]; omega)
       (by
         rw [hshape]
         change K * (2 * d) % K = 0
-        simp only [Nat.mul_mod, Nat.mod_self, Nat.zero_mul, Nat.zero_mod])).symm
+        exact Nat.mul_mod_right K (2 * d))).symm
   · intro hempty
     have hz := congrArg List.length hempty
     change chunks.length = 0 at hz
@@ -86,8 +86,10 @@ theorem ShardedRel.attention_chunks
     rw [Nat.mul_comm K (2 * d)]
 
 -- Only the global Denote mathematics is claimed here. The caller's metadata
--- equality specifies a single sequence; K/V remain ordinary dim-0 shards.
+-- equality specifies a single Q sequence; K/V remain ordinary dim-0 shards.
+-- cuKV is unrestricted in this global model theorem, not a source-domain claim.
 set_option maxHeartbeats 500000 in
+-- Bound the combined relation/chunk elaboration without an unbounded heartbeat option.
 theorem ZigzagKRel.attn_zigzag_sharded_kv_single
     (fullQ fullK fullV cu cuKV : Tensor) (qs ks vs : List Tensor)
     (K d qh kvh qd vd : Nat)
@@ -173,13 +175,13 @@ theorem ZigzagKRel.attn_zigzag_sharded_kv_single
       have hqone : fullQ = qs.getD 0 (zeroTensor []) := by
         have hh := sharded_single_getD hlinear (by rw [List.length_map, List.length_range, hone])
         simpa only [hone, hrangeone, List.map_cons, List.map_nil,
-          List.getD_cons_zero, fw_maybe_unshuffle_collective, if_pos rfl] using hh
+          List.getD_cons_zero, fw_maybe_unshuffle_collective, ite_true] using hh
       have hkone := sharded_single_getD hk (hks.trans hone)
       have hvone := sharded_single_getD hv (hvs.trans hone)
       have hchunkone : chunkPrimDimN 0 1 0 fullOut = fullOut :=
-        chunkPrimDimN_one_eq 0 fullOut (by rw [hfull]; decide)
+        chunkPrimDimN_one_eq 0 fullOut (by rw [hfull]; simp only [List.length_cons, List.length_nil]; omega)
       simp only [hone, hrzero, fw_attn_zigzag_collective_sharded_kv,
-        fw_maybe_shuffle_collective, if_pos rfl]
+        fw_maybe_shuffle_collective]
       change fw_attn_varlen (qs.getD 0 (zeroTensor []))
         (ks.getD 0 (zeroTensor [])) (vs.getD 0 (zeroTensor []))
         cu cuKV qh kvh qd vd true 0 = chunks.getD 0 (zeroTensor [])

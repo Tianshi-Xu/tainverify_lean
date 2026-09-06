@@ -103,7 +103,7 @@ was retained on disk.
 Run (add `-s` for concrete ownership arrays, V values, outputs, and errors):
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider /home/v-zhouziyu/work/trainverify-cp-kattention-authority/scripts/tests/test_cp_k_attention_authority.py
+PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider scripts/tests/test_cp_k_attention_authority.py
 ```
 
 ## Remaining formal obligation
@@ -114,4 +114,42 @@ collectives to the complete Tensor-level global Denote operation, including
 layout and group hypotheses. Row support and exact Real denominator/weighted-sum
 lemmas can supply part of that bridge but are not by themselves its Tensor-level
 lifting or a GPU implementation proof. Numerical agreement cannot replace those
-obligations. No compiler or Lean semantics are changed by this artifact.
+obligations. No compiler or existing Lean semantics are changed by this artifact.
+
+## Kernel-checked foundation
+
+Four new leaf modules make the two evidence tracks explicit:
+
+- `denote.ZigzagKAttention`: `ShardedRel.attention_chunks` reconstructs full
+  tensors from the actual ordered chunks; `ZigzagKRel.attn_zigzag_sharded_kv_single`
+  carries complete shape/value relations through the existing global attention
+  collective for every positive K, including its K=1 branch. The mathematical
+  theorem permits separate unrestricted `cuKV`; this is **not** permission to
+  widen the restricted equal-length, shared-metadata source domain above.
+- `denote.ZigzagKAttentionWitness`: assumption-free, nonconstant CP3 Q/K/V,
+  Q-heads=2 and KV-heads=1, establish entry, attention output, and ordinary exit
+  reconstruction of the actual full `fw_attn_varlen` tensor. These are collective
+  relation witnesses, not generated graph/public certificates.
+- `denote.ZigzagKAttentionSource`: proves causal-prefix denominator equality and
+  weighted-row equality, retaining Denote's zero-denominator branch. Its
+  `front_row_eq` / `end_row_eq` incorporate bottom-right offset; the separate
+  `fw_attn_varlen_row` connects the scalar row to actual Denote flat-index,
+  head, channel and logit expressions.
+- `denote.ZigzagKAttentionSourceWitness`: actual nonconstant CP3 GQA front/end
+  rows plus CP5 conditional row callers. This does not establish that source
+  Q extraction/scatter and a generated graph supply those same tensor rows.
+
+Parent `lake build` materialized all four `.olean` files. All 20 public theorem
+axiom groups are exactly the standard `propext`, `Classical.choice`, `Quot.sound`;
+no `sorryAx`, native decision or source-refinement axiom is used. The parent
+re-ran all 26 scalar tests. Independently removing the source oracle's
+bottom-right offset and reversing its actual K gather each rejected all six
+CP-size/local-length positive cases. No mutation is retained.
+
+The next source-level obligation is the Tensor lifting: prove that the pinned
+Q split and output scatter, with actual ordered collective inputs, supply the
+same Q row, K/V row and head/channel mapping consumed by these row lemmas.
+Only after that boundary is established should the dedicated K-attention
+certificate consume entry's internal `zigzag_k` Q fact and independent ordinary
+K/V facts. Production compiler acceptance and existing model artifacts are
+unchanged; these results are not general ring or CP×EP closure.
