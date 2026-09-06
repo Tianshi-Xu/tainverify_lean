@@ -97,6 +97,7 @@ theorem ZigzagKRel.full_row_spec
       xs.getD r (zeroTensor [2 * d, heads, dim]) = xs.getD r (zeroTensor []) := by
     unfold List.getD
     rw [List.getElem?_eq_getElem (by omega)]
+    rfl
   have hselect : qs.getD rank (zeroTensor []) =
       fw_maybe_shuffle_collective xs (decodeCuSeqlens cu) K rank := by
     rw [hout]
@@ -160,7 +161,7 @@ theorem ZigzagKRel.full_row_spec
     rw [hdecomp, hdefault _ hsrc, ← hfull] at hval
     change gatherFromRank xs (2 * d) (heads * dim) g (head * dim + channel) =
       valAt full ((g * heads + head) * dim + channel)
-    unfold gatherFromRank
+    dsimp only [gatherFromRank]
     rw [show g % (2 * d) * (heads * dim) + (head * dim + channel) =
       (g % (2 * d) * heads + head) * dim + channel by ring]
     exact hval.symm

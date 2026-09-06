@@ -106,15 +106,15 @@ Run (add `-s` for concrete ownership arrays, V values, outputs, and errors):
 PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider scripts/tests/test_cp_k_attention_authority.py
 ```
 
-## Remaining formal obligation
+## Evidence boundary
 
 This source-derived oracle does **not** prove production-source/kernel equivalence.
-A formal bridge still must connect pinned metadata/split/scatter and ordered
-collectives to the complete Tensor-level global Denote operation, including
-layout and group hypotheses. Row support and exact Real denominator/weighted-sum
-lemmas can supply part of that bridge but are not by themselves its Tensor-level
-lifting or a GPU implementation proof. Numerical agreement cannot replace those
-obligations. No compiler or existing Lean semantics are changed by this artifact.
+The Lean Tensor lifting below proves the hand-translated Real front/end model
+against the existing global Denote operation. Connecting concrete generated
+process groups, runtime parameter defaults, metadata and writer operands to that
+restricted contract remains a compiler/source-authority obligation. GPU floating-
+point behavior and the installed FlashAttention backend/version are not proved.
+No production compiler or existing Lean semantics are changed by this artifact.
 
 ## Kernel-checked foundation
 
@@ -146,10 +146,44 @@ re-ran all 26 scalar tests. Independently removing the source oracle's
 bottom-right offset and reversing its actual K gather each rejected all six
 CP-size/local-length positive cases. No mutation is retained.
 
-The next source-level obligation is the Tensor lifting: prove that the pinned
-Q split and output scatter, with actual ordered collective inputs, supply the
-same Q row, K/V row and head/channel mapping consumed by these row lemmas.
-Only after that boundary is established should the dedicated K-attention
-certificate consume entry's internal `zigzag_k` Q fact and independent ordinary
-K/V facts. Production compiler acceptance and existing model artifacts are
-unchanged; these results are not general ring or CP×EP closure.
+## Tensor lifting of the source-derived Real model
+
+The follow-up adds four leaf modules:
+
+- `ZigzagKAttentionRows`: closed-form single-sequence `zigzagPos`, logical-row
+  bounds, and `ZigzagKRel.full_row_spec/full_row_value`. These derive actual
+  `qs.getD rank` values, both tensor shapes and all flat-index bounds from the
+  existing relation, preserving the head and channel coordinates.
+- `ZigzagKAttentionTensor`: `sourceOutput` computes the two source-derived
+  branches using **local Q**, front/end K prefixes, bottom-right causal offsets,
+  the existing GQA head map and scatter into local output slots. Dot-product
+  transport and a coordinate form of `fw_attn_varlen_row` connect the local
+  computation to global attention without changing either existing operation.
+- `ZigzagKAttentionRefinement`: `ZigzagKRel.sourceOutput_eq_collective` proves
+  complete Tensor equality between that source model using **actual ordered K/V
+  gathers** and `fw_attn_zigzag_collective_sharded_kv`. Every Q-row equality is
+  derived internally from `ZigzagKRel`, never supplied by the caller. This
+  theorem uses shared single-sequence metadata, K>1, positive dimensions and
+  query-head divisibility by KV heads, and fixes causal/no-window/default-scale
+  mathematics. Source dropout and ALiBi are absent from this restricted model.
+- `ZigzagKAttentionRefinementWitness`: the same concrete CP3 GQA inputs prove
+  each rank, complete ordered Tensor-list equality, and ordinary exit
+  reconstruction of the source-model attention outputs.
+
+All four modules build, and all 12 additional public theorem axiom sets are
+subsets of kernel3. Together with the first foundation this is eight leaf
+modules and 32 audited public theorems. A standalone exact-source assembly of
+Tensor+Refinement compiles and materializes an `.olean` without importing their
+production `.olean` files. Coherently shifting either the front or end prefix in
+both the source definition and its observation lemma makes that assembly fail
+in the unchanged refinement proof; neither negative creates an `.olean`.
+A separate wrong-Q-row probe timed out and is **not** counted as a semantic
+negative receipt.
+
+The next boundary is the dedicated compiler certificate/backend: consume the
+entry-produced `zigzag_k` Q fact and independent ordinary K/V facts, authenticate
+all actual ordered writers and group/rank context, bind shared metadata and the
+restricted source parameters, and preserve that output fact through exit and
+the exact public graph theorem. Compiler acceptance and existing model artifacts
+are unchanged; this is not general ring, CP×EP, GPU or formal Python-execution
+closure.

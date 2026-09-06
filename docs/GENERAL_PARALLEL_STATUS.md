@@ -152,13 +152,24 @@ counts 2/4/6. Removing bottom-right alignment or reversing the actual K gather
 independently breaks all six positive parameter cases. Noncausal source-prefix
 counterexamples demonstrate why that mode cannot be admitted.
 
-Tensor-level lifting of the pinned Q split/output scatter and ordered group
-inputs remains the next source-refinement obligation. Compiler K-attention
-acceptance is not widened. The restricted source domain additionally requires
-causal=true, no window, equal single-sequence lengths, default scale, dropout=0,
-no ALiBi and one explicitly ordered CP group; the broader existing-global-model
-lemma does not relax it. See `CP_K_ATTENTION_AUTHORITY.md` for exact formulas,
-receipts and the distinction from a FlashAttention/GPU implementation proof.
+The source-derived Real Tensor lifting is now also proved. `ZigzagKAttentionRows`
+derives the actual local Q values and global-row bounds without changing heads or
+channels. `ZigzagKAttentionTensor` implements local-Q front/end branches and
+scatter; `ZigzagKRel.sourceOutput_eq_collective` in `ZigzagKAttentionRefinement`
+proves complete Tensor equality using actual
+ordered K/V gathers, deriving every Q-row equality internally. The CP3 GQA
+refinement witness proves complete output-list equality and source-output exit
+reconstruction. These four further leaf modules build; all 12 new public theorems
+use kernel3 or less. A standalone exact Tensor+Refinement replay compiles, while
+coherent wrong front/end prefixes fail the unchanged refinement proof.
+
+The next boundary is the dedicated K-attention compiler certificate/backend and
+its exact public graph theorem. Acceptance is not yet widened. The restricted
+source model requires causal=true, no window, equal single-sequence lengths,
+default scale, dropout=0, no ALiBi, valid GQA head divisibility and one explicitly
+ordered CP group; the broader existing-global-model lemma does not relax it.
+See `CP_K_ATTENTION_AUTHORITY.md` for formulas, receipts and the distinction
+between this hand-translated Real model and GPU/formal-Python execution.
 
 ## Ordered-K shared relation foundation
 
