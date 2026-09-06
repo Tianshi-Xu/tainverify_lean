@@ -133,7 +133,44 @@ clobber, each FW/BW—fail in Lean and produce no `.olean`. Independent immutabl
 compiler review and focused parent-delta review pass. All three canonical model
 bundles and all six earlier entry/prefix fixtures remain byte-identical.
 
-## Ordered-K attention foundations (not compiler admission)
+## Ordered-K attention compiler/public slice
+
+The shared compiler now admits the restricted `FW_attn_zigzag` transition for
+K>=3 (CP2 stays on its existing route): entry-produced `zigzag_k` Q plus two
+independent ordinary dim-0 K/V InitGoals produces a `zigzag_k` attention output.
+Typed certificates bind exact graph writers/producers, semantic rank order,
+explicit replica groups, all five operands/six parameters, full/shard shapes,
+shared external single-sequence metadata and entry-derived packed authority.
+Only Q and output join that metadata region; K/V are not relabeled zigzag.
+Exit consumes the actual attention result, including a changed V/output width.
+Target projections reuse all three certificates in one dependency DAG.
+
+`k_attention_renderer.py` restores Q/K/V operand roles from the certificate,
+not the sorted transition prerequisite list. It revalidates graph authority and
+live packed/alias/cross-metadata facts, exposes every buddy Q/K/V read in actual
+execution order, and consumes both the K relation theorem and source Tensor
+refinement. Missing/default runtime scale, dropout or ALiBi are not fabricated
+as Node fields: the evidence is still the existing restricted Real operator
+interpretation, not a new authenticated GPU execution capture.
+
+The committed `scripts/tests/fixtures/CPKAttentionFW.lean` is generated from the
+same CP3 test IR with execution order [2,0,1], QK width 2 and V width 3. Its exact
+public theorem preserves full output [12,2,3], every shard [4,2,3] and complete
+reconstruction. `publicInputs` supplies nonconstant Q/K/V and inhabits all public
+assumptions; `inhabitedPublicOutput` applies that theorem. CP5 exact three-segment
+closure is separately kernel-checked with an explicit initial-state hypothesis.
+Both checks retain the generated native-decision baseline; publicInputs itself
+uses kernel3. Wrong attention buddy order, a cross-buddy Q overwrite and an exit
+overwrite of retained Q are rejected by Lean and produce no `.olean`.
+
+Parent focused validation passes 213 attention/entry/exit/prefix/import-policy
+tests. Removing causal/window/GQA guards independently breaks their negative tests;
+removing renderer authority liveness breaks all three packed/alias/cross tests,
+and removing region alias validation breaks its own test. No full-model build or
+canonical regeneration was used for this incremental slice. Packed multi-sequence,
+BW attention, additional KV layouts and CP subgroups remain outside admission.
+
+## Ordered-K attention mathematical foundations
 
 The next computation is now proved under the existing global Denote model:
 `ZigzagKRel.attn_zigzag_sharded_kv_single` preserves the complete output relation
@@ -163,8 +200,8 @@ reconstruction. These four further leaf modules build; all 12 new public theorem
 use kernel3 or less. A standalone exact Tensor+Refinement replay compiles, while
 coherent wrong front/end prefixes fail the unchanged refinement proof.
 
-The next boundary is the dedicated K-attention compiler certificate/backend and
-its exact public graph theorem. Acceptance is not yet widened. The restricted
+The dedicated K-attention certificate/backend and CP3 exact public graph theorem
+are now implemented (see the compiler/public slice above). The restricted
 source model requires causal=true, no window, equal single-sequence lengths,
 default scale, dropout=0, no ALiBi, valid GQA head divisibility and one explicitly
 ordered CP group; the broader existing-global-model lemma does not relax it.

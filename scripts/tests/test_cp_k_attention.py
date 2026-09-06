@@ -22,7 +22,7 @@ from trainverify.bridge_emitter.model_compiler import (
 from trainverify.bridge_emitter.proof_compiler import build_default_registry
 
 
-def attention_ir():
+def attention_ir(num_ranks=3):
     """Actual ordered CP3 buddies, GQA 2:1, local L=4, QK dim=2, V dim=3.
 
     Execution order [2,0,1] deliberately differs from semantic group order.
@@ -30,21 +30,21 @@ def attention_ir():
     Metadata 90 is shared by both attention operands and both boundaries, with
     the existing entry helper's public packed contract on its value alias 91.
     """
-    ir = entry_ir(3)
-    q_full, q_local = [12, 2, 2], [4, 2, 2]
+    ir = entry_ir(num_ranks)
+    q_full, q_local = [4 * num_ranks, 2, 2], [4, 2, 2]
     ir.sm_shapes[0] = (10, q_full)
-    ir.pm_shapes[:3] = [(100 + r, q_local) for r in range(3)]
+    ir.pm_shapes[:num_ranks] = [(100 + r, q_local) for r in range(num_ranks)]
     ir.init_lineages[10] = parser.LineageGoal(
-        10, q_full, [(r, 100 + r) for r in range(3)], [q_local] * 3, 0,
+        10, q_full, [(r, 100 + r) for r in range(num_ranks)], [q_local] * num_ranks, 0,
     )
     for tid, base, full, local in (
-        (11, 110, [12, 1, 2], [4, 1, 2]),
-        (12, 120, [12, 1, 3], [4, 1, 3]),
+        (11, 110, [4 * num_ranks, 1, 2], [4, 1, 2]),
+        (12, 120, [4 * num_ranks, 1, 3], [4, 1, 3]),
     ):
         ir.sm_shapes.append((tid, full))
-        ir.pm_shapes.extend((base + r, local) for r in range(3))
+        ir.pm_shapes.extend((base + r, local) for r in range(num_ranks))
         ir.init_lineages[tid] = parser.LineageGoal(
-            tid, full, [(r, base + r) for r in range(3)], [local] * 3, 0,
+            tid, full, [(r, base + r) for r in range(num_ranks)], [local] * num_ranks, 0,
         )
     ir.prereqs = list(ir.init_lineages)
     ir.full_init_goal_ids = tuple(ir.prereqs)
@@ -53,12 +53,12 @@ def attention_ir():
     pm_attn = [
         parser.Node(r, "FW_attn_zigzag", [200 + r, 110 + r, 120 + r, 90, 90],
                     [300 + r], list(parameters))
-        for r in range(3)
+        for r in range(num_ranks)
     ]
     sm_exit = parser.Node(0, "FW_maybe_unshuffle", [30, 90], [40], [1, 0])
     pm_exit = [
-        parser.Node(r, "FW_maybe_unshuffle", [300 + r, 90], [400 + r], [3, r])
-        for r in range(3)
+        parser.Node(r, "FW_maybe_unshuffle", [300 + r, 90], [400 + r], [num_ranks, r])
+        for r in range(num_ranks)
     ]
     for cid, sm, pm in ((1, sm_attn, pm_attn), (2, sm_exit, pm_exit)):
         def group(nodes):
@@ -69,11 +69,11 @@ def attention_ir():
         ir.sm_replica_groups += (group([sm]),)
         ir.pm_replica_groups += (group(pm),)
     ir.sm_nodes += [sm_attn, sm_exit]
-    ir.pm_nodes = [ir.pm_nodes[r] for r in (2, 0, 1)]
-    ir.pm_nodes += [pm_attn[r] for r in (2, 0, 1)]
-    ir.pm_nodes += [pm_exit[r] for r in (2, 0, 1)]
+    ir.pm_nodes = [ir.pm_nodes[r] for r in (num_ranks - 1, *range(num_ranks - 1))]
+    ir.pm_nodes += [pm_attn[r] for r in (num_ranks - 1, *range(num_ranks - 1))]
+    ir.pm_nodes += [pm_exit[r] for r in (num_ranks - 1, *range(num_ranks - 1))]
     ir.lineage = parser.LineageGoal(
-        40, [12, 2, 3], [(r, 400 + r) for r in range(3)], [[4, 2, 3]] * 3, 0,
+        40, [4 * num_ranks, 2, 3], [(r, 400 + r) for r in range(num_ranks)], [[4, 2, 3]] * num_ranks, 0,
     )
     ir.sm_graph_ref = "CPKAttention.smGraph"
     ir.pm_graph_ref = "CPKAttention.pmGraph"
@@ -82,12 +82,13 @@ def attention_ir():
 
 def attention_model(ir):
     """Exit first: compile the maximal closure, then reuse its two prefixes."""
+    num_ranks = ir.pm_num_ranks
     lineages = (
         ir.lineage,
-        parser.LineageGoal(20, [12, 2, 2], [(r, 200 + r) for r in range(3)],
-                           [[4, 2, 2]] * 3, 0),
-        parser.LineageGoal(30, [12, 2, 3], [(r, 300 + r) for r in range(3)],
-                           [[4, 2, 3]] * 3, 0),
+        parser.LineageGoal(20, [4 * num_ranks, 2, 2], [(r, 200 + r) for r in range(num_ranks)],
+                           [[4, 2, 2]] * num_ranks, 0),
+        parser.LineageGoal(30, [4 * num_ranks, 2, 3], [(r, 300 + r) for r in range(num_ranks)],
+                           [[4, 2, 3]] * num_ranks, 0),
     )
     targets = {}
     for goal_id, lineage in enumerate(lineages):
@@ -98,6 +99,58 @@ def attention_model(ir):
     payload = {f.name: getattr(ir, f.name) for f in fields(ModelAuthorityIR) if hasattr(ir, f.name)}
     return ModelAuthorityIR(**payload, model_id="cp3-k-attention", root=__file__,
                             targets=targets, aggregate=None)
+
+
+def test_cp3_attention_public_fixture_matches_generator():
+    from pathlib import Path
+    from scripts.tests.cp_k_attention_witness import witness_source
+    fixture = Path(__file__).with_name("fixtures") / "CPKAttentionFW.lean"
+    assert fixture.read_text() == witness_source()
+
+
+def _attention_segment():
+    ir = attention_ir()
+    model = attention_model(ir)
+    relation = compile_shared_relation_dag(
+        model, compile_shared_proof_dag(model, build_default_registry())).global_relation
+    return ir, relation, relation.dependent_chain_plan.segments[1]
+
+
+@pytest.mark.parametrize("kind", ["packed", "alias", "cross metadata"])
+def test_attention_renderer_rejects_nonlive_metadata_authority(kind):
+    ir, relation, segment = _attention_segment()
+    chain = relation.dependent_chain_plan
+    def wanted(a):
+        if kind == "packed":
+            return a.kind == "packed_cu"
+        return a.kind == "tensor_eq" and a.left_side == ("pm" if kind == "alias" else "sm")
+    authority = next(a for a in chain.authority_facts if wanted(a))
+    states = tuple(replace(s, fact_ids=tuple(f for f in s.fact_ids if f != authority.fact_id))
+                   if s.state_id in (segment.pre_state_id, segment.post_state_id) else s
+                   for s in chain.states)
+    corrupt = replace(relation, dependent_chain_plan=replace(chain, states=states))
+    with pytest.raises(ValueError, match=kind + " authority not live"):
+        composer.render_closed_segment(ir, corrupt, segment.segment_id)
+
+
+def test_attention_renderer_rejects_region_alias_loss():
+    ir, relation, segment = _attention_segment()
+    corrupt = replace(relation, zigzag_regions=(replace(relation.zigzag_regions[0], alias_tids=()),))
+    with pytest.raises(ValueError, match="metadata region authority mismatch"):
+        composer.render_closed_segment(ir, corrupt, segment.segment_id)
+
+
+def test_cp5_attention_complete_shared_dag():
+    ir = attention_ir(5)
+    model = attention_model(ir)
+    dag = compile_shared_relation_dag(model, compile_shared_proof_dag(model, build_default_registry()))
+    relation = dag.global_relation
+    assert relation is not None and relation.dependent_chain_plan.complete
+    assert len(dag.certificates) == 3
+    assert [s.pm_range for s in relation.dependent_chain_plan.segments] == [(0, 5), (5, 10), (10, 15)]
+    rendered = "\n".join(composer.render_closed_segment(ir, relation, s.segment_id)
+                         for s in relation.dependent_chain_plan.segments)
+    assert "sourceOutput_eq_collective" in rendered
 
 
 def test_cp3_attention_complete_shared_dag_from_ordinary_inputs():
@@ -237,6 +290,23 @@ def test_cp3_attention_rejects_graph_authority_mutations(mutation):
         ir.init_lineages[11] = replace(ir.init_lineages[11], gatherDim=1)
     with pytest.raises(rc.RelationCompositionError):
         _advance_attention(ir, _attention_plan(ir))
+
+
+def test_cp3_attention_rejects_nondivisible_gqa_with_coherent_shapes():
+    from trainverify.bridge_emitter import relation_compiler as rc
+    ir = attention_ir()
+    for tid, base, channels in ((11, 110, 2), (12, 120, 3)):
+        full, local = [12, 3, channels], [4, 3, channels]
+        ir.sm_shapes = [(t, full if t == tid else sh) for t, sh in ir.sm_shapes]
+        ir.pm_shapes = [(t, local if base <= t < base + 3 else sh) for t, sh in ir.pm_shapes]
+        ir.init_lineages[tid] = replace(ir.init_lineages[tid], tsShape=full, tpShapes=[local] * 3)
+    for node in ir.sm_nodes + ir.pm_nodes:
+        if node.op == "FW_attn_zigzag":
+            node.params[1] = 3
+    proof = _attention_plan(ir)
+    assert proof.supported
+    with pytest.raises(rc.RelationCompositionError, match="positive GQA dimensions"):
+        _advance_attention(ir, proof)
 
 
 @pytest.mark.parametrize("mutation", ["producer", "writer", "rank_order", "shape", "parameters"])

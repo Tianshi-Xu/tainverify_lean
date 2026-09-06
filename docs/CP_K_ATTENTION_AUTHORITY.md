@@ -110,11 +110,11 @@ PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider scripts/tests/
 
 This source-derived oracle does **not** prove production-source/kernel equivalence.
 The Lean Tensor lifting below proves the hand-translated Real front/end model
-against the existing global Denote operation. Connecting concrete generated
-process groups, runtime parameter defaults, metadata and writer operands to that
-restricted contract remains a compiler/source-authority obligation. GPU floating-
-point behavior and the installed FlashAttention backend/version are not proved.
-No production compiler or existing Lean semantics are changed by this artifact.
+against the existing global Denote operation. The compiler extension below binds
+graph groups, metadata and writer operands; connecting a new captured runtime's
+parameter defaults to that restricted contract remains a source-authority
+obligation. GPU floating-point behavior and the installed FlashAttention
+backend/version are not proved. The existing Lean operator semantics are unchanged.
 
 ## Kernel-checked foundation
 
@@ -180,10 +180,40 @@ in the unchanged refinement proof; neither negative creates an `.olean`.
 A separate wrong-Q-row probe timed out and is **not** counted as a semantic
 negative receipt.
 
-The next boundary is the dedicated compiler certificate/backend: consume the
-entry-produced `zigzag_k` Q fact and independent ordinary K/V facts, authenticate
-all actual ordered writers and group/rank context, bind shared metadata and the
-restricted source parameters, and preserve that output fact through exit and
-the exact public graph theorem. Compiler acceptance and existing model artifacts
-are unchanged; this is not general ring, CP×EP, GPU or formal Python-execution
-closure.
+## Shared compiler and exact graph evidence
+
+The dedicated `KRankAttentionCertificate` and `k_attention_renderer` now bind
+entry's internal `zigzag_k` Q and independent ordinary external K/V facts to the
+actual attention output, then exit and public gather. All three projections reuse
+one shared three-segment DAG. The compiler checks SM1/PMK>=3, positive/even local
+length, six matching attention parameters, valid GQA, shared external cu,
+entry-derived packed/value-class authority and explicit ordered replica groups.
+CP2 keeps its previous path; no source subgroup or new backward path is admitted.
+
+The renderer revalidates exact graph/producers, restores Q/K/V roles from the
+typed certificate rather than sorted pre-facts, retains full frame/no-clobber
+obligations, and consumes the source Tensor refinement for each PM writer. The
+six graph parameters do not encode dropout, explicit scale or ALiBi. Those
+remain the restricted Real operator interpretation above; no nonexistent Node
+fields or new runtime/source capture are asserted.
+
+`cp_k_attention_witness.witness_source()` generates the committed exact CP3
+`fixtures/CPKAttentionFW.lean`: nonconstant Q[12,2,2], K[12,1,2], V[12,1,3],
+execution order [2,0,1] but semantic ranks [0,1,2], shared metadata90/91.
+Its `prove_goal_0_closed` proves full output shape, all shard shapes and complete
+reconstruction. `publicInputs` inhabits the actual public contract independently;
+`inhabitedPublicOutput` applies that exact theorem. No intermediate Q/attention
+InitGoal is introduced. CP5 `conditional_source(5)` separately compiles the same
+three graph segments with its initial-state hypothesis, not a CP5 inhabited
+public theorem. Both exact outputs materialize `.olean`; generated proofs retain
+the existing native-decision baseline, while publicInputs is kernel3.
+
+Parent validation passes 213 focused attention/entry/exit/prefix/import-policy
+tests, including committed-fixture byte reproduction. Causal/window/GQA guard removal
+is detected independently; renderer packed/alias/cross liveness and region-alias
+guard removals are detected. Exact graph-only variants with wrong attention buddy
+order, cross-buddy Q clobber and retained-Q clobber are all rejected by Lean and
+produce no `.olean`. Full-model builds/canonical regeneration were not rerun for
+this incremental slice; no publication artifacts changed. Packed multi-sequence,
+BW attention, additional KV layouts, source subgroup composition and new real
+configuration captures remain separate work.
