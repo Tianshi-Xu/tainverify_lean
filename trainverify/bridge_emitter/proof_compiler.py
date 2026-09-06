@@ -1381,6 +1381,10 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
     rejected except an in-place collective that consumes and rewrites the same
     tid; those use the immediately preceding writer as their dependency.
     """
+    if ir.sm_adapter_communications is not None or ir.pm_adapter_communications is not None:
+        from .adapter_communication import validate_adapter_communications
+        validate_adapter_communications(ir, "sm")
+        validate_adapter_communications(ir, "pm")
     if ir.parallel_authority is not None:
         from .parallel_authority import validate_ir_parallel_authority
         validate_ir_parallel_authority(ir)

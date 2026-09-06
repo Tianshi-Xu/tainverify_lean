@@ -1063,11 +1063,11 @@ def _build_whole_model_bundle(
     if "Main.lean" not in bundle:
         raise ValueError("whole-model production bundle must contain Main.lean")
     if parallel_topology is not None:
-        from dataclasses import asdict
+        from trainverify.bridge_emitter.parallel_authority import parallel_authority_payload
         # Metadata is source/graph checked in Python; the Lean theorem remains
         # about these GraphDecls, not runtime DP/ZeRO or a GPU/source execution.
         header = ("/- Parallel graph authority (not a Lean topology theorem)\n"
-                  + json.dumps(asdict(model.parallel_authority), sort_keys=True)
+                  + json.dumps(parallel_authority_payload(model.parallel_authority), sort_keys=True)
                   + "\n-/\n").encode()
         bundle["Main.lean"] = header + bundle["Main.lean"]
     return bundle

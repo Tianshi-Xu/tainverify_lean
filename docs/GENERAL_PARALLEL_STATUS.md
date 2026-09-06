@@ -10,16 +10,26 @@ model authority, and feeds the existing shared DAG/public-bundle path. See
 evidence, and limitations. Topology metadata is Python/source checked, not a
 Lean topology theorem or a new GPU capture.
 
-The actual saved YOCO whole-model run currently stops at
-`missing-collective-role: AllToAllPrim rank 0`; primitive communication authority
-must be carried from the adapter capture rather than guessed from replica count.
+Adapter `kwargs.ranks` and ordered input ownership now have an opt-in exporter,
+graph-specific decoder and shared consumer path, separate from logical replicas.
+Direct projections cannot drop these records to select the old planner. A
+synthetic embedding→AllToAll tracer reaches the real whole-model loader/builder,
+complete `Main`, and a non-vacuous full output obligation checked by Lean.
+The input inhabitant is kernel3-only; the public result retains the existing
+native-decision baseline (91 native axioms in this tracer).
+
+The actual saved YOCO authority still lacks these records and stops at
+`missing-collective-role: AllToAllPrim rank 0`. No fresh model capture was run;
+raw capture inputs were not found locally and the active Python lacks
+Torch/nnScaler. The capture launcher itself still couples two-rank settings.
 Correct subgroup metadata also remains blocked by full-graph backend assumptions.
-The source-derived topology/public integration tracer passed exact Lean through
-`Main`; this does not close mixed CP/EP, runtime DP/ZeRO or pipeline training.
-The focused checkpoint passed 241 tests and 116 subtests, plus six selected
-model-authority regressions. No new upstream bug was confirmed in the separate
-975-configuration source differential. Historical operator slices below are
-reusable components, not system-completion claims.
+Thus mixed CP/EP, data-lane/runtime DP/ZeRO and pipeline training are **not closed**.
+
+The focused checkpoint passed 293 tests and 116 subtests, plus six selected
+model-authority regressions; four targeted guard mutations were killed and
+independent review findings were closed. No new upstream bug was confirmed in
+the separate 975-configuration source differential. Historical operator slices
+below are reusable components, not system-completion claims.
 
 ## CP2 entry compiler closure
 

@@ -9,6 +9,7 @@ Usage:
     python3 parser.py <N> [--root <repo_root>]
 prints a JSON-ish dump of the parsed IR + topology for goal N.
 """
+import ast
 import os
 import re
 import sys
@@ -85,6 +86,49 @@ class TensorValueBoundContract:
     upper_bound: int
 
 
+@dataclass(frozen=True)
+class AdapterCommunication:
+    rank: int
+    primary_out_tid: int
+    op: str
+    ranks: tuple[int, ...]
+    inputs: tuple[tuple[int, int], ...]
+
+
+def parse_adapter_communications(source: str, name: str) -> tuple[AdapterCommunication, ...] | None:
+    """Read the literal capture tuple format, not arbitrary Lean/Python code.
+
+    None means absent authority; () means an explicit assertion of no adapters.
+    Only the wire subset shared by Lean literals and Python literal_eval is used.
+    """
+    declarations = re.findall(rf"(?m)^\s*def\s+{re.escape(name)}\s*:", source)
+    if not declarations:
+        return None
+    if len(declarations) != 1:
+        raise ValueError(f"ambiguous adapter communication declaration: {name}")
+    block = extract_def_block(source, name)
+    try:
+        raw = ast.literal_eval(block.split(":=", 1)[1].strip())
+    except (ValueError, SyntaxError, IndexError) as exc:
+        raise ValueError(f"{name} requires literal adapter communication tuples") from exc
+    if type(raw) is not list:
+        raise ValueError(f"{name} requires a literal list")
+    result = []
+    for row in raw:
+        if type(row) is not tuple or len(row) != 5:
+            raise ValueError("adapter communication needs rank, output, op, ranks, inputs")
+        rank, output, op, ranks, inputs = row
+        if type(op) is not str or type(ranks) is not list or type(inputs) is not list:
+            raise ValueError("invalid adapter communication field types")
+        if any(type(pair) is not tuple or len(pair) != 2 for pair in inputs):
+            raise ValueError("adapter inputs require literal (rank, tid) pairs")
+        numbers = [rank, output, *ranks, *(v for pair in inputs for v in pair)]
+        if any(type(v) is not int or v < 0 for v in numbers):
+            raise ValueError("adapter rank/tid values must be natural integers, not bool")
+        result.append(AdapterCommunication(rank, output, op, tuple(ranks), tuple(inputs)))
+    return tuple(result)
+
+
 @dataclass
 class GoalIR:
     n: int
@@ -116,6 +160,8 @@ class GoalIR:
     init_lineages: dict[int, LineageGoal] = field(default_factory=dict)
     full_init_goal_ids: tuple[int, ...] = ()
     parallel_authority: "ParallelGraphAuthority | None" = None
+    sm_adapter_communications: tuple[AdapterCommunication, ...] | None = None
+    pm_adapter_communications: tuple[AdapterCommunication, ...] | None = None
 
 # ---------- low-level parsers ----------
 RANGE_MAP_VALUE_RE = (
@@ -838,6 +884,8 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         pm_num_ranks=parse_num_ranks(pm_block, pm_name),
         sm_replica_groups=parse_replica_groups(sm_block),
         pm_replica_groups=parse_replica_groups(pm_block),
+        sm_adapter_communications=parse_adapter_communications(gen_text, sm_name.rsplit(".", 1)[-1] + "AdapterCommunications"),
+        pm_adapter_communications=parse_adapter_communications(gen_text, pm_name.rsplit(".", 1)[-1] + "AdapterCommunications"),
         packed_cu_contracts=packed_cu_contracts,
         tensor_value_bound_contracts=tensor_value_bound_contracts,
         sm_input_value_classes=sm_input_value_classes,

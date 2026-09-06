@@ -83,6 +83,19 @@ def _step_payload(step: CertificateStep) -> dict:
     return asdict(step)
 
 
+def _adapter_payload(graph) -> dict:
+    return {side + "_adapter_communications": [asdict(record) for record in getattr(graph, side + "_adapter_communications")]
+            for side in ("sm", "pm") if getattr(graph, side + "_adapter_communications") is not None}
+
+
+def _query_payload(query) -> dict:
+    payload = asdict(query)
+    for side in ("sm", "pm"):
+        if payload[side + "_adapter_communications"] is None:
+            del payload[side + "_adapter_communications"]
+    return payload
+
+
 def _authority_digest(model: ModelAuthorityIR) -> str:
     payload = {
         "model_id": model.model_id,
@@ -97,13 +110,15 @@ def _authority_digest(model: ModelAuthorityIR) -> str:
         "sm_replica_groups": [asdict(group) for group in model.sm_replica_groups],
         "pm_replica_groups": [asdict(group) for group in model.pm_replica_groups],
         "targets": [
-            {"goal_id": goal_id, "query": asdict(query)}
+            {"goal_id": goal_id, "query": _query_payload(query)}
             for goal_id, query in model.targets.items()
         ],
         "aggregate": None if model.aggregate is None else asdict(model.aggregate),
     }
+    payload.update(_adapter_payload(model))
     if model.parallel_authority is not None:
-        payload["parallel_authority"] = asdict(model.parallel_authority)
+        from .parallel_authority import parallel_authority_payload
+        payload["parallel_authority"] = parallel_authority_payload(model.parallel_authority)
     return hashlib.sha256(_canonical(payload)).hexdigest()
 
 
@@ -117,6 +132,8 @@ def compile_shared_proof_dag(
     globally stable ``side:node:output`` IDs and conflicting payloads fail
     closed instead of being silently overwritten.
     """
+    from .adapter_communication import validate_model_adapter_communications
+    validate_model_adapter_communications(model)
     graph_keys = {
         goal_id: _content_key("target-graph-authority", {
             "sm_graph_ref": query.sm_graph_ref,
@@ -129,6 +146,7 @@ def compile_shared_proof_dag(
             "pm_shapes": query.pm_shapes,
             "sm_replica_groups": [asdict(group) for group in query.sm_replica_groups],
             "pm_replica_groups": [asdict(group) for group in query.pm_replica_groups],
+            **_adapter_payload(query),
         })
         for goal_id, query in model.targets.items()
     }
@@ -601,6 +619,8 @@ def compile_shared_relation_dag(
     model: ModelAuthorityIR, proof_dag: SharedProofDAG
 ) -> SharedRelationDAG:
     """Compile maximal relation closures once and project target-local sub-DAGs."""
+    from .adapter_communication import validate_model_adapter_communications
+    validate_model_adapter_communications(model)
     if model.parallel_authority is not None:
         from .parallel_authority import validate_model_parallel_authority
         validate_model_parallel_authority(model)

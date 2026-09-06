@@ -55,9 +55,28 @@ allowed. Correct subgroup metadata that the current full-graph backend cannot
 consume reports `unsupported-group-local-proof`, separately from contradictory
 or absent group metadata.
 
-Generic adapter collectives currently report `missing-collective-role`. Their
-communication membership must come from the adapter/capture, not from assuming
-that every collective is CP, EP or the full plan.
+Adapter communication now has a separate source-backed path. Opting in to
+`graph_to_lean.py --with-adapter-communications` exports literal
+`<graph-name>AdapterCommunications` tables for AllToAll, AllGather, AllReduce and
+ReduceScatter primitives. Each row binds node rank, primary output TID, operator,
+raw ordered `kwargs.ranks`, and ordered input `(rank, tid)` pairs. It does not
+invent CP/EP roles or reinterpret logical replica groups. The parser follows the
+actual resolved graph name, including scoped graphs, rather than reading one
+global table for every graph.
+
+The consumer requires exact primitive coverage, input/operator equality and
+input ownership from preceding writers or explicit initial lineages. Absent
+metadata (`None`) is distinct from an explicit complete empty table (`()`).
+Model, direct target projection, standalone planner and shared-DAG paths all
+preserve/check this distinction; a target cannot drop captured metadata to
+select the legacy path. Both SM and PM captures are bound into the topology
+snapshot. Absent fields are omitted from serialization to preserve old identities
+and bytes; explicit empty tables remain present.
+
+Current adapter backends still require the whole ordered graph rank space.
+Valid smaller/permuted groups are preserved by export but rejected as
+`unsupported-group-local-proof`, not silently relabelled as full-plan groups.
+Legacy YOCO files without these tables still stop at `missing-collective-role`.
 
 The model authority digest includes the topology and rank map. Relation DAG
 construction rechecks the actual model and compares the supplied proof DAG's
@@ -99,7 +118,7 @@ blocker is `missing-collective-role: AllToAllPrim rank 0`. All completion flags
 remain false. It is a capture/translation authority gap, not a detected
 llm-train semantic bug and not evidence that the configuration is illegal.
 
-## Verified checkpoint
+## Verified topology checkpoint
 
 - 241 focused Python tests plus 116 subtests passed with the explicit pinned
   source enabled; six additional selected model-authority/CLI regressions passed.
@@ -128,12 +147,36 @@ llm-train semantic bug and not evidence that the configuration is illegal.
 Local receipts: `~/trainverify-audits/parallel-topology/` and
 `~/trainverify-audits/parallel-topology-upstream/`.
 
-## Next actual boundary
+## Adapter checkpoint
 
-Follow adapter `ranks` and collective grouping from
-`Verdict/nnscaler_backend/build_graph.py` into `Verdict/graph_to_lean.py`.
-The latter currently emits replica groups only for selected custom operators,
-not primitive adapter communication. Preserve explicit communication authority
-separately from logical-replica identity, and bind token/expert ownership before
-opening subgroup proof backends. Do not bypass the new gate by assigning every
-`AllToAllPrim` a full-plan role.
+- 293 focused tests and 116 subtests passed in 5.34 seconds, with pinned source
+  enabled; six selected model-authority regressions also passed.
+- `scripts/tests/adapter_communication_witness.py` supplies a clearly synthetic,
+  asymmetric hidden-sharded embedding → AllToAll graph. Its communication
+  records pass through the actual exporter, graph-specific parser, strict
+  whole-model loader, source topology binding, shared DAG and production builder.
+  No loader mock is used for this tracer.
+- The generated complete `AdapterProof.Main.all_outputs` and instantiated full
+  output obligation passed Lean. `AdapterFixture.publicInputs` is kernel3-only;
+  `inhabitedOutput` additionally carries 91 existing generated native-decision
+  axioms. The latter is not kernel3-only. No tensor-shape conjunct is dropped.
+- Independent review findings were reproduced before fixing: direct projection
+  could drop capture metadata, absent nested fields changed old cache identity,
+  and the SM capture snapshot was not frozen. Focused closure review passed.
+- Four fresh-process in-memory guard mutations were killed by the intended
+  assertions: projection validation, preceding-writer ownership, absent-field
+  serialization and exporter input order. No candidate file was mutated.
+- Receipts, generated Lean, logs and the executable integration/mutation drivers
+  are in `~/trainverify-audits/adapter-communication/`.
+
+## Remaining system boundary
+
+The source-to-consumer metadata path is implemented; old saved Lean cannot
+recover source `kwargs.ranks` that was omitted at capture/export time. No raw
+capture pickle was found in the checked work area, and the active Python lacks
+Torch/nnScaler. This checkpoint therefore does **not** claim a fresh YOCO capture
+or a GPU execution. The existing capture launcher still couples a two-rank
+profile and capture settings; the new proof CLI does not itself generalize that
+launcher. Fresh configuration-driven captures, explicit token/expert/data-lane
+ownership, and group-local backends remain necessary for the requested general
+system. No new llm-train bug has been established by these adapter tests.

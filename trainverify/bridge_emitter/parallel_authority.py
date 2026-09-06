@@ -8,10 +8,11 @@ This is graph/plan scope, not a GPU capture or proof of runtime DP/ZeRO/PP.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 
 from trainverify.parallel_topology import ParallelTopology, validate_topology
-from .parser import ReplicaNodeRef
+from .parser import AdapterCommunication, ReplicaNodeRef
+from .adapter_communication import ADAPTER_COLLECTIVES, validate_adapter_communications
 
 
 # Roles of the fixed source-derived custom operators, not inferred from shapes.
@@ -20,7 +21,7 @@ _SOURCE_ROLES = {
        for op in ("maybe_shuffle", "maybe_unshuffle", "attn_zigzag", "attn_sliding_window")},
     **{f"{direction}_all2all_moe_gmm": "ep" for direction in ("FW", "BW")},
 }
-_GENERIC_COLLECTIVES = frozenset(("AllGatherPrim", "AllReducePrim", "AllToAllPrim", "ReduceScatterPrim"))
+_GENERIC_COLLECTIVES = ADAPTER_COLLECTIVES
 
 
 class ParallelAuthorityError(ValueError):
@@ -44,6 +45,17 @@ class ParallelGraphAuthority:
     rank_map: tuple[int, ...]
     communications: tuple[GraphCommunication, ...]
     evidence_kind: str = "source-checked-replica-group-projection"
+    adapters: tuple[AdapterCommunication, ...] | None = None
+    sm_adapters: tuple[AdapterCommunication, ...] | None = None
+
+
+def parallel_authority_payload(authority: ParallelGraphAuthority) -> dict:
+    """Keep legacy identities/bytes when adapter capture is absent, not empty."""
+    payload = asdict(authority)
+    for name in ("adapters", "sm_adapters"):
+        if payload.get(name) is None:
+            payload.pop(name, None)
+    return payload
 
 
 def _communications(graph) -> tuple[GraphCommunication, ...]:
@@ -51,7 +63,7 @@ def _communications(graph) -> tuple[GraphCommunication, ...]:
     for node in graph.pm_nodes:
         role = _SOURCE_ROLES.get(node.op)
         if role is None:
-            if node.op in _GENERIC_COLLECTIVES:
+            if node.op in _GENERIC_COLLECTIVES and graph.pm_adapter_communications is None:
                 raise ParallelAuthorityError("missing-collective-role", f"{node.op} rank {node.rank}: capture the communication role; shape/replica count is insufficient")
             continue
         if not node.outs:
@@ -85,6 +97,10 @@ def validate_graph_authority(graph, authority: ParallelGraphAuthority) -> None:
         raise ParallelAuthorityError("missing-pipeline-placement", "pipeline stages require captured stage placement; a stage count is not placement authority")
     if any(type(n.rank) is not int or not 0 <= n.rank < len(mapping) for n in graph.pm_nodes):
         raise ParallelAuthorityError("invalid-node-rank", "PM node rank is outside the graph rank space")
+    if authority.adapters != graph.pm_adapter_communications or authority.sm_adapters != graph.sm_adapter_communications:
+        raise ParallelAuthorityError("adapter-binding-mismatch", "adapter capture changed after topology binding")
+    validate_adapter_communications(graph, "sm")
+    validate_adapter_communications(graph, "pm")
     actual = _communications(graph)
     if authority.communications != actual:
         raise ParallelAuthorityError("communication-binding-mismatch", "stored communication projection differs from actual graph writers/groups/roles")
@@ -124,10 +140,12 @@ def validate_model_parallel_authority(model) -> None:
     if model.parallel_authority is None:
         return
     validate_graph_authority(model, model.parallel_authority)
-    fields = ("sm_graph_ref", "pm_graph_ref", "sm_num_ranks", "pm_num_ranks", "sm_nodes", "pm_nodes", "sm_shapes", "pm_shapes", "sm_replica_groups", "pm_replica_groups")
+    fields = ("sm_graph_ref", "pm_graph_ref", "sm_num_ranks", "pm_num_ranks", "sm_nodes", "pm_nodes", "sm_shapes", "pm_shapes", "sm_replica_groups", "pm_replica_groups", "sm_adapter_communications", "pm_adapter_communications")
     for target, query in model.targets.items():
         if any(getattr(query, f) != getattr(model, f) for f in fields):
             raise ParallelAuthorityError("target-graph-authority-mismatch", f"target {target} is not a projection of the topology-bound shared graph")
+        validate_adapter_communications(query, "sm")
+        validate_adapter_communications(query, "pm")
 
 
 def bind_model(model, topology: ParallelTopology, *, graph_scope: str, scale_unit: int = 0):
@@ -141,7 +159,9 @@ def bind_model(model, topology: ParallelTopology, *, graph_scope: str, scale_uni
         rank_map = tuple(range(topology.config.runtime_ngpus))
     else:
         raise ParallelAuthorityError("graph-rank-scope-mismatch", "invalid scope/scale-unit selection")
-    authority = ParallelGraphAuthority(topology, graph_scope, rank_map, _communications(model))
+    authority = ParallelGraphAuthority(topology, graph_scope, rank_map, _communications(model),
+                                       adapters=model.pm_adapter_communications,
+                                       sm_adapters=model.sm_adapter_communications)
     bound = replace(model, parallel_authority=authority)
     validate_model_parallel_authority(bound)
     return bound

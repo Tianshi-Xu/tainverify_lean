@@ -49,6 +49,8 @@ class TargetQuery:
     pm_input_value_classes_ref: str
     init_lineages: dict[int, p.LineageGoal]
     full_init_goal_ids: tuple[int, ...]
+    sm_adapter_communications: tuple[p.AdapterCommunication, ...] | None = None
+    pm_adapter_communications: tuple[p.AdapterCommunication, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,8 @@ class ModelAuthorityIR:
     targets: dict[int, TargetQuery]
     aggregate: PublicAggregateAuthority | None
     parallel_authority: ParallelGraphAuthority | None = None
+    sm_adapter_communications: tuple[p.AdapterCommunication, ...] | None = None
+    pm_adapter_communications: tuple[p.AdapterCommunication, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -274,6 +278,8 @@ def _query_from_ir(ir: p.GoalIR, public_statement_digest: str) -> TargetQuery:
         pm_input_value_classes_ref=ir.pm_input_value_classes_ref,
         init_lineages=dict(ir.init_lineages),
         full_init_goal_ids=ir.full_init_goal_ids,
+        sm_adapter_communications=ir.sm_adapter_communications,
+        pm_adapter_communications=ir.pm_adapter_communications,
     )
 
 
@@ -376,6 +382,8 @@ def _parse_target_query(
         ),
         init_lineages=init_lineages,
         full_init_goal_ids=full_init_ids,
+        sm_adapter_communications=model.sm_adapter_communications,
+        pm_adapter_communications=model.pm_adapter_communications,
     )
 
 
@@ -402,6 +410,8 @@ def load_model_authority(
         pm_num_ranks=base.pm_num_ranks,
         sm_replica_groups=base.sm_replica_groups,
         pm_replica_groups=base.pm_replica_groups,
+        sm_adapter_communications=base.sm_adapter_communications,
+        pm_adapter_communications=base.pm_adapter_communications,
         targets={},
         aggregate=None,
     )
@@ -454,6 +464,8 @@ def bind_parallel_authority(model: ModelAuthorityIR, topology, *, graph_scope: s
 
 
 def materialize_target_ir(model: ModelAuthorityIR, goal_id: int) -> p.GoalIR:
+    from .adapter_communication import validate_model_adapter_communications
+    validate_model_adapter_communications(model)
     if model.parallel_authority is not None:
         from .parallel_authority import validate_model_parallel_authority
         validate_model_parallel_authority(model)
@@ -491,4 +503,6 @@ def materialize_target_ir(model: ModelAuthorityIR, goal_id: int) -> p.GoalIR:
         init_lineages=dict(query.init_lineages),
         full_init_goal_ids=query.full_init_goal_ids,
         parallel_authority=model.parallel_authority,
+        sm_adapter_communications=query.sm_adapter_communications,
+        pm_adapter_communications=query.pm_adapter_communications,
     )
