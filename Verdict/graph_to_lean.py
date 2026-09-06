@@ -173,6 +173,11 @@ def parse_args() -> argparse.Namespace:
 		default=80,
 		help="Maximum repeated period, measured in concrete goals, for segment detection.",
 	)
+	p.add_argument(
+		"--with-adapter-communications",
+		action="store_true",
+		help="Export source-backed adapter ranks and ordered fused inputs; fail closed on missing authority.",
+	)
 	p.add_argument("--manifest-out", help="Write an immutable deterministic provenance manifest.")
 	p.add_argument(
 		"--verifier-cache-dir",
@@ -678,6 +683,78 @@ def _lean_input_value_classes(classes: Sequence[InputValueClass]) -> str:
 		for source, tids in classes
 	]
 	return "[\n  " + ",\n  ".join(items) + ",\n]"
+
+
+@dataclass(frozen=True)
+class AdapterCommunication:
+	"""Captured adapter group and ordered fused input ownership (not replicas)."""
+
+	rank: int
+	primary_out_tid: int
+	op: str
+	ranks: Tuple[int, ...]
+	inputs: Tuple[Tuple[int, int], ...]
+
+
+def derive_adapter_communications(G: Any, nodes: Sequence[Any]) -> List[AdapterCommunication]:
+	"""Read adapter authority from kwargs.ranks and concrete tensor ownership.
+
+	nnScaler CollectivePrim preserves an explicit ranks value, defaulting to
+	its device only at primitive construction. Never reconstruct that value
+	from world size, shapes, or logical replicas here.
+	"""
+	records: List[AdapterCommunication] = []
+	for node in nodes:
+		op = _safe_str_op(G.node_opname(node)).removeprefix("OpName.")
+		if op not in {"AllToAllPrim", "AllGatherPrim", "AllReducePrim", "ReduceScatterPrim"}:
+			continue
+		kwargs = G.node_kwargs(node)
+		raw_ranks = kwargs.get("ranks") if isinstance(kwargs, Mapping) else None
+		if not isinstance(raw_ranks, (list, tuple)) or not raw_ranks:
+			raise ValueError(f"{op}: missing or invalid ordered kwargs.ranks")
+		if any(type(r) is not int or r < 0 for r in raw_ranks):
+			raise ValueError(f"{op}: ranks must contain nonnegative integers (not bool)")
+		ranks = tuple(raw_ranks)
+		if len(set(ranks)) != len(ranks):
+			raise ValueError(f"{op}: duplicate ranks: {ranks}")
+		rank = getattr(node, "rank", None)
+		if type(rank) is not int or rank < 0 or rank not in ranks:
+			raise ValueError(f"{op}: node rank {rank!r} is invalid or not in ranks {ranks}")
+		outputs = list(G.node_outputs(node))
+		if not outputs:
+			raise ValueError(f"{op} rank={rank}: missing primary output")
+		out_tid = getattr(outputs[0], "tid", None)
+		if type(out_tid) is not int or out_tid < 0:
+			raise ValueError(f"{op} rank={rank}: invalid primary output tid {out_tid!r}")
+		inputs = list(G.node_inputs(node))
+		owners = tuple(getattr(t, "rank", None) for t in inputs)
+		# build_graph fuses inputs and sorts by indmap, NOT necessarily ranks.
+		# Detect that translator mismatch; never silently sort or invent owners.
+		if any(type(r) is not int or r < 0 for r in owners) or owners != ranks:
+			raise ValueError(
+				f"{op} rank={rank}: fused input ownership {owners} must match ranks "
+				f"{ranks} one-to-one in order; multi-input forms are unsupported"
+			)
+		input_pairs: List[Tuple[int, int]] = []
+		for tensor in inputs:
+			tid = getattr(tensor, "tid", None)
+			if type(tid) is not int or tid < 0:
+				raise ValueError(f"{op} rank={rank}: invalid input tid")
+			input_pairs.append((tensor.rank, tid))
+		records.append(AdapterCommunication(rank, out_tid, op, ranks, tuple(input_pairs)))
+	return records
+
+
+def _lean_adapter_communications(records: Sequence[AdapterCommunication]) -> str:
+	"""Render Core Lean tuples, with no GraphDecl or proof dependency changes."""
+	decls: List[str] = []
+	for record in records:
+		inputs = ", ".join(f"({rank}, {tid})" for rank, tid in record.inputs)
+		decls.append(
+			f'({record.rank}, {record.primary_out_tid}, "{escape_lean_string(record.op)}", '
+			f'{lean_list_nat(list(record.ranks))}, [{inputs}])'
+		)
+	return "[" + ", ".join(decls) + "]"
 
 
 REPLICA_GROUP_OPS = frozenset({
@@ -1975,6 +2052,7 @@ def emit_lean_spec(
 	segment_max_period: int = 80,
 	manifest_name: Optional[str] = None,
 	cp_dim0_audited: bool = False,
+	with_adapter_communications: bool = False,
 ) -> None:
 	# Build mapping from goal ts to sequential id (1-based) by default
 	goal_ts_to_seq_id: Dict[int, int] = {}
@@ -2109,6 +2187,14 @@ def emit_lean_spec(
 			f"replicaGroups := {_lean_replica_groups(replica_groups)} }}"
 		)
 		lines.append("")
+		if with_adapter_communications:
+			records = derive_adapter_communications(G, nodes)
+			lines.append(
+				f"def {name}AdapterCommunications : "
+				"List (Nat × Nat × String × List Nat × List (Nat × Nat)) := "
+				+ _lean_adapter_communications(records)
+			)
+			lines.append("")
 
 	pm_num_ranks = max((_node_rank(n) for n in pm_nodes), default=0) + 1
 
@@ -4321,6 +4407,7 @@ def _generate(args: argparse.Namespace) -> None:
 		segment_max_period=int(args.segment_max_period),
 		manifest_name=Path(args.manifest_out).name if args.manifest_out else None,
 		cp_dim0_audited=bool(args.assume_cp_dim0_shuffle),
+		with_adapter_communications=bool(getattr(args, "with_adapter_communications", False)),
 	)
 
 	if args.manifest_out:
