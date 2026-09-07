@@ -15,7 +15,7 @@ def matcher_fixture(k=3,o=32,d=32,*,b=1,s=8):
     pms=tuple(SimpleNamespace(step_id=f"pm:{r}:0",op="BW_linear",side="pm",rank=r,
         output_projection=".1",parameters=(),input_bindings=("pm:g:shared",f"pm:x:{r}",f"init:{701+r}"),
         input_shapes=(gradient,shard,sw),output_shape=shard) for r in range(k))
-    ir=SimpleNamespace(init_lineages={700:LineageGoal(700,list(fw),[(r,701+r) for r in range(k)],
+    ir=SimpleNamespace(pm_num_ranks=k,init_lineages={700:LineageGoal(700,list(fw),[(r,701+r) for r in range(k)],
         [list(sw) for _ in range(k)],gatherDim=1)})
     return SimpleNamespace(steps=(sm,*pms)),ir,(sm.step_id,*(p.step_id for p in pms))
 
@@ -137,26 +137,8 @@ def test_column_compound_routes_dynamic_identity(tail,expected):
 
 
 def dual_fixture(k=4,o=32,d=32):
-    from dataclasses import replace
-    from trainverify.bridge_emitter.composer import _typed_certificate_digest
-    ir,rel=renderer_fixture(k,o,d)
-    c=rel.certificates[0];g,x,w=c.input_facts
-    fact=rc.RelationFactSpec("sharded",("sm:0:1",*(f"pm:{r}:1" for r in range(k))),gather_dim=1)
-    dw=rc.KRankBWLinearDwColumnShardedCertificate("bw-linear-dw-input-column-sharded-k-rank",k,g,x,w,fact,
-        "sm:0:1",tuple(f"pm:{r}:1" for r in range(k)),
-        "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3")
-    tr=rc.CertificateTransitionSpec("transition_000001",dw.rule_id,tuple(sorted((g,x,w))),(fact,),
-        (0,),tuple(range(k)),dw.lean_theorem,certificate_digest=_typed_certificate_digest(dw))
-    record=rc.ClosedRelationFactRecord("fact_dw",fact,"sharded",401,tuple(5000+r for r in range(k)),
-        None,None,(o,d*k),(o,d),gather_dim=1)
-    rel.dependent_chain_plan.complete=True
-    rel.dependent_chain_plan.relation_facts+= (record,)
-    before,after=rel.dependent_chain_plan.states
-    rel.dependent_chain_plan.states=(before,replace(after,fact_ids=after.fact_ids+("fact_dw",)))
-    seg=rel.dependent_chain_plan.segments[0]
-    rel.dependent_chain_plan.segments=(replace(seg,transition_ids=seg.transition_ids+(tr.transition_id,)),)
-    rel.transition_specs+=(tr,);rel.certificates+=(dw,)
-    return ir,rel
+    from scripts.tests.bw_linear_dw_column_general_witness import renderer_fixture
+    return renderer_fixture(k,1,8,o,d,dual=True,namespace="SyntheticBWLinearDxColumn")
 
 
 def test_column_dual_uses_shared_dynamic_value_backend():
@@ -164,14 +146,14 @@ def test_column_dual_uses_shared_dynamic_value_backend():
     ir,rel=dual_fixture()
     source=render_closed_segment(ir,rel,"segment_000000")
     assert THEOREM in source
-    assert "bw_linear_dw_input_allGatherPrimDimN_dim2_rank3" in source
+    assert "bw_linear_dw_column_allGather_rank3" in source
 
 
 @pytest.mark.parametrize("k,o,d",((3,7,5),(1,1,1),(5,3,1)))
 def test_column_dual_accepts_dw_dynamic_widths(k,o,d):
     from trainverify.bridge_emitter.composer import render_closed_segment
     ir,rel=dual_fixture(k,o,d)
-    assert "bw_linear_dw_input_allGatherPrimDimN_dim2_rank3" in render_closed_segment(ir,rel,"segment_000000")
+    assert "bw_linear_dw_column_allGather_rank3" in render_closed_segment(ir,rel,"segment_000000")
 
 
 def test_column_dual_production_header_imports_theorem():
@@ -189,14 +171,14 @@ def test_column_dual_production_header_imports_theorem():
     ir.public_statement_module="denote.GeneratedKRankBWLinearDxColumnWitness"
     bundle=compose_closed_dependent_bundle(ir,rel,"ColumnHeaderAudit","denote.ColumnHeaderAudit",include_public=False,require_full_graph=False)
     segments=[v.decode() for p,v in bundle.items() if p.startswith("Segment")]
-    assert segments and any("import denote.KRankBWLinearDxColumnGeneral\n" in s and "import denote.KRankBWLinearDwColumn\n" in s and THEOREM in s for s in segments)
+    assert segments and any("import denote.KRankBWLinearDxColumnGeneral\n" in s and "import denote.KRankBWLinearDwColumnGeneral\n" in s and THEOREM in s for s in segments)
 
 
 def dual_witness_source(o=32,d=32):
     from scripts.tests.test_k_rank_bw_layernorm import fixture_source
     from trainverify.bridge_emitter.bw_linear_column_dual_renderer import render_closed_k_rank_bw_linear_column_dual_segment
     ir,rel=dual_fixture(4,o,d)
-    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_column_dual_segment).replace("SyntheticBWLayernorm","SyntheticBWLinearDxColumn").replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumnGeneral\nimport denote.KRankBWLinearDwColumn")
+    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_column_dual_segment).replace("SyntheticBWLayernorm","SyntheticBWLinearDxColumn").replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumnGeneral\nimport denote.KRankBWLinearDwColumnGeneral")
 
 
 @pytest.mark.parametrize("mutation",("rank","pairing","record-shape","parameters","digest","type"))

@@ -24,10 +24,10 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
 
     try:
         from .relation_compiler import get_closed_rule_spec
-        from .bw_linear_dx_column_renderer import render_dynamic_column_commute, column_dx_shape_spec
+        from .bw_linear_dx_column_renderer import render_dynamic_column_commute, column_dx_shape_spec, validate_column_dw_authority
     except ImportError:
         from relation_compiler import get_closed_rule_spec
-        from bw_linear_dx_column_renderer import render_dynamic_column_commute, column_dx_shape_spec
+        from bw_linear_dx_column_renderer import render_dynamic_column_commute, column_dx_shape_spec, validate_column_dw_authority
     rule = "bw-linear-dx-column-sharded-k-rank"
     chain = relation.dependent_chain_plan
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
@@ -105,7 +105,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
             or (output.full_shape, output.shard_shape) != spec["output"]
             or len(activation.pm_tids) != k or len(weight.pm_tids) != k):
         raise ValueError("BW_linear column dX metadata is not exact")
-    dw_theorem = "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
+    dw_theorem = "TrainVerify.Denote.bw_linear_dw_column_allGather_rank3"
 
     if (dw_transition.lean_theorem != dw_theorem
             or dw_certificate.rank_count != k or dw_output.kind != "sharded"
@@ -149,6 +149,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
                 or node.outs[0] != output.pm_tids[rank]
                 or node.outs[1] != dw_output.pm_tids[rank]):
             raise ValueError("BW_linear column dX PM writer roles/order are not exact")
+    validate_column_dw_authority(ir,chain,segment,dw_transition,gradient,activation,weight,dw_output)
     view_sm_node=view_pm_node=None
     if view_transition is not None:
         if (view_input.kind!="joined" or view_output.kind!="joined"
@@ -234,9 +235,9 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
         view_pm_helper=view_writer("hViewPm",ir.pm_graph_ref,"pmStore",pm_final_name,pm_nodes_name,pm_frame,view_transition.pm_node_indices[0]-pm_start,view_pm_node)
     lines.extend([
         f"private theorem {segment_id}_dx_shape (g x w : Tensor) (o i : Nat)",
-        "    (hg : g.shape = [1,8,o]) (hx : x.shape = [1,8,i])",
-        "    (hw : w.shape = [o,i]) : (bw_linear g x w).1.shape = [1,8,i] :=",
-        "  bw_linear_3d_fst_shape 1 8 o i g x w hg hx hw", "",
+        f"    (hg : g.shape = [{gradient.full_shape[0]},{gradient.full_shape[1]},o]) (hx : x.shape = [{gradient.full_shape[0]},{gradient.full_shape[1]},i])",
+        f"    (hw : w.shape = [o,i]) : (bw_linear g x w).1.shape = [{gradient.full_shape[0]},{gradient.full_shape[1]},i] :=",
+        f"  bw_linear_3d_fst_shape {gradient.full_shape[0]} {gradient.full_shape[1]} o i g x w hg hx hw", "",
     ])
     xlist = "[" + ", ".join(f"pmFinal {tid}" for tid in activation.pm_tids) + "]"
     wlist = "[" + ", ".join(f"pmFinal {tid}" for tid in weight.pm_tids) + "]"
@@ -377,7 +378,9 @@ def render_dynamic_column_dw_commute(theorem, gradient, activation, weight):
     """Independent dW value theorem: reconstruct both activation and weight roles."""
     xs="["+", ".join(f"pmFinal {t}" for t in activation.pm_tids)+"]"
     ws="["+", ".join(f"pmFinal {t}" for t in weight.pm_tids)+"]"
-    return [f"    have hDwComm := {theorem} (pmFinal {gradient.joined_pm_tid})",
-            f"      {xs} {ws} {gradient.full_shape[2]} {activation.shard_shape[2]} (by decide) (by decide)",
-            "      (by simp) (by simp) hg.2.2 hx.shard_shapes hw.shard_shapes",
+    k=len(activation.pm_tids); b,s,o=gradient.full_shape; i=activation.shard_shape[2]
+    return [f"    have hDwComm := {theorem} {k} {b} {s} {o} {i}",
+            f"      (pmFinal {gradient.joined_pm_tid}) {xs} {ws}",
+            "      (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl",
+            "      hg.2.2 hx.shard_shapes hw.shard_shapes",
             "    simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hDwComm"]

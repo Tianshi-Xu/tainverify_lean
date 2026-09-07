@@ -118,6 +118,8 @@ def _render_column_single_output(ir, relation, segment_id: str, *, dw: bool) -> 
                 )
                 or node.outs[projection_index] != output.pm_tids[rank]):
             raise ValueError("BW_linear column dX PM writer roles/order are not exact")
+    if dw:
+        validate_column_dw_authority(ir,chain,segment,transition,gradient,activation,weight,output)
     view_sm_node=view_pm_node=None
     if view_transition is not None:
         if (view_input.kind!="joined" or view_output.kind!="joined"
@@ -299,6 +301,83 @@ def _render_column_single_output(ir, relation, segment_id: str, *, dw: bool) -> 
     return "\n".join(lines)
 
 
+
+
+def validate_column_dw_authority(ir, chain, segment, transition, gradient, activation, weight, output):
+    """Bind ordered roles to the latest read-point writers, not a payload digest."""
+    k=len(activation.pm_tids)
+    if ir.pm_num_ranks != k:
+        raise ValueError("column dW graph rank authority mismatch")
+    ss,se=segment.sm_range; ps,pe=segment.pm_range
+    if not (0<=ss<=se<=len(ir.sm_nodes) and 0<=ps<=pe<=len(ir.pm_nodes)):
+        raise ValueError("column dW frame range mismatch")
+    def source_tid(ref,side):
+        fields=ref.split(":")
+        if len(fields)==2 and fields[0]=="init" and fields[1].isdigit():return int(fields[1])
+        if len(fields)!=3 or fields[0]!=side or not all(v.isdigit() for v in fields[1:]):
+            raise ValueError("column dW malformed source")
+        nodes=ir.sm_nodes if side=="sm" else ir.pm_nodes
+        index,slot=map(int,fields[1:])
+        if index>=len(nodes) or slot>=len(nodes[index].outs):raise ValueError("column dW missing source")
+        return nodes[index].outs[slot]
+    def read(ref,tid,side,pos):
+        if source_tid(ref,side)!=tid:raise ValueError("column dW source TID mismatch")
+        nodes=ir.sm_nodes if side=="sm" else ir.pm_nodes
+        prior=[(i,j) for i,n in enumerate(nodes[:pos]) for j,t in enumerate(n.outs) if t==tid]
+        expected=f"{side}:{prior[-1][0]}:{prior[-1][1]}" if prior else f"init:{tid}"
+        if ref!=expected:raise ValueError("column dW source is not the latest writer before its read point")
+    for r in (gradient,activation,weight,output):
+        f=r.source
+        if (f.layout!=r.kind or f.gather_dim!=r.gather_dim or f.source_step_triples
+                or r.source_tid_triples or r.metadata_tid is not None or r.metadata_region_id is not None
+                or r.row_shard_shape is not None):raise ValueError("column dW source/record metadata mismatch")
+        if r.kind=="joined":
+            refs=(f.step_triple[0],f.joined_pm_step) if len(f.step_triple)==1 else ()
+            tids=(r.sm_tid,r.joined_pm_tid)
+        else:
+            refs=f.step_triple;tids=(r.sm_tid,*r.pm_tids)
+            if f.joined_pm_step is not None:raise ValueError("column dW sharded source cannot be joined")
+        if len(refs)!=len(tids) or tuple(source_tid(ref,"sm" if j==0 else "pm") for j,ref in enumerate(refs))!=tids:
+            raise ValueError("column dW ordered source roles mismatch")
+        if r is not output:
+            read(refs[0],r.sm_tid,"sm",transition.sm_node_indices[0])
+            for rank,pos in enumerate(transition.pm_node_indices):
+                read(refs[1 if r is gradient else rank+1],r.joined_pm_tid if r is gradient else r.pm_tids[rank],"pm",pos)
+    if output.source.step_triple!=(f"sm:{transition.sm_node_indices[0]}:1",*(f"pm:{p}:1" for p in transition.pm_node_indices)):
+        raise ValueError("column dW output projection authority mismatch")
+    for n in (ir.sm_nodes[transition.sm_node_indices[0]],*(ir.pm_nodes[p] for p in transition.pm_node_indices)):
+        if not (n.params is None or type(n.params) is list and n.params==[]) or len(set(n.outs))!=2:
+            raise ValueError("column dW params/output arity mismatch")
+    byid={r.fact_id:r for r in chain.relation_facts}
+    authority={a.fact_id:a for a in getattr(chain,"authority_facts",())}
+    anchor=getattr(chain,"anchor_fact",None)
+    if anchor is not None:authority[anchor.fact_id]=anchor
+    states={s.state_id:s for s in chain.states};before=states[segment.pre_state_id];after=states[segment.post_state_id]
+    def live(ids):
+        sm,pm=set(),set()
+        for fid in ids:
+            if fid in byid:
+                r=byid[fid];sm.add(r.sm_tid);pm.update(r.pm_tids)
+                if r.joined_pm_tid is not None:pm.add(r.joined_pm_tid)
+                if r.metadata_tid is not None:sm.add(r.metadata_tid);pm.add(r.metadata_tid)
+                for a,b,c in r.source_tid_triples:sm.add(a);pm.update((b,c))
+            elif fid in authority:
+                a=authority[fid]
+                if a.kind in ("tensor_shape","packed_cu","label_bound") and a.side in ("sm","pm"):(sm if a.side=="sm" else pm).add(a.tid)
+                elif a.kind=="tensor_eq" and a.left_side in ("sm","pm") and a.right_side in ("sm","pm"):
+                    (sm if a.left_side=="sm" else pm).add(a.left_tid);(sm if a.right_side=="sm" else pm).add(a.right_tid)
+                elif a.kind=="gather":sm.add(a.sm_tid);pm.update((a.pm_rank0_tid,a.pm_rank1_tid))
+                else:raise ValueError("column dW unsupported live authority")
+            else:raise ValueError("column dW unknown live fact")
+        return sm,pm
+    old=live(before.fact_ids);new=live(after.fact_ids)
+    for side,nodes,start,end,old_tids,new_tids in (("sm",ir.sm_nodes,ss,se,old[0],new[0]),("pm",ir.pm_nodes,ps,pe,old[1],new[1])):
+        for tid in old_tids:
+            if any(tid in n.outs for n in nodes[start:end]):raise ValueError("column dW frame overwrites live authority")
+        for tid in new_tids-old_tids:
+            if sum(n.outs.count(tid) for n in nodes[start:end])!=1:raise ValueError("column dW fresh output writer ambiguity")
+
+
 def render_dynamic_column_commute(theorem, gradient, activation, weight):
     """Common list ABI for singleton and shared dX/dW column frames."""
     xs="["+", ".join(f"pmFinal {t}" for t in activation.pm_tids)+"]"
@@ -318,7 +397,7 @@ def column_dx_shape_spec(gradient, activation, weight, output, k, *, dw=False):
             or activation.shard_shape[:2] != gradient.full_shape[:2]):
         raise ValueError("column dX tensor ranks or row shape are unsupported")
     b,s=gradient.full_shape[:2]
-    if b<=0 or s<=0 or (dw and (b,s)!=(1,8)):
+    if b<=0 or s<=0:
         raise ValueError("column derivative theorem batch/sequence domain mismatch")
     o,d=gradient.full_shape[2],activation.shard_shape[2]
     expected_output=((o,d*k),(o,d)) if dw else ((b,s,d*k),(b,s,d))

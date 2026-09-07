@@ -4,7 +4,7 @@ from scripts.tests.test_k_rank_bw_linear_dx_column import matcher_fixture as dx_
 from trainverify.bridge_emitter import relation_compiler as rc
 
 RULE = "bw-linear-dw-input-column-sharded-k-rank"
-THEOREM = "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
+THEOREM = "TrainVerify.Denote.bw_linear_dw_column_allGather_rank3"
 
 
 def matcher_fixture(k=3,o=7,d=5):
@@ -29,13 +29,10 @@ def test_dw_column_matcher_positive_widths(k,o,d):
     assert c.weight_fact.gather_dim==c.output_fact.gather_dim==1
 
 
-@pytest.mark.parametrize("mutation",("row-axis-singleton","sequence","rank2"))
+@pytest.mark.parametrize("mutation",("row-axis-singleton","rank2"))
 def test_dw_column_preserves_other_families(mutation):
     plan,ir,frontier=matcher_fixture(1)
     if mutation=="row-axis-singleton": ir.init_lineages[700].gatherDim=0
-    elif mutation=="sequence":
-        for s in plan.steps:
-            g,x,w=s.input_shapes;s.input_shapes=((1,4,g[-1]),(1,4,x[-1]),w)
     else:
         for s in plan.steps:
             g,x,w=s.input_shapes;s.input_shapes=(g[1:],x[1:],w)
@@ -75,7 +72,7 @@ def witness_source(k=3,o=7,d=5,with_view=False):
     return (fixture_source(ir,rel,render_closed_segment)
         .replace("SyntheticBWLayernorm","SyntheticBWLinearDwColumn")
         .replace("SyntheticBWLinearDxColumn","SyntheticBWLinearDwColumn")
-        .replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumnGeneral\nimport denote.KRankBWLinearDwColumn"))
+        .replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumnGeneral\nimport denote.KRankBWLinearDwColumnGeneral"))
 
 
 def test_dw_column_committed_witness_matches_renderer():
@@ -123,7 +120,7 @@ def test_dw_standalone_registry_identity():
     spec=rc.get_closed_rule_spec(RULE)
     assert spec.certificate_type is rc.KRankBWLinearDwColumnShardedCertificate
     assert spec.lean_theorems==(THEOREM,)
-    assert spec.lean_imports==("denote.KRankBWLinearDwColumn",)
+    assert spec.lean_imports==("denote.KRankBWLinearDwColumnGeneral",)
     from trainverify.bridge_emitter.closed_segment_import_policy import plan_closed_segment_imports
     assert plan_closed_segment_imports((RULE,),(THEOREM,),rc.CLOSED_RULE_REGISTRY)==spec.lean_imports
     with pytest.raises(ValueError):
@@ -158,4 +155,4 @@ def standalone_source(k=3,o=7,d=5):
     return (fixture_source(ir,rel,render_closed_segment)
         .replace("SyntheticBWLayernorm","SyntheticBWLinearDwStandalone")
         .replace("SyntheticBWLinearDxColumn","SyntheticBWLinearDwStandalone")
-        .replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDwColumn"))
+        .replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDwColumnGeneral"))

@@ -7791,7 +7791,7 @@ def advance_k_rank_bw_linear_dw_column_sharded_frontiers(plan, ir, frontiers, la
             raise RelationCompositionError("BW_linear dW column input arity mismatch")
         gfull,xfull,wfull=sm.input_shapes;outfull=sm.output_shape
         if not (len(gfull)==len(xfull)==3 and len(wfull)==len(outfull)==2
-                and gfull[:2]==xfull[:2]==(1,8)):
+                and gfull[:2]==xfull[:2]):
             keep();continue
         # Axis provenance distinguishes this family even when K=1 and shapes coincide.
         refs=(sm.input_bindings[2],*(p.input_bindings[2] for p in pms))
@@ -7801,12 +7801,13 @@ def advance_k_rank_bw_linear_dw_column_sharded_frontiers(plan, ir, frontiers, la
         if goal is None or goal.gatherDim!=1:
             keep();continue
         o,full_i=wfull
-        if (type(o) is not int or type(full_i) is not int or o<=0 or full_i<=0
-                or full_i%k or outfull!=wfull or gfull!=(1,8,o)
-                or xfull!=(1,8,full_i)):
+        b,s=gfull[:2]
+        if (k!=ir.pm_num_ranks or any(type(v) is not int or v<=0 for v in (b,s,o,full_i))
+                or full_i%k or outfull!=wfull or gfull!=(b,s,o)
+                or xfull!=(b,s,full_i)):
             raise RelationCompositionError("BW_linear dW column full shape mismatch")
         d=full_i//k;shard=(o,d)
-        if any(p.input_shapes!=(gfull,(1,8,d),shard) or p.output_shape!=shard for p in pms):
+        if any(p.input_shapes!=(gfull,(b,s,d),shard) or p.output_shape!=shard for p in pms):
             raise RelationCompositionError("BW_linear dW column local shape mismatch")
         if sm.rank!=0 or tuple(p.rank for p in pms)!=tuple(range(k)) or any(s.parameters for s in (sm,*pms)):
             raise RelationCompositionError("BW_linear dW column rank/parameter mismatch")
@@ -7824,7 +7825,7 @@ def advance_k_rank_bw_linear_dw_column_sharded_frontiers(plan, ir, frontiers, la
             rule_id="bw-linear-dw-input-column-sharded-k-rank",rank_count=k,
             gradient_fact=grad,activation_fact=act,weight_fact=weight,output_fact=output,
             sm_step_id=sm.step_id,pm_step_ids=tuple(p.step_id for p in pms),
-            lean_theorem="TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"))
+            lean_theorem="TrainVerify.Denote.bw_linear_dw_column_allGather_rank3"))
         rewritten.extend(((*grad.step_triple,grad.joined_pm_step),act.step_triple,weight.step_triple));rewritten_layouts.extend(("joined","sharded","sharded"))
     return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
 
@@ -10834,9 +10835,9 @@ _register_closed_rule_specs(
     ),
     ClosedRuleSpec(
         "bw-linear-dw-input-column-sharded-k-rank", KRankBWLinearDwColumnShardedCertificate,
-        ("TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3",),
+        ("TrainVerify.Denote.bw_linear_dw_column_allGather_rank3",),
         "BW_linear", "bw_linear_dx_column_renderer:render_closed_k_rank_bw_linear_dw_column_segment",
-        ("denote.KRankBWLinearDwColumn",),
+        ("denote.KRankBWLinearDwColumnGeneral",),
     ),
     ClosedRuleSpec(
         "bw-linear-dx-column-sharded-k-rank", KRankBWLinearDxCertificate,

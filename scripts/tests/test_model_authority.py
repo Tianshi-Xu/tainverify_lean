@@ -1729,7 +1729,7 @@ def test_gpt_goal150_bw_linear_dw_shards_input_columns(monkeypatch):
     assert len(certs) == 1
     assert certs[0].output_fact.gather_dim == 1
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
+        "TrainVerify.Denote.bw_linear_dw_column_allGather_rank3"
     )
     from trainverify.bridge_emitter.composer import render_closed_segment
     transitions={item.transition_id:item for item in relation.transition_specs}
@@ -1755,7 +1755,7 @@ def test_gpt_goal214_bw_linear_dw_uses_direct_input_column_shards(monkeypatch):
              and next(s.output_shape for s in proof.steps if s.step_id==item.sm_step_id)==(32,128)]
     assert len(certs) == 1
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3"
+        "TrainVerify.Denote.bw_linear_dw_column_allGather_rank3"
     )
     from trainverify.bridge_emitter.composer import render_closed_segment
     transitions={item.transition_id:item for item in relation.transition_specs}

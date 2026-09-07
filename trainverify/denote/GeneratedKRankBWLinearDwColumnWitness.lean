@@ -1,6 +1,6 @@
 import denote.RelationCompiler
 import denote.KRankBWLinearDxColumnGeneral
-import denote.KRankBWLinearDwColumn
+import denote.KRankBWLinearDwColumnGeneral
 open TrainVerify.Denote TrainVerify.Denote.RelationCompiler
 namespace SyntheticBWLinearDwColumn
 noncomputable section
@@ -453,9 +453,10 @@ private theorem segment_000000_sound (smStore pmStore : Store)
         exact hOutShape1
       · subst shard
         exact hOutShape2
-    have hDwComm := TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3 (pmFinal 1000)
-      [pmFinal 2000, pmFinal 2001, pmFinal 2002] [pmFinal 3000, pmFinal 3001, pmFinal 3002] 7 5 (by decide) (by decide)
-      (by simp) (by simp) hg.2.2 hx.shard_shapes hw.shard_shapes
+    have hDwComm := TrainVerify.Denote.bw_linear_dw_column_allGather_rank3 3 1 8 7 5
+      (pmFinal 1000) [pmFinal 2000, pmFinal 2001, pmFinal 2002] [pmFinal 3000, pmFinal 3001, pmFinal 3002]
+      (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl
+      hg.2.2 hx.shard_shapes hw.shard_shapes
     simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hDwComm
     have hDwValue : smFinal 401 = allGatherPrimDimN 1 3 0 [pmFinal 5000, pmFinal 5001, pmFinal 5002] := by
       rw [hSmDwWriter, hg.1, hxValue, hwValue, hDwComm]
