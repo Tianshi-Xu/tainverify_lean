@@ -22,12 +22,14 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
         "transpose-sharded-k-rank",
     ):
         return "transpose_linear_transpose_renderer:render_closed_transpose_linear_transpose_segment"
-    if family == (
-        "bw-matmul-fst-query-sharded-rank4",
-        "bw-matmul-snd-contraction-reduction-rank4",
-        "bw-view-joined",
-    ):
-        return "bw_matmul_view_renderer:render_closed_bw_matmul_view_segment"
+    query_rules = {
+        "bw-matmul-fst-query-sharded-k-rank",
+        "bw-matmul-snd-contraction-reduction-k-rank",
+    }
+    if (len(family) in (2, 3) and len(set(family)) == len(family)
+            and query_rules <= set(family)
+            and set(family) <= query_rules | {"bw-view-joined"}):
+        return "bw_matmul_query_renderer:render_closed_bw_matmul_query_segment"
     if family == (
         "bw-matmul-batch-sharded-rank4",
         "bw-matmul-batch-sharded-rank4",

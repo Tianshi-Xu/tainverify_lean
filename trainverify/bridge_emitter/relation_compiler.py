@@ -7478,6 +7478,43 @@ class KRankBWMatmulCertificate:
     lean_theorem: str
 
 
+def bw_matmul_query_shape_spec(k, full_inputs, local_inputs, full_output, local_output, projection, layout):
+    """Check every rank-4 query equation; also shared by the untrusted-payload renderer."""
+    if (type(k) is not int or k <= 0 or len(full_inputs) != 3 or len(local_inputs) != 3
+            or any(len(s) != 4 for s in (*full_inputs, *local_inputs, full_output, local_output))):
+        raise RelationCompositionError("BW_matmul query requires positive K and exact rank-4 shapes")
+    b, h, q, m = local_inputs[0]
+    n = local_inputs[1][3]
+    if any(type(v) is not int or v <= 0
+           for s in (*full_inputs, *local_inputs, full_output, local_output) for v in s):
+        raise RelationCompositionError("BW_matmul query dimensions must be positive integers")
+    full = ((b,h,q*k,m), (b,h,q*k,n), (b,h,n,m))
+    local = ((b,h,q,m), (b,h,q,n), (b,h,n,m))
+    if tuple(map(tuple, full_inputs)) != full or tuple(map(tuple, local_inputs)) != local:
+        raise RelationCompositionError("BW_matmul query input shape equations mismatch")
+    slot = {".1": 1, ".2": 2}.get(projection)
+    if (slot is None or layout != ("sharded" if slot == 1 else "reduction")
+            or tuple(full_output) != full[slot] or tuple(local_output) != local[slot]):
+        raise RelationCompositionError("BW_matmul query projection/output shape equations mismatch")
+    return b, h, q, n, m
+
+
+_register_closed_rule_specs(
+    ClosedRuleSpec(
+        "bw-matmul-fst-query-sharded-k-rank", KRankBWMatmulCertificate,
+        ("TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_query_axis_rank4",),
+        "BW_matmul", "bw_matmul_query_renderer:render_closed_bw_matmul_query_segment",
+        ("denote.KRankBWMatmulQuery", "denote.KRankMatmulQueryAxis"),
+    ),
+    ClosedRuleSpec(
+        "bw-matmul-snd-contraction-reduction-k-rank", KRankBWMatmulCertificate,
+        ("TrainVerify.Denote.bw_matmul_snd_query_reduction_rank4",),
+        "BW_matmul", "bw_matmul_query_renderer:render_closed_bw_matmul_query_segment",
+        ("denote.KRankBWMatmulQuery",),
+    ),
+)
+
+
 def advance_k_rank_bw_matmul_frontiers(plan, frontiers, layouts):
     """Classify BW_matmul projections by exact operand and output relations."""
     if len(frontiers)!=len(layouts):
@@ -7497,7 +7534,7 @@ def advance_k_rank_bw_matmul_frontiers(plan, frontiers, layouts):
         dim=candidates[0];refs=(sm_ref,*pm_refs)
         return RelationFactSpec("sharded",refs,gather_dim=dim),refs,("sharded",dim)
     for frontier,layout in zip(frontiers,layouts):
-        if layout not in ("sharded","reduction") or len(frontier)!=5:
+        if layout not in ("sharded","reduction") or len(frontier)<2:
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         try: sm=by_id[frontier[0]];pms=tuple(by_id[x] for x in frontier[1:])
         except KeyError:
@@ -7505,7 +7542,42 @@ def advance_k_rank_bw_matmul_frontiers(plan, frontiers, layouts):
         if sm.op!="BW_matmul" or sm.side!="sm" or any(x.op!="BW_matmul" or x.side!="pm" for x in pms):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         k=len(pms)
-        if k!=4 or tuple(int(x.rank) for x in pms)!=(0,1,2,3) or len(sm.input_bindings)!=3 or any(len(x.input_bindings)!=3 for x in pms):
+        if any(len(s.input_bindings) != 3 or len(s.input_shapes) != 3 for s in (sm,*pms)):
+            raise RelationCompositionError("BW_matmul input authority arity mismatch")
+        # Query axis is explicit, not inferred from coincident dimensions (K=1).
+        # Non-query families retain their existing K=4 domain.
+        query = (len(set(p.input_bindings[2] for p in pms)) == 1
+                 or all(len(s.input_shapes[a]) == 4 for s in (sm,*pms) for a in (0,1))
+                 and all(sm.input_shapes[a][2] == p.input_shapes[a][2]*k
+                         for p in pms for a in (0,1)))
+        if query:
+            if (sm.rank != 0 or type(sm.rank) is not int
+                    or any(type(p.rank) is not int for p in pms)
+                    or tuple(p.rank for p in pms) != tuple(range(k))
+                    or any(s.parameters for s in (sm,*pms))
+                    or sm.output_projection not in (".1", ".2")
+                    or any(p.output_projection != sm.output_projection for p in pms)
+                    or len(set(p.input_bindings[2] for p in pms)) != 1):
+                raise RelationCompositionError("BW_matmul query rank/params/projection/shared-y authority mismatch")
+            for p in pms:
+                bw_matmul_query_shape_spec(k, sm.input_shapes, p.input_shapes,
+                    sm.output_shape, p.output_shape, sm.output_projection, layout)
+            grefs=(sm.input_bindings[0],*(p.input_bindings[0] for p in pms))
+            xrefs=(sm.input_bindings[1],*(p.input_bindings[1] for p in pms))
+            yrefs=(sm.input_bindings[2],pms[0].input_bindings[2])
+            facts=(RelationFactSpec("sharded",grefs,gather_dim=2),
+                   RelationFactSpec("sharded",xrefs,gather_dim=2),
+                   RelationFactSpec("joined",(yrefs[0],),joined_pm_step=yrefs[1]))
+            family="fst-query-sharded" if sm.output_projection==".1" else "snd-contraction-reduction"
+            rule=f"bw-matmul-{family}-k-rank"
+            certs.append(KRankBWMatmulCertificate(rule,family,sm.output_projection,k,facts,
+                RelationFactSpec(layout,tuple(frontier),gather_dim=2 if layout=="sharded" else None),
+                sm.step_id,tuple(p.step_id for p in pms),get_closed_rule_spec(rule).lean_theorems[0]))
+            rewritten.extend((grefs,xrefs,yrefs));rewritten_layouts.extend(("sharded","sharded","joined"))
+            continue
+        if k!=4:
+            rewritten.append(frontier);rewritten_layouts.append(layout);continue
+        if tuple(int(x.rank) for x in pms)!=(0,1,2,3) or len(sm.input_bindings)!=3 or any(len(x.input_bindings)!=3 for x in pms):
             raise RelationCompositionError("rank-4 BW_matmul writer/input authority mismatch")
         if sm.output_projection not in (".1",".2") or any(x.output_projection!=sm.output_projection for x in pms):
             raise RelationCompositionError("BW_matmul output projection authority mismatch")
@@ -7536,10 +7608,6 @@ def advance_k_rank_bw_matmul_frontiers(plan, frontiers, layouts):
                 ("batch-sharded","TrainVerify.Denote.bw_matmul_fst_split_dim1_4_1_4_8_8"),
             (".2",(("sharded",1),("sharded",1),("sharded",1)),"sharded",1):
                 ("batch-sharded","TrainVerify.Denote.bw_matmul_snd_split_batchdim1_1_4_8_8"),
-            (".1",(("sharded",2),("sharded",2),("joined",None)),"sharded",2):
-                ("fst-query-sharded","TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_query_axis_rank4"),
-            (".2",(("sharded",2),("sharded",2),("joined",None)),"reduction",None):
-                ("snd-contraction-reduction","TrainVerify.Denote.bw_matmul_snd_split_dW_g197"),
         }
         try: family,theorem=family_theorem[sig]
         except KeyError as exc: raise RelationCompositionError(f"unsupported BW_matmul relation signature: {sig}") from exc

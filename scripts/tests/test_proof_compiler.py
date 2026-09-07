@@ -1784,8 +1784,8 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     matmul_view = next(s for s in relation.dependent_chain_plan.segments
                        if s.segment_id == "segment_000259")
     assert tuple(transitions[item].rule_id for item in matmul_view.transition_ids) == (
-        "bw-matmul-fst-query-sharded-rank4",
-        "bw-matmul-snd-contraction-reduction-rank4",
+        "bw-matmul-fst-query-sharded-k-rank",
+        "bw-matmul-snd-contraction-reduction-k-rank",
         "bw-view-joined",
     )
     matmul_view_source = render_closed_segment(ir, relation, matmul_view.segment_id)

@@ -4,16 +4,11 @@ import pytest
 def test_bw_compound_rule_selector_preserves_exact_order_and_count():
     from trainverify.bridge_emitter.compound_rule_dispatch import select_bw_compound_renderer
 
-    assert select_bw_compound_renderer((
-        "bw-matmul-fst-query-sharded-rank4",
-        "bw-matmul-snd-contraction-reduction-rank4",
-        "bw-view-joined",
-    )) == "bw_matmul_view_renderer:render_closed_bw_matmul_view_segment"
-    assert select_bw_compound_renderer((
-        "bw-matmul-snd-contraction-reduction-rank4",
-        "bw-matmul-fst-query-sharded-rank4",
-        "bw-view-joined",
-    )) is None
+    query = ("bw-matmul-fst-query-sharded-k-rank", "bw-matmul-snd-contraction-reduction-k-rank")
+    binding = "bw_matmul_query_renderer:render_closed_bw_matmul_query_segment"
+    assert select_bw_compound_renderer((*query, "bw-view-joined")) == binding
+    assert select_bw_compound_renderer((*reversed(query), "bw-view-joined")) == binding
+    assert select_bw_compound_renderer((query[0], query[0], "bw-view-joined")) is None
 
 
 def test_bw_compound_rule_selector_keeps_count_grammar_imperative():
