@@ -125,8 +125,9 @@ def render_closed_k_rank_bw_linear_dx_sequence_segment(ir, relation, segment_id:
         f" change ShardedRel (smFinal {w.sm_tid}) [pmFinal {w.pm_tids[0]}] {w.gather_dim} {wf} {wf} at hw",
         f" have hwEq : smFinal {w.sm_tid} = pmFinal {w.pm_tids[0]} := by rw [hw.full_value]; exact allGatherPrimDimN_singleton_eq {w.gather_dim} _ (by rw [hw.shard_shapes _ (by simp)]; decide)",
         f" have hgV : smFinal {g.sm_tid} = allGatherPrimDimN 1 {k} 0 {gl} := by simpa only [List.length_cons,List.length_nil] using hg.full_value",
-        f" have hS := {hs} smStore"])
-    for r,th in enumerate(hp): lines.append(f" have hP{r} := {th} pmStore")
+        f" have hS : smFinal {out.sm_tid} = (bw_linear (smFinal {g.sm_tid}) (smFinal {x.sm_tid}) (smFinal {w.sm_tid})).1 := {hs} smStore"])
+    for r,th in enumerate(hp):
+        lines.append(f" have hP{r} : pmFinal {out.pm_tids[r]} = (bw_linear (pmFinal {g.pm_tids[r]}) (pmFinal {x.pm_tids[r]}) (pmFinal {w.pm_tids[0]})).1 := {th} pmStore")
     local_list="["+", ".join(f"(bw_linear (pmFinal {gt}) (pmFinal {xt}) (pmFinal {w.pm_tids[0]})).1" for gt,xt in zip(g.pm_tids,x.pm_tids))+"]"
     lines.extend([f" have hcomm := {c.lean_theorem} {k} {b} {s} {o} {i} {gl} {xl} (smFinal {x.sm_tid}) (pmFinal {w.pm_tids[0]})",
         "   (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl hg.shard_shapes hx.shard_shapes hx.full_shape (hw.shard_shapes _ (by simp))",

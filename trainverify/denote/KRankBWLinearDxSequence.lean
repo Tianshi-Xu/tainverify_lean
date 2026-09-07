@@ -6,7 +6,7 @@ noncomputable section
 -- Generic leaf candidates; direct kernel checking is delegated to the parent.
 private theorem sequence_transpose_shape (w : Tensor) (o i : Nat)
     (hw : w.shape = [o, i]) : (transpose2d w).shape = [i, o] := by
-  simp only [transpose2d, hw, List.reverse_cons, List.reverse_nil, List.append_nil,
+  simp only [transpose2d, hw, List.reverse_cons, List.reverse_nil, List.nil_append,
     List.cons_append, Tensor.mkShape]
 
 private theorem sequence_transpose_valAt (w : Tensor) (o i c j : Nat)
@@ -23,12 +23,14 @@ private theorem sequence_transpose_valAt (w : Tensor) (o i c j : Nat)
       Nat.div_eq_of_lt hj, Nat.zero_add]
   have hmod : (c * o + j) % o = j := by
     rw [show c * o + j = j + o * c by ring, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hj]
+  have hbound : c * o + j < o * i := by
+    simpa only [Nat.mul_comm i o] using hidx
   unfold transpose2d
-  simp only [hw, List.reverse_cons, List.reverse_nil, List.append_nil, List.cons_append]
+  simp only [hw, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append]
   rw [valAt_of_lt _ _ (by simpa [Tensor.mkShape, prodShape] using hidx)]
   simp only [Tensor.mkShape, if_neg hio.ne', if_neg ho.ne',
-    Nat.div_eq_of_lt (by simpa [Nat.mul_comm] using hidx),
-    Nat.mod_eq_of_lt (by simpa [Nat.mul_comm] using hidx), hdiv, hmod,
+    Nat.div_eq_of_lt hbound,
+    Nat.mod_eq_of_lt hbound, hdiv, hmod,
     Nat.zero_mul, Nat.zero_add]
 
 /-- Under the exact rank-3 shape contract, dX is linear in g with transposed w.
@@ -46,8 +48,8 @@ theorem bw_linear_fst_eq_fw_linear_transpose_rank3
     rw [hshapeR, ← hshape]; exact hidx
   unfold bw_linear fw_linear
   simp only [hg, hx, hw, hwt]
-  rw [valAt_of_lt _ _ (by simpa only [hshape] using hidx),
-    valAt_of_lt _ _ (by simpa only [hshapeR] using hidxR)]
+  rw [valAt_of_lt _ _ (by simpa only [hshape, Tensor.mkShape] using hidx),
+    valAt_of_lt _ _ (by simpa only [hshapeR, Tensor.mkShape] using hidxR)]
   simp only [Tensor.mkShape]
   have hsi : 0 < s * i := Nat.mul_pos hs hi
   simp only [if_neg hsi.ne', if_neg hi.ne']
@@ -73,7 +75,7 @@ theorem bw_linear_dx_sequence_allGather_rank3
     | cons g rest => exact hgs g (List.mem_cons_self ..)
   have hg : (allGatherPrimDimN 1 K 0 gs).shape = [b, s * K, o] := by
     rw [allGatherPrimDimN_shape 1 K gs [b, s, o] hhead]
-    simp only [List.set, List.getD]
+    simp [List.set, List.getD]
   rw [bw_linear_fst_eq_fw_linear_transpose_rank3 _ x w b (s * K) o i
     (Nat.mul_pos hs hK) ho hi hg hx hw]
   rw [fw_linear_3d_allGatherPrimDimN_dim1_comm K b s o i gs (transpose2d w)

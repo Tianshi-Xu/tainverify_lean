@@ -125,6 +125,22 @@ def witness_source(k=3,b=2,s=5,o=7,i=11):
         "import denote.KRankBWLayernorm","import denote.KRankBWLinearDxSequence")
 
 
+def combined_witness_source():
+    pieces = []
+    imports = []
+    for index, args in enumerate(CASES):
+        source = witness_source(*args).replace('SyntheticBWLinearDx', f'SyntheticBWLinearDxCase{index}')
+        imports.extend(line for line in source.splitlines() if line.startswith('import '))
+        pieces.append('\n'.join(line for line in source.splitlines() if not line.startswith('import ')))
+    return '\n'.join(dict.fromkeys(imports)) + '\n' + '\n'.join(pieces)
+
+
+def test_sequence_generated_witness_exact_bytes():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    assert (root / 'trainverify/denote/GeneratedBWLinearDxSequenceWitness.lean').read_text() == combined_witness_source()
+
+
 def test_sequence_leaf_import_and_reproducible_witness():
     spec=rc.get_closed_rule_spec(RULE)
     text=witness_source()
