@@ -74,11 +74,13 @@ private theorem tensorSum_range_valAt
       ((List.range K).map f).foldl (fun acc t => acc + valAt t idx) 0 := by
     cases he : (List.range K).map f with
     | nil =>
+        rw [he] at hidx
         rw [valAt_of_lt _ _ hidx]
-        simp only [he, tensorSum, Tensor.mkShape, List.foldl_nil]
+        rfl
     | cons x xs =>
+        rw [he] at hidx
         rw [valAt_of_lt _ _ hidx]
-        simp only [he, tensorSum, Tensor.mkShape]
+        rfl
   rw [hfold, List.foldl_map, List.foldl_add_eq_sum]
   exact map_range_sum K (fun r => valAt (f r) idx)
 
