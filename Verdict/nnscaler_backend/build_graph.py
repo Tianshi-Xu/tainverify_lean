@@ -159,11 +159,17 @@ def _set_mb(cells: List[Cell]) -> List[Cell]:
     return cells
 
 
-def _flatten_segment(cells: List[Cell]) -> List[Cell]:
+def _flatten_segment(cells: List[Cell], mg: ModuleCodeGen) -> List[Cell]:
     ret: List[Cell] = []
     for cell in cells:
         if isinstance(cell.ir, IRSegment):
             for node in cell.ir.nodes():
+                # ModuleCodeGen.scale recurses into forward segments only.
+                # Their children are already scaled; backward children still
+                # carry plan-local ranks. Use the source leaf API exactly once,
+                # without changing the segment or its microbatch identity.
+                if not cell.ir.isfw():
+                    node = mg.scale(node, cell.rank)
                 new_cell = Cell(node, cell.rank, cell.wtype)
                 new_cell.mb = cell.mb
                 ret.append(new_cell)
@@ -656,7 +662,7 @@ def _prepare_rank_cells(W: World, mg: ModuleCodeGen, rank: int) -> List[Cell]:
     # distinguish cells with micro-batch id
     cells = _set_mb(cells)
     # flatten the segment wrapper into operators
-    cells = _flatten_segment(cells)
+    cells = _flatten_segment(cells, mg)
     # flatten the adapter into prims
     cells = _flatten_adapter(cells)
 
