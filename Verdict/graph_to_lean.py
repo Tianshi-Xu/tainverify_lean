@@ -72,6 +72,11 @@ def parse_args() -> argparse.Namespace:
 		help="REQUIRED. Lean module name used in the generated file header comment (must match --out path).",
 	)
 	p.add_argument(
+		"--definitions-only",
+		action="store_true",
+		help="Emit only graph and statement definitions into a fresh private --out parent directory; refuse every existing directory, file or symlink; no generated proofs.",
+	)
+	p.add_argument(
 		"--emit-spec-template",
 		action="store_true",
 		help="Also emit a proof template file (GeneratedSpec.lean) with sorry-filled theorem stubs.",
@@ -2025,6 +2030,24 @@ def _emit_cut_to_full(
 	return lines
 
 
+def _validate_definitions_only_options(
+	definitions_only: bool, *, emit_spec_template: bool, split_goals: bool,
+	emit_segment_patterns: bool,
+) -> None:
+	if definitions_only and (emit_spec_template or split_goals or emit_segment_patterns):
+		raise ValueError(
+			"--definitions-only is incompatible with --emit-spec-template, "
+			"--split-goals, and --emit-segment-patterns"
+		)
+
+
+def _validate_definitions_only_destination(out_path: Path) -> None:
+	"""Require a fresh private directory; callers must exclude concurrent writers."""
+	target = out_path.parent
+	if target.is_symlink() or target.exists():
+		raise ValueError("definitions-only requires a fresh private directory; existing destinations and symlinks are refused")
+
+
 def emit_lean_spec(
 	*,
 	out_path: Path,
@@ -2056,7 +2079,15 @@ def emit_lean_spec(
 	manifest_name: Optional[str] = None,
 	cp_dim0_audited: bool = False,
 	with_adapter_communications: bool = False,
+	definitions_only: bool = False,
 ) -> None:
+	_validate_definitions_only_options(
+		definitions_only, emit_spec_template=emit_spec_template,
+		split_goals=goal_slices is not None or goals_out_dir is not None,
+		emit_segment_patterns=emit_segment_patterns,
+	)
+	if definitions_only:
+		_validate_definitions_only_destination(out_path)
 	# Build mapping from goal ts to sequential id (1-based) by default
 	goal_ts_to_seq_id: Dict[int, int] = {}
 	if not use_tid_goal_ids:
@@ -2516,40 +2547,43 @@ def emit_lean_spec(
 		lines.append("def pmShapeCheck : Except String (List (Tid × Shape)) :=")
 		lines.append("  TrainVerify.Denote.graphShapesCheck pm pmInitShapes")
 		lines.append("")
-		lines.append("theorem smShapeCheck_ok : smShapeCheck.isOk := by")
-		lines.append("  native_decide")
-		lines.append("")
-		lines.append("theorem smShapeCheck_exists : ∃ m, smShapeCheck = Except.ok m := by")
-		lines.append("  exact (TrainVerify.Denote.Except.isOk_iff_exists smShapeCheck).1 smShapeCheck_ok")
-		lines.append("")
-		lines.append("theorem pmShapeCheck_ok : pmShapeCheck.isOk := by")
-		lines.append("  native_decide")
-		lines.append("")
-		lines.append("theorem pmShapeCheck_exists : ∃ m, pmShapeCheck = Except.ok m := by")
-		lines.append("  exact (TrainVerify.Denote.Except.isOk_iff_exists pmShapeCheck).1 pmShapeCheck_ok")
-		lines.append("")
+		if not definitions_only:
+			lines.append("theorem smShapeCheck_ok : smShapeCheck.isOk := by")
+			lines.append("  native_decide")
+			lines.append("")
+			lines.append("theorem smShapeCheck_exists : ∃ m, smShapeCheck = Except.ok m := by")
+			lines.append("  exact (TrainVerify.Denote.Except.isOk_iff_exists smShapeCheck).1 smShapeCheck_ok")
+			lines.append("")
+			lines.append("theorem pmShapeCheck_ok : pmShapeCheck.isOk := by")
+			lines.append("  native_decide")
+			lines.append("")
+			lines.append("theorem pmShapeCheck_exists : ∃ m, pmShapeCheck = Except.ok m := by")
+			lines.append("  exact (TrainVerify.Denote.Except.isOk_iff_exists pmShapeCheck).1 pmShapeCheck_ok")
+			lines.append("")
 	else:
 		lines.append("-- Auto shape/dimension checks skipped for this large generated graph.")
 		lines.append("")
 
+	def _node_lit(n: Any, G: Any, num_parts: int = 1) -> str:
+		op = escape_lean_string(_safe_str_op(G.node_opname(n)))
+		ins = [int(t.tid) for t in G.node_inputs(n)]
+		outs = [int(t.tid) for t in G.node_outputs(n)]
+		rank = _node_rank(n)
+		node_params = _get_node_params(G, n, num_parts=num_parts)
+		params_str = f", params := {lean_list_nat(node_params)}" if node_params else ""
+		return (
+			"{ "
+			+ f"rank := {rank}, op := \"{op}\", ins := {lean_list_nat(ins)}, outs := {lean_list_nat(outs)}{params_str}"
+			+ " }"
+		)
+
+
 	# Small unfold lemma for SM denotation (SM graphs are typically tiny and single-rank).
 	# This avoids repeatedly rewriting foldl by hand in proofs.
-	if len(sm_nodes) <= 24:
+	if not definitions_only and len(sm_nodes) <= 24:
 		lines.append("theorem sm_denoteGraph_unfold (init : Store) :")
 		lines.append("    denoteGraph sm init =")
 		# Build a nested applyNode chain with the concrete node decls.
-		def _node_lit(n: Any, G: Any, num_parts: int = 1) -> str:
-			op = escape_lean_string(_safe_str_op(G.node_opname(n)))
-			ins = [int(t.tid) for t in G.node_inputs(n)]
-			outs = [int(t.tid) for t in G.node_outputs(n)]
-			rank = _node_rank(n)
-			node_params = _get_node_params(G, n, num_parts=num_parts)
-			params_str = f", params := {lean_list_nat(node_params)}" if node_params else ""
-			return (
-				"{ "
-				+ f"rank := {rank}, op := \"{op}\", ins := {lean_list_nat(ins)}, outs := {lean_list_nat(outs)}{params_str}"
-				+ " }"
-			)
 
 		sm_node_lits = [_node_lit(n, sm_graph) for n in sm_nodes]
 		expr = "init"
@@ -2562,7 +2596,7 @@ def emit_lean_spec(
 
 	# NOTE: Fully unfolding PM denotation into nested `applyNode` chains quickly becomes enormous
 	# and is usually counterproductive. We only emit the full unfold lemma for very small PM graphs.
-	if len(pm_nodes) <= 24:
+	if not definitions_only and len(pm_nodes) <= 24:
 		lines.append("theorem pm_denoteGraph_unfold (init : Store) :")
 		lines.append("    denoteGraph pm init =")
 		pm_node_lits = [_node_lit(n, pm_graph) for n in pm_nodes]
@@ -2619,39 +2653,40 @@ def emit_lean_spec(
 				lines.append(f"    {_node_lit(n, pm_graph)},")
 			lines.append("  ]")
 			lines.append("")
-			# Split lemma: pm nodes = prefix ++ suffix
-			lines.append(f"theorem pm_split_goal_{int(g0.ts)} (init : Store) :")
-			lines.append(
-				f"    denoteGraph pm init = denoteGraph {suffix_name} (denoteGraph {prefix_name} init) := by"
-			)
-			lines.append("  -- purely definitional fold over concatenated node lists")
-			lines.append("  -- use the generic append lemma with an empty graph (same numRanks)")
-			lines.append(
-				f"  simpa [pm, {prefix_name}, {suffix_name}] using (denoteGraph_nodes_append"
-				f"    (g := {{ numRanks := pm.numRanks, nodes := [] }})"
-				f"    (xs := {prefix_name}.nodes) (ys := {suffix_name}.nodes) init)"
-			)
-			lines.append("")
-			# Pointwise lemmas for each target tid: suffix does not overwrite it
-			for tid in sorted(target_tids):
-				lines.append(f"theorem pm_tid_{tid}_eq_prefix_goal_{int(g0.ts)} (init : Store) :")
+			if not definitions_only:
+				# Split lemma: pm nodes = prefix ++ suffix
+				lines.append(f"theorem pm_split_goal_{int(g0.ts)} (init : Store) :")
 				lines.append(
-					f"    (denoteGraph pm init) {tid} = (denoteGraph {prefix_name} init) {tid} := by"
+					f"    denoteGraph pm init = denoteGraph {suffix_name} (denoteGraph {prefix_name} init) := by"
 				)
-				lines.append(f"  have hsplit := pm_split_goal_{int(g0.ts)} init")
-				lines.append(f"  -- show suffix does not write tid={tid} (computable) and use preservation lemma")
+				lines.append("  -- purely definitional fold over concatenated node lists")
+				lines.append("  -- use the generic append lemma with an empty graph (same numRanks)")
 				lines.append(
-					f"  have hpres : (denoteGraph {suffix_name} (denoteGraph {prefix_name} init)) {tid} ="
-					f"      (denoteGraph {prefix_name} init) {tid} := by"
+					f"  simpa [pm, {prefix_name}, {suffix_name}] using (denoteGraph_nodes_append"
+					f"    (g := {{ numRanks := pm.numRanks, nodes := [] }})"
+					f"    (xs := {prefix_name}.nodes) (ys := {suffix_name}.nodes) init)"
 				)
-				lines.append(f"    have hno : ∀ n ∈ {suffix_name}.nodes, {tid} ∉ n.outs := by native_decide")
-				lines.append(
-					f"    simpa using (denoteGraph_tid_eq_of_forall_not_mem_outs {suffix_name} {suffix_name}.nodes"
-					f"      (denoteGraph {prefix_name} init) {tid} hno)"
-				)
-				lines.append(f"  -- rewrite using the split")
-				lines.append(f"  simpa [hsplit] using hpres")
 				lines.append("")
+				# Pointwise lemmas for each target tid: suffix does not overwrite it
+				for tid in sorted(target_tids):
+					lines.append(f"theorem pm_tid_{tid}_eq_prefix_goal_{int(g0.ts)} (init : Store) :")
+					lines.append(
+						f"    (denoteGraph pm init) {tid} = (denoteGraph {prefix_name} init) {tid} := by"
+					)
+					lines.append(f"  have hsplit := pm_split_goal_{int(g0.ts)} init")
+					lines.append(f"  -- show suffix does not write tid={tid} (computable) and use preservation lemma")
+					lines.append(
+						f"  have hpres : (denoteGraph {suffix_name} (denoteGraph {prefix_name} init)) {tid} ="
+						f"      (denoteGraph {prefix_name} init) {tid} := by"
+					)
+					lines.append(f"    have hno : ∀ n ∈ {suffix_name}.nodes, {tid} ∉ n.outs := by native_decide")
+					lines.append(
+						f"    simpa using (denoteGraph_tid_eq_of_forall_not_mem_outs {suffix_name} {suffix_name}.nodes"
+						f"      (denoteGraph {prefix_name} init) {tid} hno)"
+					)
+					lines.append(f"  -- rewrite using the split")
+					lines.append(f"  simpa [hsplit] using hpres")
+					lines.append("")
 
 	# Build dependency map for goals
 	deps_by_ts: Dict[int, GoalDependency] = {}
@@ -2735,7 +2770,7 @@ def emit_lean_spec(
 			lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
 			lines.append("")
 
-		if goal_slices is None:
+		if goal_slices is None and not definitions_only:
 			lines.append(f"theorem prove_{def_name} : {def_name}_stmt := by")
 			lines.append("  sorry")
 			lines.append("")
@@ -2768,7 +2803,7 @@ def emit_lean_spec(
 			sm_tid_to_node_idx[int(t.tid)] = i
 			sm_tid_to_node[int(t.tid)] = n
 	
-	if (sm_goal_tids or sm_intermediate_tids) and len(sm_nodes) <= 24:
+	if not definitions_only and (sm_goal_tids or sm_intermediate_tids) and len(sm_nodes) <= 24:
 		lines.append("/-!")
 		lines.append("## Auto-generated SM tid computation lemmas")
 		lines.append("")
@@ -3727,13 +3762,31 @@ def emit_lean_spec(
 			if skeleton_path.exists():
 				skeleton_path.unlink()
 
-	out_path.parent.mkdir(parents=True, exist_ok=True)
 	node_lines.append("end TrainVerify.Denote.Generated")
 	node_lines.append("")
-	out_path.with_name("GeneratedGraphNodes.lean").write_text(
-		"\n".join(node_lines), encoding="utf-8"
-	)
-	out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+	if definitions_only:
+		# Validate both complete files privately, then publish one directory snapshot.
+		# The destination must remain fresh in this caller-owned namespace.
+		target = out_path.parent
+		if out_path.name == "GeneratedGraphNodes.lean":
+			raise ValueError("definitions-only requires distinct data and graph-node filenames")
+		_validate_definitions_only_destination(out_path)
+		target.parent.mkdir(parents=True, exist_ok=True)
+		with tempfile.TemporaryDirectory(prefix="trainverify-definitions-", dir=target.parent) as staging:
+			staged_root = Path(staging)
+			(staged_root / "GeneratedGraphNodes.lean").write_text(
+				"\n".join(node_lines), encoding="utf-8"
+			)
+			(staged_root / out_path.name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+			_validate_generated_authority_tree(staged_root)
+			_validate_definitions_only_destination(out_path)
+			_atomic_publish_generated_directory(staged_root, target)
+	else:
+		out_path.parent.mkdir(parents=True, exist_ok=True)
+		out_path.with_name("GeneratedGraphNodes.lean").write_text(
+			"\n".join(node_lines), encoding="utf-8"
+		)
+		out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 	if zigzag_suppressed:
 		# Loud, not silent: a dropped goal is a coverage hole, and reporting a
@@ -3978,7 +4031,14 @@ def _remap_output_path(path: str, final_root: Path, staged_root: Path) -> str:
 
 
 def _generate(args: argparse.Namespace) -> None:
+	_validate_definitions_only_options(
+		bool(getattr(args, "definitions_only", False)),
+		emit_spec_template=bool(args.emit_spec_template), split_goals=bool(args.split_goals),
+		emit_segment_patterns=bool(args.emit_segment_patterns),
+	)
 	out_path = Path(args.out)
+	if bool(getattr(args, "definitions_only", False)):
+		_validate_definitions_only_destination(out_path)
 	spec_out_path = Path(args.spec_out)
 
 	v = load_verifier(args.sm_pkl, args.pm_pkl, args.verifier_cache_dir)
@@ -4412,6 +4472,7 @@ def _generate(args: argparse.Namespace) -> None:
 		manifest_name=Path(args.manifest_out).name if args.manifest_out else None,
 		cp_dim0_audited=bool(args.assume_cp_dim0_shuffle),
 		with_adapter_communications=bool(getattr(args, "with_adapter_communications", False)),
+		definitions_only=bool(getattr(args, "definitions_only", False)),
 	)
 
 	if args.manifest_out:
@@ -4506,6 +4567,13 @@ def _generate(args: argparse.Namespace) -> None:
 
 def main() -> None:
 	args = parse_args()
+	_validate_definitions_only_options(
+		bool(getattr(args, "definitions_only", False)),
+		emit_spec_template=bool(args.emit_spec_template), split_goals=bool(args.split_goals),
+		emit_segment_patterns=bool(args.emit_segment_patterns),
+	)
+	if bool(getattr(args, "definitions_only", False)):
+		_validate_definitions_only_destination(Path(args.out))
 	if not args.split_goals:
 		_generate(args)
 		return
