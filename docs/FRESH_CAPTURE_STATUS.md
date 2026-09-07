@@ -24,7 +24,8 @@ canonical global-batch reference for the pending two-scale-unit work.
 
 The first real closure failures drove general, kernel-checked identities and
 compiler/renderer wiring for sequence/vocabulary-sharded `BW_embedding`, and
-sequence/row-reduction `BW_linear` dX. These mathematical identities depend only
+sequence/row-reduction/column-sharded `BW_linear` dX, sequence-axis `BW_sum`,
+and sequence/head-sharded rank-4→rank-3 `BW_view`. These mathematical identities depend only
 on `propext`, `Classical.choice`, and `Quot.sound`. Generated conditional
 witnesses additionally retain the existing native metadata-check trust base.
 ROW migration also binds initial weight-lineage shapes to the operator's shapes;
@@ -35,8 +36,22 @@ and changed real graph frames, not repeated full-bundle rebuilds. The ROW
 checkpoint has 106 focused tests, five parameterized K=1/2/3/4/5 conditional
 witnesses, a joint dX/dW witness, and four exact conditional frames from the
 legacy real GPT authority checked. These do **not** establish whole-model
-public closure. The fresh TP2/TP4 shared DAG currently stops at column-sharded
-`BW_linear` dX with sequence length 16 and hidden width 64.
+public closure.
+
+The subsequent column/sum checkpoint passed 151 focused tests, five general
+column dX witnesses, a general-batch collective dX witness, and four sequence-axis
+BW_sum witnesses. Column math and both BW_view flattening math theorems use only
+the same three kernel axioms. Ten exact BW_view witnesses cover axes 1/2,
+K=1..5 and nontrivial batch sizes; the view-focused integration set passed 73
+Python tests. These are bounded conditional proofs, not fresh public closure.
+Independent source review found and closed a mixed-column shape-helper migration
+omission using a batch-2 exact Lean regression.
+
+The fresh TP2/TP4 shared DAG now reaches the missing `BW_matmul` second-output
+contraction-reduction producer upstream of ReduceScatter (TP2 SM 104 / PM
+355–356). The inputs are query-axis shards; legacy backward matmul rules still
+assume four ranks and fixed dimensions. This is the next active proof/compiler
+capability gap, not a newly established upstream numerical bug.
 
 For plan2/runtime4, the expanded capture contains both scale units and gradient
 reducers. Export still rejects this case: raw integer tensor IDs alias distinct

@@ -7287,6 +7287,63 @@ def advance_joined_bw_view_frontiers(plan, frontiers, layouts):
 
 
 @dataclass(frozen=True)
+class KRankBWViewFlattenCertificate:
+    rule_id: str
+    rank_count: int
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_bw_view_flatten_frontiers(plan, frontiers, layouts):
+    """Flatten the trailing two dimensions without changing sequence ownership."""
+    if len(frontiers)!=len(layouts):
+        raise RelationCompositionError("BW_view flatten frontier/layout arity mismatch")
+    by_id={step.step_id:step for step in plan.steps}
+    certs=[];rewritten=[];rewritten_layouts=[]
+    for frontier,layout in zip(frontiers,layouts):
+        steps=tuple(by_id.get(ref) for ref in frontier)
+        if (layout!="sharded" or len(steps)<2 or any(step is None for step in steps)
+                or any(step.op!="BW_view" for step in steps)):
+            rewritten.append(frontier);rewritten_layouts.append(layout);continue
+        sm,*pms=steps;k=len(pms)
+        # Leave other valid view families to their own relation rule.
+        if (len(sm.input_shapes)!=2 or len(sm.input_shapes[0])!=4 or len(sm.output_shape)!=3):
+            rewritten.append(frontier);rewritten_layouts.append(layout);continue
+        if (sm.side!="sm" or sm.rank!=0 or tuple(p.rank for p in pms)!=tuple(range(k))
+                or any(p.side!="pm" for p in pms)
+                or any(len(p.input_shapes)!=2 or len(p.input_bindings)!=2 for p in steps)
+                or any(len(p.input_shapes[0])!=4 for p in pms)):
+            raise RelationCompositionError("BW_view flatten writer/input authority mismatch")
+        b,s,n,d=tuple(pms[0].input_shapes[0])
+        if tuple(sm.input_shapes[0])==(b,s*k,n,d):
+            dim=1;full=(b,s*k,n,d);full_out=(b,s*k,n*d)
+            rule="bw-view-flatten-sequence-sharded-k-rank"
+            theorem="TrainVerify.Denote.fw_view_allGatherPrimDimN_dim1_rank4_to_rank3"
+        elif tuple(sm.input_shapes[0])==(b,s,n*k,d):
+            dim=2;full=(b,s,n*k,d);full_out=(b,s,n*k*d)
+            rule="bw-view-flatten-head-sharded-k-rank"
+            theorem="TrainVerify.Denote.fw_view_allGatherPrimDimN_dim2_rank4_to_rank3"
+        else:
+            raise RelationCompositionError("BW_view flatten input gather shape mismatch")
+        shard=(b,s,n,d);shard_out=(b,s,n*d)
+        if (any(v<=0 for v in (b,s,n,d))
+                or tuple(sm.input_shapes[0])!=full or tuple(sm.output_shape)!=full_out
+                or any(tuple(p.input_shapes[0])!=shard or tuple(p.output_shape)!=shard_out for p in pms)
+                or any(tuple(p.input_shapes[1])!=tuple(p.output_shape) or tuple(p.parameters)!=tuple(p.output_shape) for p in steps)):
+            raise RelationCompositionError("BW_view flatten shape/parameter authority mismatch")
+        refs=tuple(p.input_bindings[0] for p in steps)
+        inp=RelationFactSpec("sharded",refs,gather_dim=dim)
+        out=RelationFactSpec("sharded",tuple(frontier),gather_dim=dim)
+        certs.append(KRankBWViewFlattenCertificate(
+            rule,k,inp,out,sm.step_id,tuple(p.step_id for p in pms),theorem))
+        rewritten.append(refs);rewritten_layouts.append("sharded")
+    return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankBWSumCertificate:
     rule_id: str
     rank_count: int
@@ -8767,14 +8824,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "rms_norm_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "rms_norm_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"}
     known.update(("shuffle_k_entry", "unshuffle_k_exit", "attention_k"))
     unknown = set(rules) - known
     if unknown:
@@ -8838,6 +8895,10 @@ def normalize_relation_frontiers(
                     plan, goal_ir, current_frontiers, current_layouts
                 )
             )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "bw_view_flatten_k" in rules:
+            _certs, current_frontiers, current_layouts = advance_k_rank_bw_view_flatten_frontiers(
+                plan, current_frontiers, current_layouts)
             _extend_unique_certificates(certificate_sink, _certs)
         if "bw_softmax_k" in rules:
             _certs, current_frontiers, current_layouts = (
@@ -10527,6 +10588,18 @@ _register_closed_rule_specs(
         ("denote.KRankBWMultiref",),
     ),
     ClosedRuleSpec(
+        "bw-view-flatten-head-sharded-k-rank", KRankBWViewFlattenCertificate,
+        ("TrainVerify.Denote.fw_view_allGatherPrimDimN_dim2_rank4_to_rank3",),
+        "BW_view", "bw_view_flatten_renderer:render_closed_bw_view_flatten_segment",
+        ("denote.KRankViewFlatten",),
+    ),
+    ClosedRuleSpec(
+        "bw-view-flatten-sequence-sharded-k-rank", KRankBWViewFlattenCertificate,
+        ("TrainVerify.Denote.fw_view_allGatherPrimDimN_dim1_rank4_to_rank3",),
+        "BW_view", "bw_view_flatten_renderer:render_closed_bw_view_flatten_segment",
+        ("denote.KRankViewFlatten",),
+    ),
+    ClosedRuleSpec(
         "bw-sum-scalar-broadcast-dim1-k-rank", KRankBWSumCertificate,
         ("TrainVerify.Denote.bw_sum_allGatherPrimDimN_dim1_rank3",),
         "BW_sum", "bw_sum_renderer:render_closed_k_rank_bw_sum_segment",
@@ -11153,6 +11226,10 @@ def build_certificate_transition_specs(
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), (cert.pm_step_id,))
+        elif type(cert) is KRankBWViewFlattenCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
         elif type(cert) is KRankBWSumCertificate:
             pre = (cert.gradient_fact, cert.activation_fact)
             post = (cert.output_fact,)
@@ -11991,7 +12068,7 @@ def compile_relation_plan(
         compiled_certificates: list[object] = []
         frontiers, layouts = normalize_relation_frontiers(
             proof, (tuple(proof.target_steps),), (seed_layout,),
-            rules=("allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k",
+            rules=("allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k",
                    "embedding_sharded_ids_k", "sum_producer_k",
                    "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag",
                    "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k",
