@@ -99,7 +99,9 @@ def build_snapshot(writers):
                     or producer["ref"]["op"] != writer["ref"]["op"]):
                 raise ValueError("transport reference has inconsistent producer")
     return dict(format="trainverify.runtime-source.v1", scope="source-only",
-                proof_admissible=False, writers=writers, tensors=list(tensors.values()))
+                proof_admissible=False, writers=writers, tensors=list(tensors.values()),
+                reducer_binding="missing", completeness=dict(status="incomplete", missing=[
+                    "parameter-reducers", "ordered-adapters", "global-batch", "loss-normalization"]))
 
 
 def validate_snapshot(snapshot):
@@ -126,5 +128,181 @@ def validate_snapshot(snapshot):
             actual[tid] = {k: tensor[k] for k in ("export_id", "ref", "writer")}
         if actual != {t["export_id"]: t for t in expected["tensors"]}:
             raise ValueError("inconsistent writer/reference linkage")
+        if "rank_sources" in snapshot:
+            from copy import deepcopy
+            rebound = deepcopy(snapshot)
+            bind_reducers(rebound)
+            if any(snapshot.get(k) != rebound[k] for k in
+                   ("writers", "reducer_binding", "completeness")):
+                raise ValueError("inconsistent reducer binding")
+        elif (snapshot.get("reducer_binding", "missing") != "missing"
+              or snapshot.get("completeness", expected["completeness"]) != expected["completeness"]
+              or any("reducer" in w for w in snapshot["writers"])):
+            raise ValueError("missing generated reducer source")
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValueError(f"missing or malformed source reference: {exc}") from exc
+
+
+def _rank_reducers(text, rank, world_size):
+    """Read explicit generated constructor statements; never execute generated code."""
+    import ast
+    tree = ast.parse(text)
+    cls, = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "GenModel"]
+    constants = {n.targets[0].id: ast.literal_eval(n.value) for n in cls.body
+                 if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)
+                 and n.targets[0].id in ("rank", "world_size")}
+    if constants != dict(rank=rank, world_size=world_size):
+        raise ValueError("generated rank/world mismatch")
+    init, = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"]
+    params, maps, reducers, active = [], {}, {}, []
+    def attr(node):
+        if not isinstance(node, ast.Attribute) or not isinstance(node.value, ast.Name) or node.value.id != "self":
+            raise ValueError("not-supported: nonliteral generated attribute")
+        return node.attr
+    for stmt in init.body:
+        call = stmt.value if isinstance(stmt, (ast.Expr, ast.Assign)) else None
+        if not isinstance(call, ast.Call):
+            continue
+        fn = ast.unparse(call.func)
+        if fn == "self.register_parameter":
+            params.append(ast.literal_eval(call.args[0]))
+        elif fn == "self.add_full_map":
+            name, parent, is_param, logical, shape = map(ast.literal_eval, call.args[:5])
+            if not is_param:
+                continue
+            slices = []
+            for sl in call.args[5].elts:
+                if ast.unparse(sl.func) != "slice":
+                    raise ValueError("not-supported: generated slice")
+                start, stop, step = map(ast.literal_eval, sl.args)
+                if step is not None:
+                    raise ValueError("not-supported: generated slice step")
+                slices.append([start, stop])
+            if name in maps:
+                raise ValueError("duplicate parameter full map")
+            maps[name] = dict(parent_tid=parent, name=logical, full_shape=list(shape),
+                              indmap=slices, chunks=ast.literal_eval(call.args[6]))
+        elif fn == "nnscaler.runtime.adapter.Reducer":
+            name = attr(stmt.targets[0])
+            if name in reducers:
+                raise ValueError("duplicate generated reducer")
+            kw = {k.arg: k.value for k in call.keywords}
+            reducers[name] = {k: ast.literal_eval(kw[k]) for k in
+                              ("ranks", "reduce_op", "zero", "nreplicas")}
+            reducers[name]["params"] = []
+        elif isinstance(call.func, ast.Attribute) and call.func.attr == "add_param":
+            reducers[attr(call.func.value)]["params"].append(attr(call.args[0]))
+        elif fn == "self.add_reducer":
+            active.append(attr(call.args[0]))
+    if len(params) != len(set(params)) or set(params) != set(maps):
+        raise ValueError("generated parameter coverage mismatch")
+    if len(active) != len(set(active)) or set(active) != set(reducers):
+        raise ValueError("generated reducer registration mismatch")
+    return params, maps, reducers
+
+
+def bind_reducers(snapshot):
+    """Bind per-weight reducers to existing identities and retained source evidence.
+
+    Only reducer binding can be complete. Ordered adapters and batch/loss
+    contracts remain missing. Embedded source text is evidence, not a signature.
+    """
+    try:
+        sources = snapshot["rank_sources"]
+        size = snapshot["runtime_ndevs"]
+        if set(sources) != {str(r) for r in range(size)}:
+            raise ValueError("missing generated rank source")
+        tensors = {tensor_export_id(t["ref"]): t for t in snapshot["tensors"]}
+        for rank in range(size):
+            params, maps, generated = _rank_reducers(sources[str(rank)], rank, size)
+            local = [w for w in snapshot["writers"] if w["ref"]["runtime_rank"] == rank]
+            weights = {}
+            for tensor in tensors.values():
+                ref = tensor["ref"]
+                if ref["runtime_rank"] == rank and tensor.get("placement", {}).get("is_param"):
+                    if ref["source_tid"] in weights:
+                        raise ValueError("not-supported: ambiguous parameter identity")
+                    weights[ref["source_tid"]] = tensor
+            named = {}
+            for name in params:
+                tid = int(name.rsplit("_", 1)[1])
+                tensor = weights[tid]
+                mapping = maps[name]; placement = tensor["placement"]
+                if (any(mapping[k] != placement[k] for k in ("parent_tid", "name", "full_shape", "indmap"))
+                        or mapping["chunks"] != placement["valmap"][1]):
+                    raise ValueError("parameter full map differs from expanded source")
+                named[name] = tensor["ref"]
+            if {r["source_tid"] for r in named.values()} != set(weights):
+                raise ValueError("expanded parameter coverage mismatch")
+            owners = {}
+            for name, red in generated.items():
+                for param in red["params"]:
+                    if param not in named or param in owners:
+                        raise ValueError("generated reducer parameter coverage mismatch")
+                    owners[param] = name
+            if set(owners) != set(params):
+                raise ValueError("missing parameter reducer")
+            covered, grad_to_weight, weight_to_grad, current = set(), {}, {}, {}
+            for writer in local:
+                for gid, wid in writer["parameter_grad_tids"]:
+                    if gid in grad_to_weight and grad_to_weight[gid] != wid:
+                        raise ValueError("conflicting parameter gradient source")
+                    grad_to_weight[gid] = wid
+                    weight_to_grad[wid] = gid
+                if writer["ref"]["op"] != "CROSS_DP_WRED":
+                    for ref in writer["inputs"] + writer["outputs"]:
+                        if ref["runtime_rank"] == rank:
+                            key = tuple(ref[k] for k in TENSOR_FIELDS[:-1])
+                            current[key] = max(current.get(key, -1), ref["version"])
+                    continue
+                ir = writer["reducer_ir"]
+                param, = [n for n, r in named.items() if r["source_tid"] == ir["parameter_tid"]]
+                if param in covered:
+                    raise ValueError("duplicate parameter reducer writer")
+                covered.add(param)
+                name = owners[param]; red = generated[name]
+                if name != f"wreducer{ir['cid']}" or red["ranks"] != ir["ranks"] or red["nreplicas"] != ir["nreplicas"]:
+                    raise ValueError("generated reducer differs from expanded source")
+                if (red["reduce_op"] != "sum" or type(red["zero"]) is not int or red["zero"] != 0
+                        or type(red["nreplicas"]) is not int or red["nreplicas"] != 1):
+                    raise ValueError("not-supported: reducer requires sum/zero0/nreplicas1")
+                ranks = red["ranks"]
+                if (not isinstance(ranks, list) or rank not in ranks or len(set(ranks)) != len(ranks)
+                        or any(type(r) is not int or r < 0 or r >= size for r in ranks)):
+                    raise ValueError("invalid ordered reducer ranks")
+                inputs = writer["inputs"]
+                if len(inputs) != len(ranks) or {t["runtime_rank"] for t in inputs} != set(ranks):
+                    raise ValueError("reducer input rank coverage mismatch")
+                ordered = [next(t for t in inputs if t["runtime_rank"] == r) for r in ranks]
+                grad, = [t for t in inputs if t["runtime_rank"] == rank]
+                output, = writer["outputs"]
+                key = tuple(grad[k] for k in TENSOR_FIELDS[:-1])
+                if (current.get(key) != grad["version"]
+                        or weight_to_grad.get(ir["parameter_tid"]) != grad["source_tid"]):
+                    raise ValueError("reducer does not consume current gradient")
+                if grad_to_weight.get(grad["source_tid"]) != ir["parameter_tid"] or output != dict(grad, version=grad["version"]+1):
+                    raise ValueError("parameter gradient binding mismatch")
+                writer["reducer"] = dict(kind="CROSS_DP_WRED", ranks=ranks,
+                    ordered_inputs=ordered, outputs=writer["outputs"], parameter=named[param],
+                    grad_input=grad, grad_output=output,
+                    reduce_op=red["reduce_op"], zero=red["zero"], nreplicas=red["nreplicas"])
+            if covered != set(params):
+                raise ValueError("missing expanded parameter reducer")
+        reducers = [w for w in snapshot["writers"] if w["ref"]["op"] == "CROSS_DP_WRED"]
+        for writer in reducers:
+            binding = writer["reducer"]
+            peers = [w for w in reducers if w["reducer_ir"]["cid"] == writer["reducer_ir"]["cid"]
+                     and w["reducer_ir"]["parameter_tid"] == writer["reducer_ir"]["parameter_tid"]]
+            ordered = []
+            for rank in binding["ranks"]:
+                peer, = [w for w in peers if w["ref"]["runtime_rank"] == rank]
+                if peer["reducer"]["ranks"] != binding["ranks"]:
+                    raise ValueError("inconsistent peer reducer ranks")
+                ordered.append(peer["reducer"]["grad_input"])
+            if binding["ordered_inputs"] != ordered:
+                raise ValueError("reducer input differs from peer gradient source")
+        snapshot["reducer_binding"] = "complete"
+        snapshot["completeness"] = dict(status="incomplete", missing=[
+            "ordered-adapters", "global-batch", "loss-normalization"])
+    except (KeyError, TypeError, AttributeError, SyntaxError, IndexError) as exc:
+        raise ValueError(f"missing or malformed reducer source: {exc}") from exc

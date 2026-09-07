@@ -14,7 +14,7 @@ def _tensor_ref(tensor):
                     (tensor.wtype, tensor.rank, tensor.mb, tensor.tid, tensor.v)))
 
 
-def export_expanded_cells(world, cells):
+def export_expanded_cells(world, cells, rank_sources=None, reducer_irs=None):
     """Snapshot complete prepared Cells without merging any ranks or versions."""
     writers, placements = [], {}
     calls = defaultdict(int)
@@ -41,12 +41,23 @@ def export_expanded_cells(world, cells):
             destinations = ([cell.ir.kwargs["dst"]] if isinstance(cell.ir, MovePrim)
                             else [r for r in cell.ir.kwargs["ranks"] if r != src])
             writers[-1]["transport"] = dict(src=src, destinations=destinations)
+        if rank_sources is not None:
+            writers[-1]["parameter_grad_tids"] = [[g, w] for g, w in cell._gid2wid.items()]
+            if ref["op"] == "CROSS_DP_WRED":
+                from nnscaler.ir.adapter.adapter import IRWeightReducer
+                ir = cell.ir if cell.ir is not None else (reducer_irs or {}).get((cell.rank, node.cid))
+                if not isinstance(ir, IRWeightReducer):
+                    raise ValueError("missing reducer IR")
+                writers[-1]["reducer_ir"] = dict(
+                    cid=ir.cid, ranks=sorted(ir.device),
+                    nreplicas=ir.nreplicas, parameter_tid=cell._wred_wid)
         for ir in (*cell._input_irs, *cell._output_irs):
             if ir.is_attr():
                 placements[(node.wtype, node.rank, ir.tid)] = dict(
                     parent_tid=ir.parent.tid, name=ir.parent.name,
                     full_shape=list(ir.parent.shape), indmap=[list(p) for p in ir.indmap],
                     valmap=list(ir.valmap), is_attr=ir.is_attr(), is_grad=ir.is_grad(),
+                    is_param=ir.is_param(),
                     scale_unit=node.rank // world.plan_ndevs,
                     plan_rank=node.rank % world.plan_ndevs)
     snapshot = build_snapshot(writers)
@@ -55,10 +66,19 @@ def export_expanded_cells(world, cells):
         key = (ref["world"], ref["runtime_rank"], ref["source_tid"])
         if key in placements:
             tensor["placement"] = placements[key]
+    if rank_sources is not None:
+        from trainverify.runtime_source_authority import bind_reducers
+        if (world.num_pp != 1 or world.num_mb != 1 or world.plan_ndevs <= 0
+                or world.runtime_ndevs % world.plan_ndevs != 0
+                or any(c.node.mb != 0 for c in cells)):
+            raise ValueError("not-supported: requires uniform P|R, PP1/MB1")
+        snapshot["rank_sources"] = {str(r): text for r, text in rank_sources.items()}
+        snapshot["runtime_ndevs"] = world.runtime_ndevs
+        bind_reducers(snapshot)
     return snapshot
 
 
-def load_capture(capture_path, world_path=None, wtype="p"):
+def load_capture(capture_path, world_path=None, wtype="p", rank_code_directory=None):
     """Load a *trusted* user pickle and run the existing rank-expansion passes.
 
     Pickle can execute code: this is not an untrusted upload reader. We use the
@@ -84,7 +104,19 @@ def load_capture(capture_path, world_path=None, wtype="p"):
     cells = [cell for rank in range(world.runtime_ndevs)
              for cell in _prepare_rank_cells(world, mg, rank)]
     cells, _ = _fuse_collective_inputs(cells)
-    snapshot = export_expanded_cells(world, cells)
+    rank_sources, reducer_irs = None, {}
+    if rank_code_directory is not None:
+        from nnscaler.ir.adapter.adapter import IRWeightReducer
+        from nnscaler_backend.build_graph import _flatten_exereuse_then_scale
+        # Per-weight copy(Cell) intentionally loses its transient IR. Recover the
+        # same scaled source nodes; never substitute current CompileFlag values.
+        for rank in range(world.runtime_ndevs):
+            for ir in _flatten_exereuse_then_scale(mg.execplan.seq(rank % world.plan_ndevs), mg, rank):
+                if isinstance(ir, IRWeightReducer):
+                    reducer_irs[(rank, ir.cid)] = ir
+        rank_sources = {r: (Path(rank_code_directory) / f"gencode{r}.py").read_text()
+                        for r in range(world.runtime_ndevs)}
+    snapshot = export_expanded_cells(world, cells, rank_sources=rank_sources, reducer_irs=reducer_irs)
     snapshot["source"] = dict(capture=str(capture_path), world_sidecar=str(world_path),
                               plan_ndevs=world.plan_ndevs, runtime_ndevs=world.runtime_ndevs,
                               dataflow_order="expanded-cell-order; fused-inputs-indmap-order",
