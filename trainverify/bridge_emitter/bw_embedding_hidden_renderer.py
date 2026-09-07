@@ -113,12 +113,12 @@ def render_closed_k_rank_bw_embedding_hidden_segment(ir, relation, segment_id: s
         raise ValueError("hidden BW_embedding writer/frame partition mismatch")
     sm_node = ir.sm_nodes[sm_indices[0]]
     pm_nodes = tuple(ir.pm_nodes[i] for i in pm_indices)
-    if (sm_node.rank != 0 or sm_node.op != "BW_embedding" or sm_node.params != []
+    if (sm_node.rank != 0 or sm_node.op != "BW_embedding" or tuple(sm_node.params or ()) != ()
             or tuple(sm_node.ins) != (gradient.sm_tid, ids.sm_tid, weight.sm_tid)
             or sm_node.outs != [output.sm_tid]):
         raise ValueError("hidden BW_embedding SM writer mismatch")
     for rank, node in enumerate(pm_nodes):
-        if (node.rank != rank or node.op != "BW_embedding" or node.params != []
+        if (node.rank != rank or node.op != "BW_embedding" or tuple(node.params or ()) != ()
                 or tuple(node.ins) != (gradient.pm_tids[rank], ids.pm_tids[0], weight.pm_tids[rank])
                 or node.outs != [output.pm_tids[rank]]):
             raise ValueError("hidden BW_embedding PM writer mismatch")
@@ -147,6 +147,8 @@ def render_closed_k_rank_bw_embedding_hidden_segment(ir, relation, segment_id: s
                     pm.update((tp0, tp1))
                 continue
             fact = authority.get(fact_id)
+            if fact is None and fact_id == chain.anchor_fact.fact_id:
+                fact = chain.anchor_fact
             if fact is None:
                 raise ValueError("hidden BW_embedding unknown live fact")
             if fact.kind == "tensor_shape" and fact.side in ("sm", "pm"):

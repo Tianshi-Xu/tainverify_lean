@@ -4260,6 +4260,86 @@ def advance_k_rank_bw_embedding_sequence_reduction_frontiers(plan, ir, frontiers
 
 
 @dataclass(frozen=True)
+class KRankBWEmbeddingHiddenCertificate:
+    rule_id: str
+    rank_count: int
+    batch_size: int
+    sequence_size: int
+    vocab_size: int
+    shard_hidden: int
+    gradient_fact: RelationFactSpec
+    ids_fact: RelationFactSpec
+    weight_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_bw_embedding_hidden_frontiers(plan, ir, frontiers, layouts):
+    """Pull hidden-feature gradient shards to dim-2 gradients and dim-1 weights."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("hidden BW_embedding frontier/layout arity mismatch")
+    by_id = {s.step_id: s for s in plan.steps}
+    certs, rewritten, rewritten_layouts = [], [], []
+    for frontier, layout in zip(frontiers, layouts):
+        steps = tuple(by_id.get(ref) for ref in frontier)
+        if (layout != "sharded" or len(steps) < 2
+                or any(s is None or s.op != "BW_embedding" for s in steps)
+                or any(s.parameters for s in steps)):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        sm, *pms = steps
+        k = len(pms)
+        if (k != ir.pm_num_ranks or sm.side != "sm" or sm.rank != 0
+                or any(s.side != "pm" for s in pms)
+                or tuple(s.rank for s in pms) != tuple(range(k))
+                or any(len(s.input_bindings) != 3 or len(s.input_shapes) != 3 for s in steps)):
+            raise RelationCompositionError("hidden BW_embedding writer/input rank authority mismatch")
+        if len(pms[0].input_shapes[0]) != 3 or len(pms[0].input_shapes[2]) != 2:
+            raise RelationCompositionError("hidden BW_embedding input shape ranks mismatch")
+        b, seq, d = pms[0].input_shapes[0]
+        v, wd = pms[0].input_shapes[2]
+        if min(b, seq, d, v) <= 0 or wd != d:
+            raise RelationCompositionError("hidden BW_embedding requires positive compatible dimensions")
+        ids_shape = (b, seq)
+        full_w, shard_w = (v, d*k), (v, d)
+        if (tuple(sm.input_shapes) != ((b,seq,d*k),ids_shape,full_w)
+                or tuple(sm.output_shape) != full_w
+                or any(tuple(s.input_shapes) != ((b,seq,d),ids_shape,shard_w)
+                       or tuple(s.output_shape) != shard_w for s in pms)):
+            raise RelationCompositionError("hidden BW_embedding operator shape authority mismatch")
+        ids_ref = sm.input_bindings[1]
+        pm_ids = tuple(s.input_bindings[1] for s in pms)
+        if not ids_ref.startswith("init:") or len(set(pm_ids)) != 1 or not pm_ids[0].startswith("init:"):
+            raise RelationCompositionError("hidden BW_embedding IDs lack shared initial authority")
+        ids_lineage = ir.init_lineages.get(int(ids_ref.split(":",1)[1]))
+        if ids_lineage is None:
+            raise RelationCompositionError("hidden BW_embedding IDs lineage missing")
+        ids_fact = init_lineage_relation_fact(ids_lineage)
+        if (ids_fact.layout != "sharded" or ids_fact.gather_dim != 0
+                or ids_fact.step_triple != (ids_ref,pm_ids[0])
+                or tuple(ids_lineage.tsShape) != ids_shape
+                or tuple(map(tuple,ids_lineage.tpShapes)) != (ids_shape,)):
+            raise RelationCompositionError("hidden BW_embedding IDs lineage does not certify same values/shapes")
+        gradient = RelationFactSpec("sharded",(sm.input_bindings[0],*(s.input_bindings[0] for s in pms)),gather_dim=2)
+        weight = RelationFactSpec("sharded",(sm.input_bindings[2],*(s.input_bindings[2] for s in pms)),gather_dim=1)
+        if weight.step_triple[0].startswith("init:"):
+            lineage = ir.init_lineages.get(int(weight.step_triple[0].split(":",1)[1]))
+            if (lineage is None or init_lineage_relation_fact(lineage) != weight
+                    or tuple(lineage.tsShape) != full_w
+                    or tuple(map(tuple,lineage.tpShapes)) != (shard_w,)*k):
+                raise RelationCompositionError("hidden BW_embedding ordered weight lineage/shape mismatch")
+        output = RelationFactSpec("sharded",tuple(frontier),gather_dim=1)
+        spec = get_closed_rule_spec("bw-embedding-hidden-sharded-k-rank")
+        certs.append(KRankBWEmbeddingHiddenCertificate(
+            spec.rule_id,k,b,seq,v,d,gradient,ids_fact,weight,output,
+            sm.step_id,tuple(s.step_id for s in pms),spec.lean_theorems[0]))
+        rewritten.extend((gradient.step_triple,ids_fact.step_triple,weight.step_triple))
+        rewritten_layouts.extend(("sharded","sharded","sharded"))
+    return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankBWEmbeddingVocabCertificate:
     rule_id: str
     rank_count: int
@@ -8951,14 +9031,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "bw_embedding_hidden_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "rms_norm_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "bw_embedding_hidden_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "rms_norm_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"}
     known.update(("shuffle_k_entry", "unshuffle_k_exit", "attention_k"))
     unknown = set(rules) - known
     if unknown:
@@ -8995,6 +9075,12 @@ def normalize_relation_frontiers(
                     plan, current_frontiers, current_layouts
                 )
             )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "bw_embedding_hidden_k" in rules:
+            if goal_ir is None:
+                raise RelationCompositionError("bw_embedding_hidden_k requires GoalIR authority")
+            _certs, current_frontiers, current_layouts = advance_k_rank_bw_embedding_hidden_frontiers(
+                plan, goal_ir, current_frontiers, current_layouts)
             _extend_unique_certificates(certificate_sink, _certs)
         if "bw_embedding_vocab_k" in rules:
             if goal_ir is None:
@@ -10679,6 +10765,12 @@ _register_closed_rule_specs(
         ("denote.BWEmbeddingSequenceShardK",),
     ),
     ClosedRuleSpec(
+        "bw-embedding-hidden-sharded-k-rank", KRankBWEmbeddingHiddenCertificate,
+        ("TrainVerify.Denote.bw_embedding_hidden_allGather_rank3",),
+        "BW_embedding", "bw_embedding_hidden_renderer:render_closed_k_rank_bw_embedding_hidden_segment",
+        ("denote.BWEmbeddingHiddenShardK",),
+    ),
+    ClosedRuleSpec(
         "bw-embedding-vocab-sharded-k-rank", KRankBWEmbeddingVocabCertificate,
         ("TrainVerify.Denote.bw_embedding_eq_allGather_offset_k",),
         "BW_embedding", "bw_embedding_vocab_renderer:render_closed_k_rank_bw_embedding_vocab_segment",
@@ -11227,7 +11319,7 @@ def build_certificate_transition_specs(
             footprint_groups = (
                 (cert.sm_sum_step,), cert.pm_sum_steps, (cert.pm_allreduce_step,)
             )
-        elif type(cert) is KRankBWEmbeddingVocabCertificate:
+        elif type(cert) in (KRankBWEmbeddingVocabCertificate, KRankBWEmbeddingHiddenCertificate):
             pre = (cert.gradient_fact, cert.ids_fact, cert.weight_fact)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
@@ -12243,7 +12335,7 @@ def compile_relation_plan(
         compiled_certificates: list[object] = []
         frontiers, layouts = normalize_relation_frontiers(
             proof, (tuple(proof.target_steps),), (seed_layout,),
-            rules=("allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k",
+            rules=("allreduce_reconstruction_k", "bw_embedding_hidden_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_view_flatten_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k",
                    "embedding_sharded_ids_k", "sum_producer_k",
                    "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag",
                    "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k",
