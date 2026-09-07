@@ -14,7 +14,36 @@ def _tensor_ref(tensor):
                     (tensor.wtype, tensor.rank, tensor.mb, tensor.tid, tensor.v)))
 
 
-def export_expanded_cells(world, cells, rank_sources=None, reducer_irs=None):
+def capture_adapter_source(cells):
+    """Detach the prepared, pre-fusion stream while primitive IR is still live."""
+    from copy import deepcopy
+    from trainverify.runtime_source_authority import ADAPTER_OPS
+    calls, stream = defaultdict(int), []
+    for cell in cells:
+        n = cell.node
+        origin = "expanded" if cell.ir is None else "nnscaler"
+        key = (n.wtype, n.rank, n.mb, n.cid, origin)
+        ref = dict(world=n.wtype, runtime_rank=n.rank, microbatch=n.mb,
+                   source_cid=n.cid, call_instance=calls[key], op=cell.opname.name, origin=origin)
+        calls[key] += 1
+        row = dict(ref=ref, inputs=[_tensor_ref(t) for t in cell.inputs],
+                   outputs=[_tensor_ref(t) for t in cell.outputs])
+        if ref["op"] in ADAPTER_OPS:
+            from nnscaler.ir.adapter.prim import CollectivePrim
+            if not isinstance(cell.ir, CollectivePrim):
+                raise ValueError("missing ordered primitive source")
+            row["primitive"] = dict(
+                kind=type(cell.ir).__name__, signature=cell.ir.signature,
+                kwargs={k: deepcopy(cell.ir.kwargs[k]) for k in ("ranks", "dim", "idim", "odim")
+                        if k in cell.ir.kwargs},
+                forward=cell.adapter is None or cell.adapter.isfw(),
+                generated_inputs=[f"{t.name}_{t.tid}" for t in cell.ir.inputs()],
+                generated_outputs=[f"{t.name}_{t.tid}" for t in cell.ir.outputs()])
+        stream.append(row)
+    return deepcopy(stream)
+
+
+def export_expanded_cells(world, cells, rank_sources=None, reducer_irs=None, adapter_source=None):
     """Snapshot complete prepared Cells without merging any ranks or versions."""
     writers, placements = [], {}
     calls = defaultdict(int)
@@ -75,6 +104,15 @@ def export_expanded_cells(world, cells, rank_sources=None, reducer_irs=None):
         snapshot["rank_sources"] = {str(r): text for r, text in rank_sources.items()}
         snapshot["runtime_ndevs"] = world.runtime_ndevs
         bind_reducers(snapshot)
+    if adapter_source is not None:
+        from copy import deepcopy
+        from trainverify.runtime_source_authority import bind_adapters, ADAPTER_OPS
+        snapshot["adapter_source"] = deepcopy(adapter_source)
+        for writer, cell in zip(snapshot["writers"], cells):
+            if writer["ref"]["op"] in ADAPTER_OPS:
+                writer["adapter_kwargs"] = {k: deepcopy(cell.kwargs[k])
+                    for k in ("ranks", "dim", "idim", "odim") if k in cell.kwargs}
+        bind_adapters(snapshot, allow_translation_mismatch=True)
     return snapshot
 
 
@@ -103,6 +141,7 @@ def load_capture(capture_path, world_path=None, wtype="p", rank_code_directory=N
     _sanity_check_world(world)
     cells = [cell for rank in range(world.runtime_ndevs)
              for cell in _prepare_rank_cells(world, mg, rank)]
+    adapter_source = capture_adapter_source(cells)
     cells, _ = _fuse_collective_inputs(cells)
     rank_sources, reducer_irs = None, {}
     if rank_code_directory is not None:
@@ -116,8 +155,10 @@ def load_capture(capture_path, world_path=None, wtype="p", rank_code_directory=N
                     reducer_irs[(rank, ir.cid)] = ir
         rank_sources = {r: (Path(rank_code_directory) / f"gencode{r}.py").read_text()
                         for r in range(world.runtime_ndevs)}
-    snapshot = export_expanded_cells(world, cells, rank_sources=rank_sources, reducer_irs=reducer_irs)
+    snapshot = export_expanded_cells(world, cells, rank_sources=rank_sources, reducer_irs=reducer_irs,
+                                     adapter_source=adapter_source)
     snapshot["source"] = dict(capture=str(capture_path), world_sidecar=str(world_path),
+                              rank_code_directory=str(rank_code_directory) if rank_code_directory is not None else None,
                               plan_ndevs=world.plan_ndevs, runtime_ndevs=world.runtime_ndevs,
                               dataflow_order="expanded-cell-order; fused-inputs-indmap-order",
                               call_instance="zero-based expanded occurrence per world/rank/mb/cid/origin")

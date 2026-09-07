@@ -133,14 +133,187 @@ def validate_snapshot(snapshot):
             rebound = deepcopy(snapshot)
             bind_reducers(rebound)
             if any(snapshot.get(k) != rebound[k] for k in
-                   ("writers", "reducer_binding", "completeness")):
+                   ("writers", "reducer_binding") + (() if "adapter_source" in snapshot else ("completeness",))):
                 raise ValueError("inconsistent reducer binding")
         elif (snapshot.get("reducer_binding", "missing") != "missing"
-              or snapshot.get("completeness", expected["completeness"]) != expected["completeness"]
+              or ("adapter_source" not in snapshot and snapshot.get("completeness", expected["completeness"]) != expected["completeness"])
               or any("reducer" in w for w in snapshot["writers"])):
             raise ValueError("missing generated reducer source")
+        if "adapter_source" in snapshot:
+            from copy import deepcopy
+            rebound = deepcopy(snapshot)
+            bind_adapters(rebound, allow_translation_mismatch=True)
+            if any(snapshot.get(k) != rebound[k] for k in
+                   ("writers", "adapter_binding", "adapter_generated_binding", "completeness")):
+                raise ValueError("inconsistent adapter binding")
+        elif (snapshot.get("adapter_binding", "missing") != "missing"
+              or snapshot.get("adapter_generated_binding", "missing") != "missing"
+              or any("adapter" in w for w in snapshot["writers"])):
+            raise ValueError("missing prepared adapter source")
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValueError(f"missing or malformed source reference: {exc}") from exc
+
+
+ADAPTER_OPS = ("AllGatherPrim", "AllReducePrim", "ReduceScatterPrim", "AllToAllPrim")
+
+
+def bind_adapters(snapshot, allow_translation_mismatch=False):
+    """Replay retained pre-fusion read points; never repair the writer edge order.
+
+    Evidence is a source observation, not authentication of an arbitrary JSON.
+    Mismatched translations can be retained for inspection, never marked complete.
+    """
+    from copy import deepcopy
+    try:
+        source = snapshot["adapter_source"]
+        writers = {writer_export_id(w["ref"]): w for w in snapshot["writers"]}
+        if len(writers) != len(snapshot["writers"]):
+            raise ValueError("duplicate adapter writer")
+        if [writer_export_id(s["ref"]) for s in source] != list(writers):
+            raise ValueError("prepared primitive/writer inventory mismatch")
+        current, reads, adapters = {}, {}, []
+        produced = {tensor_export_id(t) for row in source for t in row["outputs"]}
+        def key(t):
+            return tuple(t[k] for k in TENSOR_FIELDS[:-1])
+        for row in source:
+            wid = writer_export_id(row["ref"])
+            writer = writers[wid]
+            if writer["outputs"] != row["outputs"]:
+                raise ValueError("output differs from prepared source writer")
+            points = []
+            for ref in row["inputs"]:
+                tensor_export_id(ref)
+                prior = current.get(key(ref))
+                if prior is None and tensor_export_id(ref) in produced:
+                    raise ValueError("source read precedes its current writer")
+                if prior is not None and prior[0] != ref:
+                    raise ValueError("source read does not consume current writer version")
+                points.append(dict(ref=ref, writer=prior[1] if prior else None))
+            reads[wid] = points
+            if row["ref"]["op"] in ADAPTER_OPS:
+                if writer["adapter_kwargs"] != row["primitive"]["kwargs"]:
+                    raise ValueError("adapter parameters differ from primitive source")
+                adapters.append(row)
+            elif row["ref"]["op"] != "CROSS_DP_WRED" and writer["inputs"] != row["inputs"]:
+                raise ValueError("writer read point differs from prepared source")
+            for ref in row["outputs"]:
+                current[key(ref)] = (ref, wid)
+        mismatch = False
+        for row in adapters:
+            ref, prim = row["ref"], row["primitive"]
+            wid = writer_export_id(ref); writer = writers[wid]
+            kw = prim["kwargs"]; ranks = kw["ranks"]
+            if (not isinstance(ranks, list) or not ranks or len(set(ranks)) != len(ranks)
+                    or any(type(r) is not int or r < 0 for r in ranks)):
+                raise ValueError("missing or invalid ordered primitive ranks")
+            fields = (() if ref["op"] == "AllReducePrim" else
+                      ("idim", "odim") if ref["op"] == "AllToAllPrim" else ("dim",))
+            parameters = {k: kw[k] for k in fields}
+            if any(type(v) is not int for v in parameters.values()):
+                raise ValueError("invalid primitive dimensions")
+            if prim["kind"] == "AllToAllAllToAllPrim" and prim["forward"] is False:
+                parameters = dict(idim=kw["odim"], odim=kw["idim"])
+            peers, problem = [], None
+            if ref["runtime_rank"] not in ranks:
+                problem = "primitive ranks exclude current source writer"
+            else:
+                for rank in ranks:
+                    peer_ref = dict(ref, runtime_rank=rank)
+                    candidates = [s for s in adapters if s["ref"] == peer_ref]
+                    if len(candidates) != 1 or candidates[0]["primitive"]["kwargs"] != kw:
+                        raise ValueError("missing or inconsistent primitive peer occurrence")
+                    peer = candidates[0]
+                    if len(peer["inputs"]) != 1 or len(peer["outputs"]) != 1:
+                        raise ValueError("not-supported: multi-input/output primitive")
+                    peers.append(peer)
+            ordered = [p["inputs"][0] for p in peers]
+            if problem is None and writer["inputs"] != ordered:
+                problem = "fused inputs differ from ordered primitive peer read points"
+            # Even a retained mismatch must not rewrite the captured local read.
+            local = [t for t in writer["inputs"] if t["runtime_rank"] == ref["runtime_rank"]]
+            if local != row["inputs"]:
+                raise ValueError("adapter does not consume its current source read point")
+            writer["adapter"] = deepcopy(dict(ranks=ranks, parameters=parameters,
+                ordered_inputs=ordered, outputs=row["outputs"],
+                read_points=[p for peer in peers for p in reads[writer_export_id(peer["ref"])]],
+                local_read_points=reads[wid], source_writer=wid,
+                peer_writers=[writer_export_id(p["ref"]) for p in peers],
+                status="translation-mismatch" if problem else "bound", mismatch=problem))
+            mismatch |= problem is not None
+        snapshot["adapter_binding"] = "translation-mismatch" if mismatch else "complete"
+        snapshot["adapter_generated_binding"] = "missing"
+        if "rank_sources" in snapshot:
+            generated_mismatch = _bind_generated_adapters(snapshot, adapters, writers)
+            snapshot["adapter_generated_binding"] = "translation-mismatch" if generated_mismatch else "complete"
+            mismatch |= generated_mismatch
+            if mismatch:
+                snapshot["adapter_binding"] = "translation-mismatch"
+        missing = ([] if snapshot.get("reducer_binding") == "complete" else ["parameter-reducers"])
+        if mismatch:
+            missing.append("ordered-adapters")
+        snapshot["completeness"] = dict(status="incomplete", missing=missing + ["global-batch", "loss-normalization"])
+        if mismatch and not allow_translation_mismatch:
+            raise ValueError("ordered adapter translation mismatch")
+    except (KeyError, TypeError, AttributeError, IndexError, SyntaxError) as exc:
+        raise ValueError(f"missing or malformed adapter source: {exc}") from exc
+
+
+def _bind_generated_adapters(snapshot, adapters, writers):
+    """Match exact primitive call names/arguments/outputs to retained rank ASTs.
+
+    Fused backward rows refer to their actual forward autograd call; they are
+    not invented backward Python calls. Shared call sites are recorded as such.
+    """
+    import ast
+    calls = {}
+    for rank, text in snapshot["rank_sources"].items():
+        _rank_reducers(text, int(rank), snapshot["runtime_ndevs"])
+        entries = []
+        for stmt in ast.walk(ast.parse(text)):
+            if not isinstance(stmt, ast.Assign) or not isinstance(stmt.value, ast.Call):
+                continue
+            call = stmt.value
+            signature = ast.unparse(call.func)
+            if not signature.startswith("nnscaler.runtime.adapter.") or signature.endswith(".Reducer"):
+                continue
+            targets = stmt.targets
+            if len(targets) == 1 and isinstance(targets[0], (ast.Tuple, ast.List)):
+                targets = targets[0].elts
+            entries.append(dict(signature=signature, inputs=[ast.unparse(a) for a in call.args],
+                                outputs=[ast.unparse(t) for t in targets],
+                                kwargs={k.arg: ast.literal_eval(k.value) for k in call.keywords},
+                                line=stmt.lineno))
+        calls[int(rank)] = entries
+    covered, mismatch = set(), False
+    signatures = {"nnscaler.runtime.adapter." + name for name in
+                  ("all_gather", "all_reduce", "reduce_scatter", "all_to_all",
+                   "nn.allgather_reducescatter", "nn.reducescatter_allgather",
+                   "nn.allgather_split", "nn.split_allgather", "nn.alltoall_alltoall",
+                   "nn.allreduce_identity", "nn.identity_allreduce", "nn.allreduce_allreduce")}
+    for row in adapters:
+        prim = row["primitive"]; rank = row["ref"]["runtime_rank"]
+        matches = [c for c in calls[rank] if c["signature"] == prim["signature"]
+                   and c["inputs"] == prim["generated_inputs"]
+                   and c["outputs"] == prim["generated_outputs"]]
+        if len(matches) != 1:
+            raise ValueError("missing or ambiguous generated primitive occurrence")
+        call, = matches
+        if "ranks" not in call["kwargs"]:
+            raise ValueError("missing generated primitive ranks")
+        covered.add((rank, call["line"]))
+        equal = call["kwargs"] == prim["kwargs"]
+        writer = writers[writer_export_id(row["ref"])]
+        writer["adapter"]["generated_call"] = dict(call, forward=prim["forward"],
+            status="bound" if equal else "translation-mismatch")
+        if not equal:
+            writer["adapter"]["status"] = "translation-mismatch"
+            writer["adapter"]["mismatch"] = "prepared primitive kwargs differ from generated call"
+            mismatch = True
+    inventory = {(r, c["line"]) for r, entries in calls.items() for c in entries
+                 if c["signature"] in signatures}
+    if covered != inventory:
+        raise ValueError("generated primitive inventory coverage mismatch")
+    return mismatch
 
 
 def _rank_reducers(text, rank, world_size):
