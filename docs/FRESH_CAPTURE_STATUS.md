@@ -1,5 +1,19 @@
 # Fresh configuration-driven capture on local V100s
 
+## Active dependency baseline
+
+New capture runs use the internally maintained `nnscaler==0.9+internal.1`,
+built from `/home/v-zhouziyu/work/nnscaler-internal` at
+`6b95728ac9301d06f361791a3981240bb2db15aa`. The capture environment has been
+installed from the reviewed internal wheel. `scripts/requirements-capture.txt`
+records this selection without imposing a Torch/CUDA matrix; install the internal
+distribution before resolving that requirements file. Capture receipts include
+the actual imported nnScaler version and path.
+
+The executed checkpoint below is historical evidence from the earlier pinned
+source plus its explicitly recorded private fix. Those artifacts are retained,
+not relabelled as captures of the new internal baseline.
+
 ## Executed checkpoint (2026-09-06)
 
 The dedicated environment is `~/.venvs/trainverify-capture` (Python 3.11,

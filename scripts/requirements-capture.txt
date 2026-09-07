@@ -1,0 +1,3 @@
+# Install the internally distributed wheel/source first; no public PyPI release is implied.
+# Torch/CUDA/other dependency versions are maintained by the team.
+nnscaler==0.9+internal.1

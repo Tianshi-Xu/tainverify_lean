@@ -52,6 +52,9 @@ def test_real_capture_cli(tmp_path):
     assert receipt['devices'] == [0, 1]
     assert receipt['runtime_ngpus'] == 4
     assert receipt['cuda_forward_backward'] is True
+    installed_version = subprocess.check_output(
+        [python, '-c', 'import nnscaler; print(nnscaler.__version__)'], text=True).strip()
+    assert receipt['nnscaler_version'] == installed_version
     assert len(list((out / 'code').rglob('gencode*.py'))) == 4
 
 
