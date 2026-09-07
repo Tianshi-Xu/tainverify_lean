@@ -8143,7 +8143,7 @@ def advance_k_rank_bw_layernorm_param_reduction_frontiers(plan, ir, frontiers, l
         raise RelationCompositionError("BW_layernorm parameter reduction frontier/layout arity mismatch")
     by_id={s.step_id:s for s in plan.steps};certs=[];rewritten=[];rewritten_layouts=[]
     for frontier,layout in zip(frontiers,layouts):
-        if layout!="reduction" or len(frontier)!=5:
+        if layout!="reduction" or len(frontier)<2:
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         try: sm=by_id[frontier[0]];pms=tuple(by_id[x] for x in frontier[1:])
         except KeyError:
@@ -8153,12 +8153,19 @@ def advance_k_rank_bw_layernorm_param_reduction_frontiers(plan, ir, frontiers, l
         projection=sm.output_projection
         if projection not in (".2.1", ".2.2") or any(x.output_projection!=projection for x in pms):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if tuple(int(x.rank) for x in pms)!=(0,1,2,3) or len(sm.input_bindings)!=4 or any(len(x.input_bindings)!=4 for x in pms):
-            raise RelationCompositionError("rank-4 BW_layernorm parameter writer/input authority mismatch")
-        if tuple(sm.input_shapes)!=((1,8,32),(1,8,32),(32,),(32,)) or tuple(sm.output_shape)!=(32,):
-            raise RelationCompositionError("BW_layernorm parameter SM is outside checked theorem shapes")
-        if any(tuple(x.input_shapes)!=((1,2,32),(1,2,32),(32,),(32,)) or tuple(x.output_shape)!=(32,) for x in pms):
-            raise RelationCompositionError("BW_layernorm parameter PM is outside checked theorem shapes")
+        k=len(pms)
+        if (k!=ir.pm_num_ranks or sm.rank!=0 or sm.parameters or any(x.parameters for x in pms)
+                or tuple(x.rank for x in pms)!=tuple(range(k))
+                or any(len(x.input_bindings)!=4 or len(x.input_shapes)!=4 for x in (sm,*pms))):
+            raise RelationCompositionError("BW_layernorm parameter writer/input authority mismatch")
+        if len(pms[0].input_shapes[0])!=3:
+            raise RelationCompositionError("BW_layernorm parameter gradient rank mismatch")
+        b,s,d=pms[0].input_shapes[0]
+        full,shard=(b,s*k,d),(b,s,d)
+        if min(b,s,d)<=0 or tuple(sm.input_shapes)!=(full,full,(d,),(d,)) or tuple(sm.output_shape)!=(d,):
+            raise RelationCompositionError("BW_layernorm parameter SM shape mismatch")
+        if any(tuple(x.input_shapes)!=(shard,shard,(d,),(d,)) or tuple(x.output_shape)!=(d,) for x in pms):
+            raise RelationCompositionError("BW_layernorm parameter PM shape mismatch")
         grefs=(sm.input_bindings[0],*(x.input_bindings[0] for x in pms))
         xrefs=(sm.input_bindings[1],*(x.input_bindings[1] for x in pms))
         gradient_fact=RelationFactSpec("sharded",grefs,gather_dim=1)
@@ -8169,22 +8176,27 @@ def advance_k_rank_bw_layernorm_param_reduction_frontiers(plan, ir, frontiers, l
             if not ref.startswith("init:") or any(x.input_bindings[argument]!=ref for x in pms):
                 raise RelationCompositionError("BW_layernorm parameter is not shared InitGoal authority")
             tid=int(ref.split(":",1)[1])
-            try: fact=init_lineage_relation_fact(ir.init_lineages[tid])
+            try:
+                lineage=ir.init_lineages[tid]
+                fact=init_lineage_relation_fact(lineage)
             except KeyError as exc: raise RelationCompositionError("BW_layernorm parameter InitGoal is missing") from exc
-            if fact.step_triple!=(ref,ref):
+            if (fact.step_triple!=(ref,ref)
+                    or not ((fact.layout=="sharded" and fact.gather_dim==0)
+                            or (d==1 and fact.layout=="reduction" and fact.gather_dim is None))
+                    or tuple(lineage.tsShape)!=(d,) or tuple(map(tuple,lineage.tpShapes))!=((d,),)):
                 raise RelationCompositionError("BW_layernorm parameter InitGoal is not singleton")
             shared.append(fact)
         output=RelationFactSpec("reduction",tuple(frontier))
         certs.append(KRankBWLayernormParamReductionCertificate(
-            rule_id=("bw-layernorm-dgamma-reduction-rank4" if projection==".2.1"
-                     else "bw-layernorm-dbeta-reduction-rank4"),
-            projection=projection,rank_count=4,
+            rule_id=("bw-layernorm-dgamma-sequence-reduction-k-rank" if projection==".2.1"
+                     else "bw-layernorm-dbeta-sequence-reduction-k-rank"),
+            projection=projection,rank_count=k,
             gradient_fact=gradient_fact,activation_fact=activation_fact,
             gamma_fact=shared[0],beta_fact=shared[1],output_fact=output,
             sm_step_id=sm.step_id,pm_step_ids=tuple(x.step_id for x in pms),
-            lean_theorem=("TrainVerify.Denote.bw_layernorm_dw_dp_split_dim1_4_1_2_32"
+            lean_theorem=("TrainVerify.Denote.bw_layernorm_dgamma_sequence_reduction_rank3"
                           if projection==".2.1" else
-                          "TrainVerify.Denote.bw_layernorm_db_dp_split_dim1_4_1_2_32")))
+                          "TrainVerify.Denote.bw_layernorm_dbeta_sequence_reduction_rank3")))
         rewritten.extend((grefs,xrefs,shared[0].step_triple,shared[1].step_triple))
         rewritten_layouts.extend(("sharded","sharded",shared[0].layout,shared[1].layout))
     return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
@@ -10781,6 +10793,18 @@ _register_closed_rule_specs(
         ("TrainVerify.Denote.bw_gelu_allGatherPrimDimN_eq",),
         "BW_gelu", "bw_gelu_renderer:render_closed_k_rank_bw_gelu_segment",
         (),
+    ),
+    ClosedRuleSpec(
+        "bw-layernorm-dgamma-sequence-reduction-k-rank", KRankBWLayernormParamReductionCertificate,
+        ("TrainVerify.Denote.bw_layernorm_dgamma_sequence_reduction_rank3",),
+        "BW_layernorm", "bw_layernorm_triple_renderer:render_closed_k_rank_bw_layernorm_triple_segment",
+        ("denote.KRankBWLayernormParam",),
+    ),
+    ClosedRuleSpec(
+        "bw-layernorm-dbeta-sequence-reduction-k-rank", KRankBWLayernormParamReductionCertificate,
+        ("TrainVerify.Denote.bw_layernorm_dbeta_sequence_reduction_rank3",),
+        "BW_layernorm", "bw_layernorm_triple_renderer:render_closed_k_rank_bw_layernorm_triple_segment",
+        ("denote.KRankBWLayernormParam",),
     ),
     ClosedRuleSpec(
         "bw-layernorm-dx-dim1-k-rank", KRankBWLayernormDxCertificate,

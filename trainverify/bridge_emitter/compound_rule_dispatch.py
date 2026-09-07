@@ -145,11 +145,11 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
         return "bw_add_wred_renderer:render_closed_bw_add_wred_segment"
     if family and all(item == "bw-add-identity-sharded-k-rank" for item in family):
         return "bw_add_identity_renderer:render_closed_k_rank_bw_add_identity_segment"
-    if (set(family) == {
+    if (2 <= len(family) <= 3 and len(set(family)) == len(family) and set(family) <= {
             "bw-layernorm-dx-dim1-k-rank",
-            "bw-layernorm-dgamma-reduction-rank4",
-            "bw-layernorm-dbeta-reduction-rank4",
-        } and len(family) == 3):
+            "bw-layernorm-dgamma-sequence-reduction-k-rank",
+            "bw-layernorm-dbeta-sequence-reduction-k-rank",
+        }):
         return "bw_layernorm_triple_renderer:render_closed_k_rank_bw_layernorm_triple_segment"
     if (
         len(family) in (2, 3)

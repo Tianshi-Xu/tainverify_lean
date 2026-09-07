@@ -63,6 +63,9 @@ def plan_closed_segment_imports(
             module = "denote.KRankBWMatmulHead"
         elif theorem == "TrainVerify.Denote.tensorSum_allGather_dim_K":
             module = "denote.KRankBWMultiref"
+        elif theorem in ("TrainVerify.Denote.bw_layernorm_dgamma_sequence_reduction_rank3",
+                          "TrainVerify.Denote.bw_layernorm_dbeta_sequence_reduction_rank3"):
+            module = "denote.KRankBWLayernormParam"
         elif theorem == "TrainVerify.Denote.bw_layernorm_dx_allGatherPrimDimN_dim1_3d":
             module = "denote.KRankBWLayernorm"
         else:

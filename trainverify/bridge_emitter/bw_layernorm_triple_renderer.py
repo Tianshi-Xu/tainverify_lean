@@ -8,12 +8,61 @@ from __future__ import annotations
 import re
 
 
+_FOUR_INPUT_WRITER_HELPER = """set_option maxHeartbeats 500000 in
+private theorem abstract_four_input_middle_writer
+    (g : GraphDecl) (fullnodes before after : List NodeDecl)
+    (initialStore finalStore : Store) (target : NodeDecl)
+    (in0 in1 in2 in3 output : Tid)
+    (f : Tensor → Tensor → Tensor → Tensor → Tensor)
+    (hnodes : fullnodes = before ++ [target] ++ after)
+    (hfinal : finalStore = fullnodes.foldl (applyNodeDistributedFaithful g) initialStore)
+    (happly : ∀ t, applyNodeDistributedFaithful g t target output =
+      f (t in0) (t in1) (t in2) (t in3))
+    (hAfterNil : ∀ n ∈ after, n.outs ≠ [])
+    (hAfterOutput : ∀ n ∈ after, output ∉ n.outs)
+    (h0nil : ∀ n ∈ target :: after, n.outs ≠ [])
+    (h0 : ∀ n ∈ target :: after, in0 ∉ n.outs)
+    (h1nil : ∀ n ∈ target :: after, n.outs ≠ [])
+    (h1 : ∀ n ∈ target :: after, in1 ∉ n.outs)
+    (h2nil : ∀ n ∈ target :: after, n.outs ≠ [])
+    (h2 : ∀ n ∈ target :: after, in2 ∉ n.outs)
+    (h3nil : ∀ n ∈ target :: after, n.outs ≠ [])
+    (h3 : ∀ n ∈ target :: after, in3 ∉ n.outs) :
+    finalStore output = f (finalStore in0) (finalStore in1)
+      (finalStore in2) (finalStore in3) := by
+  have hfold : finalStore = (before ++ [target] ++ after).foldl
+      (applyNodeDistributedFaithful g) initialStore :=
+    hfinal.trans (congrArg (fun ns : List NodeDecl =>
+      ns.foldl (applyNodeDistributedFaithful g) initialStore) hnodes)
+  have hwriter := foldl_faithful_middle_writer g initialStore before after target output
+    (fun t => f (t in0) (t in1) (t in2) (t in3)) happly hAfterNil hAfterOutput
+  have hprefix : finalStore output = f
+      ((before.foldl (applyNodeDistributedFaithful g) initialStore) in0)
+      ((before.foldl (applyNodeDistributedFaithful g) initialStore) in1)
+      ((before.foldl (applyNodeDistributedFaithful g) initialStore) in2)
+      ((before.foldl (applyNodeDistributedFaithful g) initialStore) in3) :=
+    (congrArg (fun st : Store => st output) hfold).trans hwriter
+  have hread (tid : Tid) (hnil : ∀ n ∈ target :: after, n.outs ≠ [])
+      (hnot : ∀ n ∈ target :: after, tid ∉ n.outs) :
+      (before.foldl (applyNodeDistributedFaithful g) initialStore) tid = finalStore tid := by
+    have hp : (before.foldl (applyNodeDistributedFaithful g) initialStore) tid =
+        ((before ++ [target] ++ after).foldl (applyNodeDistributedFaithful g) initialStore) tid := by
+      simpa only [List.append_assoc, List.singleton_append] using
+        foldl_faithful_prefix_read_eq_final g initialStore before (target :: after) tid hnil hnot
+    exact hp.trans (congrArg (fun st : Store => st tid) hfold).symm
+  exact hprefix.trans (congrArg
+    (fun v : Tensor × Tensor × Tensor × Tensor => f v.1 v.2.1 v.2.2.1 v.2.2.2)
+    (congrArg₂ Prod.mk (hread in0 h0nil h0)
+      (congrArg₂ Prod.mk (hread in1 h1nil h1)
+        (congrArg₂ Prod.mk (hread in2 h2nil h2) (hread in3 h3nil h3)))))"""
+
+
 def render_closed_k_rank_bw_layernorm_triple_segment(ir, relation, segment_id: str) -> str:
     try:
-        from .composer import _node_text, _render_mixed_final_value, _select_exact_typed_certificate, _shape_text
+        from .composer import _node_text, _select_exact_typed_certificate, _shape_text
         from .relation_compiler import KRankBWLayernormDxCertificate, KRankBWLayernormParamReductionCertificate
     except ImportError:
-        from composer import _node_text, _render_mixed_final_value, _select_exact_typed_certificate, _shape_text
+        from composer import _node_text, _select_exact_typed_certificate, _shape_text
         from relation_compiler import KRankBWLayernormDxCertificate, KRankBWLayernormParamReductionCertificate
 
     families = {
@@ -222,6 +271,10 @@ def render_closed_k_rank_bw_layernorm_triple_segment(ir, relation, segment_id: s
         f"  {pn}.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) store", "",
     ]
 
+    helper_name = f"{segment_id}_four_input_middle_writer"
+    lines.extend(_FOUR_INPUT_WRITER_HELPER.replace("abstract_four_input_middle_writer", helper_name).splitlines())
+    lines.append("")
+
     def writer(name, graph, final_name, nodes_name, frame, position, node, slot):
         theorem_name = f"{segment_id}_{name}"
         final = f"({final_name} store)"
@@ -235,19 +288,27 @@ def render_closed_k_rank_bw_layernorm_triple_segment(ir, relation, segment_id: s
             f"  have hfinal : {final} = {nodes_name}.foldl (applyNodeDistributedFaithful {graph}) store := by",
             f"    unfold {final_name}", "    rfl",
         ])
-        helper = _render_mixed_final_value(
-            name="hout", graph=graph, initial_store="store", final_store=final,
-            final_equality="hfinal", nodes_name=nodes_name, nodes=frame, position=position,
-            output_tid=node.outs[slot], input_tids=tuple(node.ins),
-            written_tids={tid for item in frame for tid in item.outs}, expression=expression,
-            apply_lines=[
-                "rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
-                "simp [applyNodeDistributed, applyNodeRingAttn]",
-                f"exact {apply_lemma} {graph} t {node.rank} {' '.join(map(str, (*node.ins, *node.outs)))}{side_conditions}",
-            ],
-        )
-        lines.extend(item[2:] if item.startswith("  ") else item for item in helper)
-        lines.extend(["  exact hout", ""])
+        prefix = f"({nodes_name}.take {position})"
+        suffix = f"({nodes_name}.drop {position + 1})"
+        split = f"{prefix} ++ [{_node_text(node)}] ++ {suffix}"
+        lines.extend([
+            f"  have hnodes : {nodes_name} = {split} := by native_decide",
+            f"  exact {helper_name} {graph}",
+            f"    {nodes_name} {prefix} {suffix}",
+            f"    store {final} {_node_text(node)}",
+            f"    {' '.join(map(str, node.ins))} {node.outs[slot]} (fun a b c d => (bw_layernorm a b c d){projection})",
+            "    hnodes hfinal (by",
+            "      intro t",
+            "      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+            "      simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"      exact {apply_lemma} {graph} t {node.rank} {' '.join(map(str, (*node.ins, *node.outs)))}{side_conditions}",
+            "    ) (by native_decide) (by native_decide)",
+            "    (by native_decide) (by native_decide)",
+            "    (by native_decide) (by native_decide)",
+            "    (by native_decide) (by native_decide)",
+            "    (by native_decide) (by native_decide)",
+            "",
+        ])
         return theorem_name
 
     sm_helpers, pm_helpers = {}, {}

@@ -24,7 +24,7 @@ def matcher_fixture(k, b=1, s=2, d=32):
         input_bindings=(f"pm:g:{r}", f"pm:x:{r}", "init:700", "init:701"),
         input_shapes=(shard, shard, (d,), (d,)), output_shape=shard,
     ) for r in range(k))
-    ir = SimpleNamespace(init_lineages={
+    ir = SimpleNamespace(pm_num_ranks=k, init_lineages={
         tid: LineageGoal(tid, [d], [(0, tid)], [[d]]) for tid in (700, 701)
     })
     return SimpleNamespace(steps=(sm, *pms)), ir, (sm.step_id, *(p.step_id for p in pms))
@@ -164,30 +164,12 @@ def test_layernorm_dx_witness_matches_committed_exact_source():
 
 
 def triple_fixture():
-    from dataclasses import replace
-    from trainverify.bridge_emitter.composer import _typed_certificate_digest
-    ir, rel = renderer_fixture(4)
-    dx=rel.certificates[0]; pre=rel.transition_specs[0].pre_facts
-    certs=list(rel.certificates); trans=list(rel.transition_specs); facts=list(rel.dependent_chain_plan.relation_facts)
-    for i,name,projection in ((1,"dgamma",".2.1"),(2,"dbeta",".2.2")):
-        output=rc.RelationFactSpec("reduction",(f"sm:0:{i}",*(f"pm:{r}:{i}" for r in range(4))))
-        theorem=f"TrainVerify.Denote.bw_layernorm_{'dw' if i==1 else 'db'}_dp_split_dim1_4_1_2_32"
-        cert=rc.KRankBWLayernormParamReductionCertificate(
-            rule_id=f"bw-layernorm-{name}-reduction-rank4",projection=projection,rank_count=4,
-            gradient_fact=dx.gradient_fact,activation_fact=dx.activation_fact,gamma_fact=dx.gamma_fact,beta_fact=dx.beta_fact,
-            output_fact=output,sm_step_id=f"sm:0:{i}",pm_step_ids=tuple(f"pm:{r}:{i}" for r in range(4)),lean_theorem=theorem)
-        certs.append(cert)
-        trans.append(replace(rel.transition_specs[0],transition_id=name,rule_id=cert.rule_id,post_facts=(output,),lean_theorem=theorem,certificate_digest=_typed_certificate_digest(cert)))
-        facts.append(rc.ClosedRelationFactRecord(name,output,"reduction",300+i,tuple(ir.pm_nodes[r].outs[i] for r in range(4)),None,None,(32,),(32,)))
-    rel.certificates=tuple(certs);rel.transition_specs=tuple(trans)
-    chain=rel.dependent_chain_plan
-    chain.relation_facts=tuple(facts)
-    chain.states=(chain.states[0],replace(chain.states[1],fact_ids=tuple(f.fact_id for f in facts)))
-    chain.segments=(replace(chain.segments[0],transition_ids=tuple(t.transition_id for t in trans)),)
-    return ir,rel
+    from scripts.tests.bw_layernorm_param_witness import renderer_fixture
+    ir, rel, _ = renderer_fixture(4, 1, 2, 32, projections=("dx", "dgamma", "dbeta"))
+    return ir, rel
 
 
-def test_layernorm_triple_keeps_rank4_parameter_contract_and_uses_dynamic_dx():
+def test_layernorm_triple_uses_generic_parameter_and_dx_theorems():
     from trainverify.bridge_emitter.bw_layernorm_triple_renderer import render_closed_k_rank_bw_layernorm_triple_segment as render
     from trainverify.bridge_emitter.compound_rule_dispatch import select_compound_renderer
     from trainverify.bridge_emitter.closed_segment_import_policy import plan_closed_segment_imports
@@ -195,8 +177,8 @@ def test_layernorm_triple_keeps_rank4_parameter_contract_and_uses_dynamic_dx():
     assert select_compound_renderer(tuple(t.rule_id for t in rel.transition_specs)) == "bw_layernorm_triple_renderer:render_closed_k_rank_bw_layernorm_triple_segment"
     source=render(ir,rel,"segment_000000")
     assert THEOREM in source
-    assert "bw_layernorm_dw_dp_split_dim1_4_1_2_32" in source
-    assert "bw_layernorm_db_dp_split_dim1_4_1_2_32" in source
+    assert "bw_layernorm_dgamma_sequence_reduction_rank3" in source
+    assert "bw_layernorm_dbeta_sequence_reduction_rank3" in source
     assert "denote.KRankBWLayernorm" in plan_closed_segment_imports(
         tuple(t.rule_id for t in rel.transition_specs), tuple(t.lean_theorem for t in rel.transition_specs), rc.CLOSED_RULE_REGISTRY)
 
@@ -216,14 +198,14 @@ def test_layernorm_triple_production_bundle_header_has_dynamic_theorem_import():
     from trainverify.bridge_emitter.composer import compose_closed_dependent_bundle
     ir,rel=triple_fixture()
     old=rel.dependent_chain_plan
-    anchor=rc.ClosedTensorShapeFactRecord("anchor", "sm", 700, (32,), 700)
-    states=tuple(replace(s, state_id=f"state_{i:06d}", fact_ids=(*s.fact_ids,"anchor")) for i,s in enumerate(old.states))
+    anchor=old.anchor_fact
+    states=tuple(replace(s, state_id=f"state_{i:06d}") for i,s in enumerate(old.states))
     segments=(replace(old.segments[0],pre_state_id=states[0].state_id,post_state_id=states[1].state_id),)
     rel.dependent_chain_plan=rc.ClosedDependentChainPlan(
         relation_facts=old.relation_facts, authority_facts=(), anchor_fact=anchor,
         states=states, segments=segments, initial_state_id=states[0].state_id,terminal_state_id=states[1].state_id,
-        terminal_target_fact_id="fo",retained_target_fact_ids=("fo",),
-        expected_sm_node_count=1,expected_pm_node_count=4)
+        terminal_target_fact_id="fact_dx",retained_target_fact_ids=("fact_dx",),
+        expected_sm_node_count=len(ir.sm_nodes),expected_pm_node_count=len(ir.pm_nodes))
     ir.public_statement_module="denote.GeneratedKRankBWLayernormWitness"
     bundle=compose_closed_dependent_bundle(ir,rel,"TripleHeaderAudit","denote.TripleHeaderAudit",include_public=False,require_full_graph=False)
     segments=[v.decode() for p,v in bundle.items() if p.startswith("Segment")]

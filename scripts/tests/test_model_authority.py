@@ -1644,7 +1644,7 @@ def test_gpt_goal112_bw_layernorm_dgamma_reduces_sequence_shards(monkeypatch):
     assert len(certs) == 1
     assert certs[0].projection == ".2.1"
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_layernorm_dw_dp_split_dim1_4_1_2_32"
+        "TrainVerify.Denote.bw_layernorm_dgamma_sequence_reduction_rank3"
     )
     assert not relation.unresolved_frontiers
 
