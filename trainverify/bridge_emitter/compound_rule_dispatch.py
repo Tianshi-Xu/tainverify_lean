@@ -179,6 +179,12 @@ def select_k_rank_compound_renderer(family: tuple[str, ...]) -> str | None:
         "embedding-hidden-sharded-k-rank", "embedding-sharded-ids-k-rank"
     }:
         return "embedding_hidden_ids_renderer:render_closed_embedding_hidden_ids_segment"
+    if len(family) == 2 and set(family) == {"sum-producer-sharded-k-rank-dim1", "bw-sum-scalar-broadcast-dim1-k-rank"}:
+        return "sum_fw_bw_renderer:render_closed_sum_fw_bw_segment"
+    if len(family) == 3 and set(family) == {"bw-linear-dw-sequence-reduction-k-rank", "bw-linear-dx-sequence-sharded-k-rank", "alltoall-k-rank-layout-transport"}:
+        return "bw_sequence_linear_alltoall_renderer:render_closed_bw_sequence_linear_alltoall_segment"
+    if len(family) == 2 and set(family) == {"bw-gelu-pointwise-sharded-k-rank", "cross-dp-wred-reconstruction-k-rank"}:
+        return "bw_gelu_wred_renderer:render_closed_bw_gelu_wred_segment"
     if set(family) == {"fw-view-unflatten-sequence-sharded-k-rank", "linear-output-sharded-k-rank"}:
         return "unflatten_output_linear_renderer:render_closed_unflatten_output_linear_segment"
     linear = "linear-sharded-k-rank-dim1"

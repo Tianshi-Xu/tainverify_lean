@@ -55,6 +55,10 @@ def plan_closed_segment_imports(
             module = "denote.KRankBWLinearDwColumnGeneral"
         elif theorem == "TrainVerify.Denote.bw_linear_dw_row_allGather_rank3":
             module = "denote.KRankBWLinearDwRowGeneral"
+        elif theorem == "TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3":
+            module = "denote.KRankBWLinearDxSequence"
+        elif theorem == "TrainVerify.Denote.bw_sum_allGatherPrimDimN_dim1_rank3":
+            module = "denote.KRankBWSumSequence"
         elif theorem == "TrainVerify.Denote.bw_linear_dw_sequence_reduction_rank3":
             module = "denote.KRankBWLinearDwSequenceGeneral"
         elif theorem == "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3":
