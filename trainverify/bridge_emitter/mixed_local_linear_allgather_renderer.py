@@ -1,4 +1,4 @@
-"""Atomic renderer for a positive local-linear tuple followed by AllGather."""
+"""Atomic renderer for a positive local-linear and AllGather tuples."""
 from __future__ import annotations
 
 
@@ -35,12 +35,13 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
     if any(len(items) != 1 for items in resolved):
         raise ValueError("local-linear/AllGather transition authority is missing or duplicated")
     transitions = [items[0] for items in resolved]
-    locals_, gather = transitions[:-1], transitions[-1]
-    if (not locals_
+    split = next((i for i, t in enumerate(transitions) if t.rule_id == gather_rule), len(transitions))
+    locals_, gathers = transitions[:split], transitions[split:]
+    if (not locals_ or not gathers
             or any(t.rule_id != local_rule or t.lean_theorem != local_theorem
                    or len(t.pre_facts) != 1 or len(t.post_facts) != 1 for t in locals_)
-            or gather.rule_id != gather_rule or gather.lean_theorem != gather_theorem
-            or len(gather.pre_facts) != 1 or len(gather.post_facts) != 1):
+            or any(t.rule_id != gather_rule or t.lean_theorem != gather_theorem
+                   or len(t.pre_facts) != 1 or len(t.post_facts) != 1 for t in gathers)):
         raise ValueError("local-linear/AllGather ordered theorem contract is malformed")
 
     local_certs = [
@@ -51,11 +52,11 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
         )
         for transition in locals_
     ]
-    gather_cert = _select_exact_typed_certificate(
-        relation, gather, gather_rule, gather_theorem,
+    gather_certs = [_select_exact_typed_certificate(
+        relation, t, gather_rule, gather_theorem,
         KRankAllGatherReconstructionCertificate,
         lambda cert: ((cert.input_fact,), (cert.output_fact,)),
-    )
+    ) for t in gathers]
 
     sources = [record.source for record in chain.relation_facts]
     if len(sources) != len(set(sources)):
@@ -63,7 +64,7 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
     records = {record.source: record for record in chain.relation_facts}
     try:
         local_pairs = [(records[c.input_fact], records[c.output_fact]) for c in local_certs]
-        gather_pre, joined = records[gather_cert.input_fact], records[gather_cert.output_fact]
+        gather_pairs = [(records[c.input_fact], records[c.output_fact]) for c in gather_certs]
     except KeyError as exc:
         raise ValueError("local-linear/AllGather relation fact is not materialized") from exc
     state_rows = {state.state_id: state for state in chain.states}
@@ -79,18 +80,18 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
     local_post_ids = {post.fact_id for _, post in local_pairs}
     if any(pre.fact_id not in before.fact_ids for pre, _ in local_pairs):
         raise ValueError("local-linear input authority is not live")
-    if gather_pre.fact_id not in before.fact_ids and gather_pre.fact_id not in local_post_ids:
+    if any(pre.fact_id not in before.fact_ids and pre.fact_id not in local_post_ids for pre, _ in gather_pairs):
         raise ValueError("AllGather input is neither live nor produced by this component")
-    fresh_ids = tuple(dict.fromkeys([*(post.fact_id for _, post in local_pairs), joined.fact_id]))
-    if joined.fact_id not in after.fact_ids:
+    fresh_ids = tuple(dict.fromkeys([*(post.fact_id for _, post in local_pairs), *(post.fact_id for _, post in gather_pairs)]))
+    if any(post.fact_id not in after.fact_ids for _, post in gather_pairs):
         raise ValueError("AllGather joined result is not published")
     if not set(after.fact_ids) <= set(before.fact_ids) | set(fresh_ids):
         raise ValueError("local-linear/AllGather post-state introduces an unproved fact")
 
-    k = int(gather_cert.rank_count)
+    k = int(gather_certs[0].rank_count)
     if k <= 0 or ir.sm_num_ranks != 1 or ir.pm_num_ranks != k:
         raise ValueError("local-linear/AllGather dynamic graph rank authority is malformed")
-    if any(c.rank_count != k for c in local_certs):
+    if any(c.rank_count != k for c in (*local_certs, *gather_certs)):
         raise ValueError("local-linear certificates disagree with dynamic rank authority")
 
     sm_indices = tuple(range(*segment.sm_range))
@@ -102,7 +103,7 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
             or any(index < 0 or index >= len(ir.sm_nodes) for index in sm_owned)
             or any(index < 0 or index >= len(ir.pm_nodes) for index in pm_owned)):
         raise ValueError("local-linear/AllGather footprints do not exactly partition both axes")
-    if len(gather.sm_node_indices) != 0 or len(gather.pm_node_indices) != 1:
+    if any(t.sm_node_indices or len(t.pm_node_indices) != 1 for t in gathers):
         raise ValueError("AllGather footprint is not exact")
 
     authorities = tuple(chain.authority_facts)
@@ -153,36 +154,119 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
             raise ValueError("local-linear shape authority is inconsistent")
         validated_locals.append((number, transition, cert, pre, post, sm_node, pm_nodes, eqs[0], shapes[0]))
 
-    gather_index = gather.pm_node_indices[0]
-    gather_node = ir.pm_nodes[gather_index]
-    reconstructed = list(gather_pre.shard_shape)
-    dim = int(gather_cert.gather_dim)
-    if (gather_cert.pm_allgather_step != f"pm:{gather_index}:0"
-            or gather_node.rank != 0 or gather_node.op != "AllGatherPrim"
-            or tuple(gather_node.params or ()) != (dim,)
-            or tuple(gather_node.ins) != gather_pre.pm_tids
-            or gather_node.outs != [joined.joined_pm_tid]
-            or gather_pre.kind != "sharded" or gather_pre.gather_dim != dim
-            or joined.kind != "joined" or joined.pm_tids != ()
-            or joined.sm_tid != gather_pre.sm_tid
-            or len(gather_pre.pm_tids) != k
-            or dim < 0 or dim >= len(reconstructed)
-            or tuple(gather_pre.full_shape) != tuple(gather_cert.full_shape)
-            or tuple(gather_pre.shard_shape) != tuple(gather_cert.shard_shape)
-            or tuple(joined.full_shape) != tuple(gather_cert.full_shape)):
-        raise ValueError("AllGather reconstruction authority is malformed")
-    reconstructed[dim] *= k
-    if tuple(reconstructed) != tuple(gather_pre.full_shape):
-        raise ValueError("AllGather reconstruction shape is inexact")
-    producer_number = next(
-        (number for number, _t, _c, _pre, post, *_rest in validated_locals
-         if post.fact_id == gather_pre.fact_id),
-        None,
-    )
-    if producer_number is not None:
-        producer_indices = validated_locals[producer_number][1].pm_node_indices
-        if any(index >= gather_index for index in producer_indices):
-            raise ValueError("AllGather executes before its local-linear producer")
+    validated_gathers = []
+    for gather, gather_cert, (gather_pre, joined) in zip(gathers, gather_certs, gather_pairs):
+        gather_index = gather.pm_node_indices[0]
+        gather_node = ir.pm_nodes[gather_index]
+        reconstructed = list(gather_pre.shard_shape)
+        dim = int(gather_cert.gather_dim)
+        if (gather_cert.pm_allgather_step != f"pm:{gather_index}:0"
+                or gather_node.rank != 0 or gather_node.op != "AllGatherPrim"
+                or tuple(gather_node.params or ()) != (dim,)
+                or tuple(gather_node.ins) != gather_pre.pm_tids
+                or gather_node.outs != [joined.joined_pm_tid]
+                or gather_pre.kind != "sharded" or gather_pre.gather_dim != dim
+                or joined.kind != "joined" or joined.pm_tids != ()
+                or joined.sm_tid != gather_pre.sm_tid
+                or len(gather_pre.pm_tids) != k
+                or dim < 0 or dim >= len(reconstructed)
+                or tuple(gather_pre.full_shape) != tuple(gather_cert.full_shape)
+                or tuple(gather_pre.shard_shape) != tuple(gather_cert.shard_shape)
+                or tuple(joined.full_shape) != tuple(gather_cert.full_shape)):
+            raise ValueError("AllGather reconstruction authority is malformed")
+        reconstructed[dim] *= k
+        if tuple(reconstructed) != tuple(gather_pre.full_shape):
+            raise ValueError("AllGather reconstruction shape is inexact")
+        producer_number = next(
+            (number for number, _t, _c, _pre, post, *_rest in validated_locals
+             if post.fact_id == gather_pre.fact_id),
+            None,
+        )
+        if producer_number is not None:
+            producer_indices = validated_locals[producer_number][1].pm_node_indices
+            if any(index >= gather_index for index in producer_indices):
+                raise ValueError("AllGather executes before its local-linear producer")
+
+        validated_gathers.append((gather_index, gather_node, gather_pre, joined, dim, producer_number))
+
+    # A source record is authority, not merely a cache of convenient TIDs.
+    # Resolve against the latest writer at the store where its proof is read.
+    def check_source(ref, side, tid, limit, rank=None):
+        nodes = ir.sm_nodes if side == "sm" else ir.pm_nodes
+        pieces = ref.split(":")
+        if len(pieces) == 2 and pieces[0] == "init" and pieces[1].isdigit():
+            if ref != f"init:{tid}":
+                raise ValueError("relation source resolved TID disagrees")
+            writer = -1
+        elif (len(pieces) == 3 and pieces[0] == side
+              and pieces[1].isdigit() and pieces[2].isdigit()):
+            writer, output = int(pieces[1]), int(pieces[2])
+            if (ref != f"{side}:{writer}:{output}" or not 0 <= writer < limit
+                    or output >= len(nodes[writer].outs)
+                    or nodes[writer].outs[output] != tid
+                    or (rank is not None and nodes[writer].rank != rank)):
+                raise ValueError("relation source writer/projection/rank is malformed")
+        else:
+            raise ValueError("relation source axis or reference is malformed")
+        if any(tid in node.outs for node in nodes[writer + 1:limit]):
+            raise ValueError("relation source is not the latest writer at its read point")
+
+    used_records = {r.fact_id: r for pair in (*local_pairs, *gather_pairs) for r in pair}
+    if len({r.fact_id for r in chain.relation_facts}) != len(chain.relation_facts):
+        raise ValueError("relation fact IDs are duplicated")
+    for record in used_records.values():
+        source = record.source
+        if (source.layout != record.kind or source.gather_dim != record.gather_dim
+                or source.source_step_triples or record.source_tid_triples
+                or record.metadata_tid is not None or record.metadata_region_id is not None):
+            raise ValueError("relation source layout/axis disagrees with materialized record")
+        initial = record.fact_id in before.fact_ids
+        sm_limit = segment.sm_range[0 if initial else 1]
+        pm_limit = segment.pm_range[0 if initial else 1]
+        if len(source.step_triple) != 1 + len(record.pm_tids):
+            raise ValueError("relation source ordered rank arity disagrees")
+        check_source(source.step_triple[0], "sm", record.sm_tid, sm_limit, 0)
+        for rank, (ref, tid) in enumerate(zip(source.step_triple[1:], record.pm_tids)):
+            check_source(ref, "pm", tid, pm_limit, rank)
+        if record.kind == "joined":
+            if source.joined_pm_step is None or record.joined_pm_tid is None:
+                raise ValueError("joined source is missing")
+            check_source(source.joined_pm_step, "pm", record.joined_pm_tid, pm_limit, 0)
+        elif source.joined_pm_step is not None or record.joined_pm_tid is not None:
+            raise ValueError("sharded source has joined authority")
+
+    # The existing proof frames the entire pre-state, and each new output is
+    # observed in the same final store. Reject writes that invalidate either.
+    protected = {"sm": set(), "pm": set()}
+    record_by_id = {r.fact_id: r for r in chain.relation_facts}
+    authority_by_id = {a.fact_id: a for a in authorities}
+    if len(authority_by_id) != len(authorities) or set(record_by_id) & set(authority_by_id):
+        raise ValueError("closed authority IDs are duplicated")
+    for fact_id in before.fact_ids:
+        if fact_id in record_by_id:
+            r = record_by_id[fact_id]
+            protected["sm"].add(r.sm_tid)
+            protected["pm"].update(r.pm_tids)
+            if r.joined_pm_tid is not None:
+                protected["pm"].add(r.joined_pm_tid)
+        elif fact_id in authority_by_id:
+            a = authority_by_id[fact_id]
+            if a.kind == "tensor_eq":
+                protected[a.left_side].add(a.left_tid)
+                protected[a.right_side].add(a.right_tid)
+            elif a.kind == "tensor_shape":
+                protected[a.side].add(a.tid)
+            else:
+                raise ValueError("unsupported live authority framing")
+        elif fact_id != chain.anchor_fact.fact_id:
+            raise ValueError("pre-state fact is not materialized")
+    anchor = chain.anchor_fact
+    if anchor.side not in protected:
+        raise ValueError("anchor side is malformed")
+    protected[anchor.side].add(anchor.tid)
+    for side, nodes, bounds in (("sm", ir.sm_nodes, segment.sm_range), ("pm", ir.pm_nodes, segment.pm_range)):
+        if any(protected[side].intersection(node.outs) for node in nodes[slice(*bounds)]):
+            raise ValueError("component overwrites protected pre-state/anchor authority")
 
     sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
     pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
@@ -243,40 +327,45 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
         for rank, (index, node) in enumerate(zip(transition.pm_node_indices, local_pm_nodes)):
             lines += writer_lines(f"hLocalPm{number}_{rank}", "pm", index, node)
 
-    gather_pos = pm_pos[gather_index]
-    prefix = f"(pmNodes.take {gather_pos})"
-    suffix = f"(pmNodes.drop {gather_pos + 1})"
-    prefix_inputs = ", ".join(
-        f"(({prefix}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {tid}"
-        for tid in gather_pre.pm_tids
-    )
-    final_inputs = ", ".join(f"pmFinal {tid}" for tid in gather_pre.pm_tids)
-    lines += [
-        f"    have hGatherRaw : pmFinal {joined.joined_pm_tid} = allGatherPrimDimN {dim} {k} 0 [{prefix_inputs}] := by",
-        f"      change (pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {joined.joined_pm_tid} = _",
-        "      conv_lhs =>",
-        f"        rw [show pmNodes = {prefix} ++ [{_node_text(gather_node)}] ++ {suffix} by native_decide]",
-        f"      rw [foldl_faithful_middle_writer {ir.pm_graph_ref} pmStore {prefix} {suffix}",
-        f"        {_node_text(gather_node)} {joined.joined_pm_tid} (fun t => allGatherPrimDimN {dim} {k} 0 [{', '.join(f't {tid}' for tid in gather_pre.pm_tids)}]) (by",
-        "          intro t",
-        "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
-        "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
-        "          simp [applyNodeDistributed, applyNodeRingAttn]",
-        f"          exact applyNode_allGatherPrimDimN_out {ir.pm_graph_ref} t 0 [{', '.join(str(tid) for tid in gather_pre.pm_tids)}] {joined.joined_pm_tid} {dim}",
-        "        ) (by native_decide) (by native_decide)]",
-    ]
-    for rank, tid in enumerate(gather_pre.pm_tids):
+    for gather_number, (gather_index, gather_node, gather_pre, joined, dim, producer_number) in enumerate(validated_gathers):
+        start = len(lines)
+        gather_pos = pm_pos[gather_index]
+        prefix = f"(pmNodes.take {gather_pos})"
+        suffix = f"(pmNodes.drop {gather_pos + 1})"
+        prefix_inputs = ", ".join(
+            f"(({prefix}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {tid}"
+            for tid in gather_pre.pm_tids
+        )
+        final_inputs = ", ".join(f"pmFinal {tid}" for tid in gather_pre.pm_tids)
         lines += [
-            f"    have hGatherInputFinal{rank} : (({prefix}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {tid} = pmFinal {tid} := by",
-            f"      have h := foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref} (pmNodes.drop {gather_pos}) (({prefix}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {tid} (by native_decide) (by native_decide)",
-            f"      rw [← List.foldl_append, show {prefix} ++ pmNodes.drop {gather_pos} = pmNodes by exact List.take_append_drop {gather_pos} pmNodes] at h",
-            "      exact h.symm",
+            f"    have hGatherRaw : pmFinal {joined.joined_pm_tid} = allGatherPrimDimN {dim} {k} 0 [{prefix_inputs}] := by",
+            f"      change (pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {joined.joined_pm_tid} = _",
+            "      conv_lhs =>",
+            f"        rw [show pmNodes = {prefix} ++ [{_node_text(gather_node)}] ++ {suffix} by native_decide]",
+            f"      rw [foldl_faithful_middle_writer {ir.pm_graph_ref} pmStore {prefix} {suffix}",
+            f"        {_node_text(gather_node)} {joined.joined_pm_tid} (fun t => allGatherPrimDimN {dim} {k} 0 [{', '.join(f't {tid}' for tid in gather_pre.pm_tids)}]) (by",
+            "          intro t",
+            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+            "          simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"          exact applyNode_allGatherPrimDimN_out {ir.pm_graph_ref} t 0 [{', '.join(str(tid) for tid in gather_pre.pm_tids)}] {joined.joined_pm_tid} {dim}",
+            "        ) (by native_decide) (by native_decide)]",
         ]
-    lines += [
-        f"    have hGatherWriter : pmFinal {joined.joined_pm_tid} = allGatherPrimDimN {dim} {k} 0 [{final_inputs}] := by",
-        "      rw [hGatherRaw]",
-        f"      rw [{', '.join(f'hGatherInputFinal{rank}' for rank in range(k))}]",
-    ]
+        for rank, tid in enumerate(gather_pre.pm_tids):
+            lines += [
+                f"    have hGatherInputFinal{rank} : (({prefix}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {tid} = pmFinal {tid} := by",
+                f"      have h := foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref} (pmNodes.drop {gather_pos}) (({prefix}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {tid} (by native_decide) (by native_decide)",
+                f"      rw [← List.foldl_append, show {prefix} ++ pmNodes.drop {gather_pos} = pmNodes by exact List.take_append_drop {gather_pos} pmNodes] at h",
+                "      exact h.symm",
+            ]
+        lines += [
+            f"    have hGatherWriter : pmFinal {joined.joined_pm_tid} = allGatherPrimDimN {dim} {k} 0 [{final_inputs}] := by",
+            "      rw [hGatherRaw]",
+            f"      rw [{', '.join(f'hGatherInputFinal{rank}' for rank in range(k))}]",
+        ]
+
+        if len(gathers) > 1:
+            lines[start:] = [line.replace("hGather", f"hGather{gather_number}_") for line in lines[start:]]
 
     local_proof_names = {}
     for number, _transition, cert, pre, post, _sm, local_pm_nodes, _eq, _shape in validated_locals:
@@ -316,25 +405,34 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
         ]
         lines += [f"        · exact {name}" for name in shape_names]
 
-    if producer_number is None:
+    joined_proof_names = {}
+    for gather_number, (gather_index, gather_node, gather_pre, joined, dim, producer_number) in enumerate(validated_gathers):
+        final_inputs = ", ".join(f"pmFinal {tid}" for tid in gather_pre.pm_tids)
+        start = len(lines)
+        if producer_number is None:
+            lines += [
+                f"    have hGatherFinal : {gather_pre.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+            ]
+        else:
+            lines += [
+                f"    have hGatherFinal : {gather_pre.fact_id}.Holds smFinal pmFinal := hLocalOut{producer_number}",
+            ]
         lines += [
-            f"    have hGatherFinal : {gather_pre.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+            f"    change ShardedRel (smFinal {gather_pre.sm_tid}) [{final_inputs}] {dim} {_shape_text(list(gather_pre.full_shape))} {_shape_text(list(gather_pre.shard_shape))} at hGatherFinal",
+            f"    have hJoinedValue : smFinal {joined.sm_tid} = pmFinal {joined.joined_pm_tid} := by",
+            f"      rw [{gather_theorem} hGatherFinal]",
+            "      simp only [List.length_cons, List.length_nil]",
+            "      exact hGatherWriter.symm",
+            f"    have hJoinedOut : {joined.fact_id}.Holds smFinal pmFinal := by",
+            f"      change smFinal {joined.sm_tid} = pmFinal {joined.joined_pm_tid} ∧ (smFinal {joined.sm_tid}).shape = {_shape_text(list(joined.full_shape))} ∧ (pmFinal {joined.joined_pm_tid}).shape = {_shape_text(list(joined.full_shape))}",
+            "      refine ⟨hJoinedValue, hGatherFinal.full_shape, ?_⟩",
+            "      rw [← hJoinedValue]",
+            "      exact hGatherFinal.full_shape",
         ]
-    else:
-        lines += [
-            f"    have hGatherFinal : {gather_pre.fact_id}.Holds smFinal pmFinal := hLocalOut{producer_number}",
-        ]
+        if len(gathers) > 1:
+            lines[start:] = [line.replace("hGather", f"hGather{gather_number}_").replace("hJoined", f"hJoined{gather_number}_") for line in lines[start:]]
+        joined_proof_names[joined.fact_id] = f"hJoined{gather_number}_Out" if len(gathers) > 1 else "hJoinedOut"
     lines += [
-        f"    change ShardedRel (smFinal {gather_pre.sm_tid}) [{final_inputs}] {dim} {_shape_text(list(gather_pre.full_shape))} {_shape_text(list(gather_pre.shard_shape))} at hGatherFinal",
-        f"    have hJoinedValue : smFinal {joined.sm_tid} = pmFinal {joined.joined_pm_tid} := by",
-        f"      rw [{gather_theorem} hGatherFinal]",
-        "      simp only [List.length_cons, List.length_nil]",
-        "      exact hGatherWriter.symm",
-        f"    have hJoinedOut : {joined.fact_id}.Holds smFinal pmFinal := by",
-        f"      change smFinal {joined.sm_tid} = pmFinal {joined.joined_pm_tid} ∧ (smFinal {joined.sm_tid}).shape = {_shape_text(list(joined.full_shape))} ∧ (pmFinal {joined.joined_pm_tid}).shape = {_shape_text(list(joined.full_shape))}",
-        "      refine ⟨hJoinedValue, hGatherFinal.full_shape, ?_⟩",
-        "      rw [← hJoinedValue]",
-        "      exact hGatherFinal.full_shape",
         "    intro fact hfact",
         f"    have covered : fact ∈ [{', '.join(fresh_ids)}] ++ {before.state_id}.facts := by",
         f"      exact (show {after.state_id}.facts ⊆ [{', '.join(fresh_ids)}] ++ {before.state_id}.facts by native_decide) hfact",
@@ -343,7 +441,7 @@ def render_closed_k_rank_local_linear_allgather_segment(ir, relation, segment_id
         "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
         f"      rcases fresh with {' | '.join('rfl' for _ in fresh_ids)}",
     ]
-    proof_by_fact = {**local_proof_names, joined.fact_id: "hJoinedOut"}
+    proof_by_fact = {**local_proof_names, **joined_proof_names}
     lines += [f"      · exact {proof_by_fact[fact_id]}" for fact_id in fresh_ids]
     lines += ["    · exact hframe fact old", ""]
     return "\n".join(lines)

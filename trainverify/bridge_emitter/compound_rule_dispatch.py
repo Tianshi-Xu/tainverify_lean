@@ -185,8 +185,6 @@ def select_k_rank_compound_renderer(family: tuple[str, ...]) -> str | None:
 
     if len(family) > 1 and all(item == linear for item in family):
         return "local_linear_tuple_renderer:render_closed_k_rank_local_linear_tuple_segment"
-    if family[:-1] and all(item == linear for item in family[:-1]) and family[-1] == allgather:
-        return "mixed_local_linear_allgather_renderer:render_closed_k_rank_local_linear_allgather_segment"
     if family == (
         linear,
         linear,
@@ -197,6 +195,8 @@ def select_k_rank_compound_renderer(family: tuple[str, ...]) -> str | None:
     local_prefix = 0
     while local_prefix < len(family) and family[local_prefix] == linear:
         local_prefix += 1
+    if 0 < local_prefix < len(family) and all(item == allgather for item in family[local_prefix:]):
+        return "mixed_local_linear_allgather_renderer:render_closed_k_rank_local_linear_allgather_segment"
     if (
         local_prefix > 0
         and local_prefix < len(family)
