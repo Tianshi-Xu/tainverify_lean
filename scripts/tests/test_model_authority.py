@@ -1659,7 +1659,7 @@ def test_gpt_goal113_bw_layernorm_dbeta_reduces_sequence_shards(monkeypatch):
     assert len(certs) == 1
     assert certs[0].projection == ".2.2"
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_layernorm_db_dp_split_dim1_4_1_2_32"
+        "TrainVerify.Denote.bw_layernorm_dbeta_sequence_reduction_rank3"
     )
     assert not relation.unresolved_frontiers
 
@@ -1675,7 +1675,7 @@ def test_gpt_goal115_bw_linear_dw_reduces_sequence_shards(monkeypatch):
     assert certs[0].gradient_fact.gather_dim == 1
     assert certs[0].activation_fact.gather_dim == 1
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dw_dp_split_dim1_4_1_2_32_g170"
+        "TrainVerify.Denote.bw_linear_dw_sequence_reduction_rank3"
     )
     assert not relation.unresolved_frontiers
 
@@ -1779,7 +1779,7 @@ def test_gpt_goal144_bw_linear_dw_reduces_wide_sequence_shards(monkeypatch):
              if type(item).__name__ == "KRankBWLinearDwReductionCertificate"]
     assert len(certs) == 1
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dw_dp_chunk_both_dim1_4_1_8_32_128_g144"
+        "TrainVerify.Denote.bw_linear_dw_sequence_reduction_rank3"
     )
     assert not relation.unresolved_frontiers
 

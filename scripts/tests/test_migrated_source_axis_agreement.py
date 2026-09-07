@@ -43,7 +43,7 @@ def add_linear_dw(ir,rel,sid):
     sm=ir.sm_nodes[lt.sm_node_indices[0]];pm=[ir.pm_nodes[i] for i in lt.pm_node_indices]
     refs=(f"sm:{lt.sm_node_indices[0]}:1",*(f"pm:{i}:1" for i in lt.pm_node_indices))
     out=rc.RelationFactSpec("reduction",refs)
-    c=rc.KRankBWLinearDwReductionCertificate("bw-linear-dw-sequence-reduction-rank4",4,1,g,x,w,out,refs[0],refs[1:],"TrainVerify.Denote.bw_linear_dw_dp_split_dim1_4_1_2_32_g170")
+    c=rc.KRankBWLinearDwReductionCertificate("bw-linear-dw-sequence-reduction-k-rank",4,1,g,x,w,out,refs[0],refs[1:],"TrainVerify.Denote.bw_linear_dw_sequence_reduction_rank3")
     tr=rc.CertificateTransitionSpec("test_dw_projection",c.rule_id,tuple(sorted((g,x,w))),(out,),lt.sm_node_indices,lt.pm_node_indices,c.lean_theorem,certificate_digest=_typed_certificate_digest(c))
     record=rc.ClosedRelationFactRecord("test_dw_fact",out,"reduction",sm.outs[1],tuple(n.outs[1] for n in pm),None,None,(32,32),(32,32))
     rel.certificates+= (c,);rel.transition_specs+=(tr,)

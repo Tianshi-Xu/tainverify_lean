@@ -9,14 +9,14 @@ def render_closed_bw_linear_matmul_quad_segment(ir,relation,segment_id):
  except ImportError:
   from composer import _node_text,_render_mixed_final_value,_select_exact_typed_certificate
   from relation_compiler import KRankBWLinearDxCertificate,KRankBWLinearDwReductionCertificate,KRankBWMatmulCertificate
- lr="bw-linear-dx-sequence-sharded-k-rank";dr="bw-linear-dw-sequence-reduction-rank4";mr="bw-matmul-head-sharded-k-rank";lth="TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3";dth="TrainVerify.Denote.bw_linear_dw_dp_split_dim1_4_1_2_32_g170";mths={".1":"TrainVerify.Denote.bw_matmul_fst_head_gather_rank4",".2":"TrainVerify.Denote.bw_matmul_snd_head_gather_rank4"}
+ lr="bw-linear-dx-sequence-sharded-k-rank";dr="bw-linear-dw-sequence-reduction-k-rank";mr="bw-matmul-head-sharded-k-rank";lth="TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3";dth="TrainVerify.Denote.bw_linear_dw_sequence_reduction_rank3";mths={".1":"TrainVerify.Denote.bw_matmul_fst_head_gather_rank4",".2":"TrainVerify.Denote.bw_matmul_snd_head_gather_rank4"}
  chain=relation.dependent_chain_plan;seg=next((z for z in chain.segments if z.segment_id==segment_id),None)
  if seg is None or len(seg.transition_ids)!=4: raise ValueError("dual BW_linear/matmul component requires four transitions")
  by={t.transition_id:t for t in relation.transition_specs};ts=tuple(by[x] for x in seg.transition_ids);lt=next((t for t in ts if t.rule_id==lr),None);dt=next((t for t in ts if t.rule_id==dr),None);mts=tuple(t for t in ts if t.rule_id==mr)
  if lt is None or dt is None or len(mts)!=2 or lt.lean_theorem!=lth or dt.lean_theorem!=dth: raise ValueError("dual BW_linear/matmul typed family mismatch")
  lc=_select_exact_typed_certificate(relation,lt,lr,lth,KRankBWLinearDxCertificate,lambda c:(tuple(sorted(c.input_facts)),(c.output_fact,)))
  dc=_select_exact_typed_certificate(relation,dt,dr,dth,KRankBWLinearDwReductionCertificate,lambda c:(tuple(sorted((c.gradient_fact,c.activation_fact,c.weight_fact))),(c.output_fact,)))
- if set((dc.gradient_fact,dc.activation_fact,dc.weight_fact))!=set(lc.input_facts): raise ValueError("dual BW_linear input authority disagrees")
+ if (dc.gradient_fact,dc.activation_fact,dc.weight_fact)!=lc.input_facts: raise ValueError("dual BW_linear input authority disagrees")
  mcs=[]
  for t in mts:
   c=_select_exact_typed_certificate(relation,t,mr,t.lean_theorem,KRankBWMatmulCertificate,lambda x:(tuple(sorted(x.input_facts)),(x.output_fact,)))
@@ -73,7 +73,7 @@ def render_closed_bw_linear_matmul_quad_segment(ir,relation,segment_id):
    if name=="lx": lines.extend([f" have h{name}C{q}:chunkPrimDimN 1 4 {q} (smFinal {r.sm_tid})=pmFinal {r.pm_tids[q]}:=by rw [h{name}V];simpa [List.getD,List.getElem?_cons_zero,List.getElem?_cons_succ] using ({roundth} {l} {q} (by omega) (by simp) (by intro z hz;exact h{name}.shard_shapes z hz))"])
    else: lines.extend([f" have h{name}C{q}:chunkPrimDimN 1 4 {q} (smFinal {r.sm_tid})=pmFinal {r.pm_tids[q]}:=by rw [h{name}V];simpa [List.getD,List.getElem?_cons_zero,List.getElem?_cons_succ] using ({roundth} "+" ".join(f"(pmFinal {u})" for u in r.pm_tids)+" "+" ".join(f"(h{name}.shard_shapes _ (by simp))" for _ in range(4))+f" {q} (by omega))"])
  lines.extend([f" have hLCraw:={lc.lean_theorem} 4 1 2 32 32 {lgl} {lxl} (smFinal {lx.sm_tid}) (pmFinal {lw.pm_tids[0]}) (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl hlg.shard_shapes hlx.shard_shapes hlx.full_shape (hlw.shard_shapes _ (by simp))", " have hLC := hLCraw", " simp only [List.zipWith] at hLC", f" have hLOV:smFinal {lo.sm_tid}=allGatherPrimDimN 1 4 0 {lol}:=by rw [hLS,hlgV,hlwEq,hLC];rw ["+", ".join(f"←hLP{r}" for r in range(4))+"]"])
- lines.extend([f" have hDC:={dc.lean_theorem} "+" ".join(f"(pmFinal {u})" for u in lg.pm_tids)+f" (smFinal {lx.sm_tid}) (pmFinal {lw.pm_tids[0]}) "+" ".join(f"(hlg.shard_shapes _ (by simp))" for _ in range(4))+" hlx.full_shape (hlw.shard_shapes _ (by simp))",f" have hDsum:smFinal {ldwo.sm_tid}=tensorSum {ldwl}:=by rw [hDS,hlgV,hlwEq,hDC];rw ["+", ".join(f"hDP{r},←hlxC{r}" for r in range(4))+"]",f" have hDReduce:smFinal {ldwo.sm_tid}=allReducePrim {ldwl}.length 0 {ldwl}:=by rw [hDsum];rfl"])
+ lines.extend([f" have hDC:={dc.lean_theorem} 4 1 2 32 32 {lgl} {lxl} (pmFinal {lw.pm_tids[0]}) (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl hlg.shard_shapes hlx.shard_shapes (hlw.shard_shapes _ (by simp))", " simp only [List.zipWith] at hDC", f" have hDsum:smFinal {ldwo.sm_tid}=tensorSum {ldwl}:=by rw [hDS,hlgV,hlxV,hlwEq,hDC];rw ["+", ".join(f"←hDP{r}" for r in range(4))+"]",f" have hDReduce:smFinal {ldwo.sm_tid}=allReducePrim {ldwl}.length 0 {ldwl}:=by rw [hDsum];rfl"])
  # matmul theorem equalities
  lines.extend([
   f" have hMF:={mf.lean_theorem} 4 1 1 8 8 8 {mgl} {mxl} {myl} (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl rfl hmg.shard_shapes hmx.shard_shapes hmy.shard_shapes",

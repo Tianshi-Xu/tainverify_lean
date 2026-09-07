@@ -7928,7 +7928,7 @@ def advance_k_rank_bw_linear_dw_reduction_frontiers(plan, ir, frontiers, layouts
         raise RelationCompositionError("BW_linear dW reduction frontier/layout arity mismatch")
     by_id={s.step_id:s for s in plan.steps};certs=[];rewritten=[];rewritten_layouts=[]
     for frontier,layout in zip(frontiers,layouts):
-        if layout!="reduction" or len(frontier)!=5:
+        if layout!="reduction" or len(frontier)<2:
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         try: sm=by_id[frontier[0]];pms=tuple(by_id[x] for x in frontier[1:])
         except KeyError:
@@ -7937,15 +7937,21 @@ def advance_k_rank_bw_linear_dw_reduction_frontiers(plan, ir, frontiers, layouts
             x.op!="BW_linear" or x.output_projection!=".2" or x.side!="pm" for x in pms
         ):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if tuple(int(x.rank) for x in pms)!=(0,1,2,3) or len(sm.input_bindings)!=3 or any(len(x.input_bindings)!=3 for x in pms):
-            raise RelationCompositionError("rank-4 BW_linear dW writer/input authority mismatch")
+        k=len(pms)
+        if (k!=ir.pm_num_ranks or sm.rank!=0 or sm.parameters or any(x.parameters for x in pms)
+                or tuple(x.rank for x in pms)!=tuple(range(k))
+                or any(len(x.input_bindings)!=3 or len(x.input_shapes)!=3 for x in (sm,*pms))):
+            raise RelationCompositionError("BW_linear dW sequence writer/input authority mismatch")
         gfull,xfull,wfull=map(tuple,sm.input_shapes);outfull=tuple(sm.output_shape)
-        if (len(gfull)!=3 or len(xfull)!=3 or len(wfull)!=2 or gfull[:2]!=(1,8)
-                or xfull[:2]!=(1,8) or wfull!=outfull
-                or wfull!=(gfull[2],xfull[2])):
+        if (len(gfull)!=3 or len(xfull)!=3 or len(wfull)!=2
+                or gfull[:2]!=xfull[:2] or wfull!=outfull
+                or wfull!=(gfull[2],xfull[2]) or min(*gfull,*xfull)<=0):
             raise RelationCompositionError("BW_linear dW SM sequence shapes are malformed")
-        expected_pm=((1,2,gfull[2]),(1,2,xfull[2]),wfull)
-        if any(tuple(x.input_shapes)!=expected_pm or tuple(x.output_shape)!=outfull for x in pms):
+        b,sequence,o=gfull
+        if sequence%k:
+            raise RelationCompositionError("BW_linear dW sequence length is not divisible by rank count")
+        expected_pm=((b,sequence//k,o),(b,sequence//k,xfull[2]),wfull)
+        if any(tuple(map(tuple,x.input_shapes))!=expected_pm or tuple(x.output_shape)!=outfull for x in pms):
             raise RelationCompositionError("BW_linear dW PM sequence shapes disagree")
         grefs=(sm.input_bindings[0],*(x.input_bindings[0] for x in pms))
         xrefs=(sm.input_bindings[1],*(x.input_bindings[1] for x in pms))
@@ -7955,22 +7961,21 @@ def advance_k_rank_bw_linear_dw_reduction_frontiers(plan, ir, frontiers, layouts
         if not weight_ref.startswith("init:") or any(x.input_bindings[2]!=weight_ref for x in pms):
             raise RelationCompositionError("BW_linear dW weight is not shared InitGoal authority")
         weight_tid=int(weight_ref.split(":",1)[1])
-        try: weight_fact=init_lineage_relation_fact(ir.init_lineages[weight_tid])
+        try:
+            lineage=ir.init_lineages[weight_tid]
+            weight_fact=init_lineage_relation_fact(lineage)
         except KeyError as exc: raise RelationCompositionError("BW_linear dW weight InitGoal is missing") from exc
-        if weight_fact.step_triple!=(weight_ref,weight_ref):
-            raise RelationCompositionError("BW_linear dW weight InitGoal is not singleton")
-        theorem_by_shape={
-            (32,32): "TrainVerify.Denote.bw_linear_dw_dp_split_dim1_4_1_2_32_g170",
-            (32,128): "TrainVerify.Denote.bw_linear_dw_dp_chunk_both_dim1_4_1_8_32_128_g144",
-        }
-        try: theorem=theorem_by_shape[outfull]
-        except KeyError as exc: raise RelationCompositionError("BW_linear dW sequence reduction lacks checked theorem shape") from exc
+        if (weight_fact.step_triple!=(weight_ref,weight_ref) or weight_fact.layout!="sharded"
+                or weight_fact.gather_dim!=0 or tuple(lineage.tsShape)!=wfull
+                or tuple(map(tuple,lineage.tpShapes))!=(wfull,)):
+            raise RelationCompositionError("BW_linear dW weight InitGoal is not exact singleton authority")
         output=RelationFactSpec("reduction",tuple(frontier))
         certs.append(KRankBWLinearDwReductionCertificate(
-            rule_id="bw-linear-dw-sequence-reduction-rank4",rank_count=4,shard_dim=1,
+            rule_id="bw-linear-dw-sequence-reduction-k-rank",rank_count=k,shard_dim=1,
             gradient_fact=gradient_fact,activation_fact=activation_fact,
             weight_fact=weight_fact,output_fact=output,sm_step_id=sm.step_id,
-            pm_step_ids=tuple(x.step_id for x in pms),lean_theorem=theorem))
+            pm_step_ids=tuple(x.step_id for x in pms),
+            lean_theorem="TrainVerify.Denote.bw_linear_dw_sequence_reduction_rank3"))
         rewritten.extend((grefs,xrefs,weight_fact.step_triple))
         rewritten_layouts.extend(("sharded","sharded",weight_fact.layout))
     return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
@@ -10802,6 +10807,12 @@ _register_closed_rule_specs(
         ("TrainVerify.Denote.bw_linear_dw_row_allGather_rank3",),
         "BW_linear", "bw_linear_dual_renderer:render_closed_k_rank_bw_linear_dual_segment",
         ("denote.KRankBWLinearDwRowGeneral",),
+    ),
+    ClosedRuleSpec(
+        "bw-linear-dw-sequence-reduction-k-rank", KRankBWLinearDwReductionCertificate,
+        ("TrainVerify.Denote.bw_linear_dw_sequence_reduction_rank3",),
+        "BW_linear", "bw_linear_dw_sequence_renderer:render_closed_bw_linear_dw_sequence_segment",
+        ("denote.KRankBWLinearDwSequenceGeneral",),
     ),
     ClosedRuleSpec(
         "bw-layernorm-dgamma-sequence-reduction-k-rank", KRankBWLayernormParamReductionCertificate,

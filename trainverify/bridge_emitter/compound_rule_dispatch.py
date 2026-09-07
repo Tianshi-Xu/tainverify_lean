@@ -8,12 +8,12 @@ registry because its renderer choice depends on the whole atomic family.
 def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
     """Return the lazy renderer binding for a supported BW compound family."""
     if (family.count("bw-linear-dx-sequence-sharded-k-rank") == 1
-            and family.count("bw-linear-dw-sequence-reduction-rank4") == 1
+            and family.count("bw-linear-dw-sequence-reduction-k-rank") == 1
             and len(family) == 2):
-        return "transpose_linear_transpose_renderer:render_closed_transpose_linear_transpose_segment"
+        return "bw_linear_dw_sequence_renderer:render_closed_bw_linear_dw_sequence_segment"
     if (family.count("transpose-sharded-k-rank") == 2
             and family.count("bw-linear-dx-sequence-sharded-k-rank") == 1
-            and family.count("bw-linear-dw-sequence-reduction-rank4") == 1
+            and family.count("bw-linear-dw-sequence-reduction-k-rank") == 1
             and len(family) == 4):
         return "transpose_linear_transpose_renderer:render_closed_transpose_linear_transpose_segment"
     if family == (
@@ -36,7 +36,7 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
     ):
         return "bw_matmul_head_renderer:render_closed_bw_matmul_head_segment"
     if (family.count("bw-linear-dx-sequence-sharded-k-rank") == 1
-            and family.count("bw-linear-dw-sequence-reduction-rank4") == 1
+            and family.count("bw-linear-dw-sequence-reduction-k-rank") == 1
             and family.count("bw-matmul-head-sharded-k-rank") == 2
             and len(family) == 4):
         return "bw_linear_matmul_quad_renderer:render_closed_bw_linear_matmul_quad_segment"
