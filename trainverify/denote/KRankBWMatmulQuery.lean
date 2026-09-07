@@ -23,13 +23,15 @@ theorem transpose2d_eq_transposeAxes23_rank4
     simpa only [prodShape, List.foldl, Nat.one_mul] using hidx
   rw [transposeAxes_2_3_valAt_gen x b h q n idx hx
     (Nat.ne_of_gt hh) (Nat.ne_of_gt hq) (Nat.ne_of_gt hn) hbound]
-  have htbound : idx < prodShape (transpose2d x).shape := by
-    rw [htshape]
-    simpa only [prodShape, List.foldl, Nat.one_mul] using hbound
-  rw [valAt_of_lt _ _ htbound]
-  simp only [transpose2d, hx, List.reverse_cons, List.reverse_nil,
-    List.nil_append, List.cons_append, Tensor.mkShape,
-    if_neg (Nat.ne_of_gt (Nat.mul_pos hq hn)), if_neg (Nat.ne_of_gt hq)]
+  have hexp : transpose2d x = Tensor.mkShape [b, h, n, q]
+      (fun i => valAt x (i.1 / (q*n) * (q*n) + i.1 % (q*n) % q * n + i.1 % (q*n) / q)) := by
+    unfold transpose2d
+    rw [hx]
+    simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+      if_neg (Nat.ne_of_gt (Nat.mul_pos hq hn)), if_neg (Nat.ne_of_gt hq)]
+    rfl
+  rw [hexp, valAt_of_lt _ _ (by simpa only [Tensor.mkShape, prodShape, List.foldl, Nat.one_mul] using hbound)]
+  change valAt x (idx / (q*n) * (q*n) + idx % (q*n) % q * n + idx % (q*n) / q) = _
   rw [Nat.mul_comm q n]
   have hmod : idx % (h * n * q) % (n * q) = idx % (n * q) := by
     apply Nat.mod_mod_of_dvd

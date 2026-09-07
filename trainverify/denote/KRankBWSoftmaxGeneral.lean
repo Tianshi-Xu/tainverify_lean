@@ -70,7 +70,7 @@ private theorem bwsg_pure_row (g y : Tensor) (d row j : Nat) (rest : List Nat)
       Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hj]
   rw [hdiv, hmod]
 
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 private theorem bwsg_pure_dim2
     (gs xs : List Tensor) (K d0 d1 d2 d3 : Nat)
     (hK : 0 < K) (hd3 : 0 < d3)
@@ -203,7 +203,7 @@ private theorem bwsg_pure_dim2
     allGatherPrimDimN_dim2_rank4_valAt gs K d0 d1 d2 d3 q r p j
       hK hd2 hd3 hq hr hp hj hghead]
 
-set_option maxHeartbeats 3200000 in
+set_option maxHeartbeats 500000 in
 private theorem bwsg_pure_dim1
     (gs xs : List Tensor) (K d0 d1 d2 d3 : Nat)
     (hK : 0 < K) (hd3 : 0 < d3)
