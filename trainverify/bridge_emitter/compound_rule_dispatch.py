@@ -179,6 +179,8 @@ def select_k_rank_compound_renderer(family: tuple[str, ...]) -> str | None:
         "embedding-hidden-sharded-k-rank", "embedding-sharded-ids-k-rank"
     }:
         return "embedding_hidden_ids_renderer:render_closed_embedding_hidden_ids_segment"
+    if set(family) == {"fw-view-unflatten-sequence-sharded-k-rank", "linear-output-sharded-k-rank"}:
+        return "unflatten_output_linear_renderer:render_closed_unflatten_output_linear_segment"
     linear = "linear-sharded-k-rank-dim1"
     alltoall = "alltoall-k-rank-layout-transport"
     allgather = "allgather-reconstruction-k-rank"
