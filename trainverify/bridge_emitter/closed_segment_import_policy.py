@@ -55,6 +55,12 @@ def plan_closed_segment_imports(
             module = "denote.KRankBWLinearDwColumnGeneral"
         elif theorem == "TrainVerify.Denote.bw_linear_dw_row_allGather_rank3":
             module = "denote.KRankBWLinearDwRowGeneral"
+        elif theorem == "TrainVerify.Denote.bw_linear_dx_row_reduction_rank3":
+            module = "denote.KRankBWLinearDxRow"
+        elif theorem == "TrainVerify.Denote.bw_embedding_hidden_allGather_rank3":
+            module = "denote.BWEmbeddingHiddenShardK"
+        elif theorem == "TrainVerify.Denote.bw_embedding_seqchunk_K":
+            module = "denote.BWEmbeddingSequenceShardK"
         elif theorem == "TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3":
             module = "denote.KRankBWLinearDxSequence"
         elif theorem == "TrainVerify.Denote.bw_sum_allGatherPrimDimN_dim1_rank3":
@@ -71,6 +77,8 @@ def plan_closed_segment_imports(
         elif theorem in {"TrainVerify.Denote.bw_matmul_fst_head_gather_rank4",
                          "TrainVerify.Denote.bw_matmul_snd_head_gather_rank4"}:
             module = "denote.KRankBWMatmulHead"
+        elif theorem == "TrainVerify.Denote.fw_view_allGatherPrimDimN_dim1_rank4_to_rank3":
+            module = "denote.KRankViewFlatten"
         elif theorem == "TrainVerify.Denote.fw_view_unflatten_allGather_dim1_rank3":
             module = "denote.KRankViewUnflatten"
         elif theorem == "TrainVerify.Denote.fw_linear_3d_weight_allGatherPrimDimN_dim0_comm":

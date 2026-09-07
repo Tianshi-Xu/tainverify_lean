@@ -179,6 +179,22 @@ def select_k_rank_compound_renderer(family: tuple[str, ...]) -> str | None:
         "embedding-hidden-sharded-k-rank", "embedding-sharded-ids-k-rank"
     }:
         return "embedding_hidden_ids_renderer:render_closed_embedding_hidden_ids_segment"
+    if len(family) == 4 and family.count("bw-matmul-head-sharded-k-rank") == 2 and set(family) == {"bw-linear-dx-row-reduction-k-rank", "bw-linear-dw-output-row-sharded-k-rank", "bw-matmul-head-sharded-k-rank"}:
+        return "bw_row_linear_head_matmul_renderer:render_closed_bw_row_linear_head_matmul_segment"
+    if len(family) == 3 and set(family) == {"bw-embedding-hidden-sharded-k-rank", "alltoall-k-rank-layout-transport", "bw-embedding-sequence-reduction-k-rank"}:
+        return "bw_embedding_alltoall_mixed_renderer:render_closed_bw_embedding_alltoall_mixed_segment"
+    if len(family) == 2 and set(family) == {"bw-softmax-sharded-dim2-k-rank", "reduce-scatter-reconstruction-k-rank"}:
+        return "bw_softmax_reduce_scatter_renderer:render_closed_bw_softmax_reduce_scatter_segment"
+    if set(family) == {"transpose-sharded-k-rank", "alltoall-k-rank-layout-transport"}:
+        return "transpose_alltoall_renderer:render_closed_transpose_alltoall_segment"
+    if len(family) == 4 and set(family) == {"bw-layernorm-dx-dim1-k-rank", "bw-layernorm-dgamma-sequence-reduction-k-rank", "bw-layernorm-dbeta-sequence-reduction-k-rank", "cross-dp-wred-reconstruction-k-rank"}:
+        return "bw_layernorm_wred_renderer:render_closed_bw_layernorm_wred_segment"
+    if len(family) == 2 and set(family) == {"alltoall-k-rank-layout-transport", "reduce-scatter-reconstruction-k-rank"}:
+        return "alltoall_reduce_scatter_renderer:render_closed_alltoall_reduce_scatter_segment"
+    if len(family) == 2 and set(family) == {"bw-softmax-sharded-dim1-k-rank", "transpose-sharded-k-rank"}:
+        return "bw_softmax_transpose_renderer:render_closed_bw_softmax_transpose_segment"
+    if len(family) == 3 and set(family) == {"bw-view-flatten-sequence-sharded-k-rank", "alltoall-k-rank-layout-transport", "div-sharded-k-rank-dim3"}:
+        return "bw_flatten_alltoall_div_renderer:render_closed_bw_flatten_alltoall_div_segment"
     if len(family) == 2 and set(family) == {"sum-producer-sharded-k-rank-dim1", "bw-sum-scalar-broadcast-dim1-k-rank"}:
         return "sum_fw_bw_renderer:render_closed_sum_fw_bw_segment"
     if len(family) == 3 and set(family) == {"bw-linear-dw-sequence-reduction-k-rank", "bw-linear-dx-sequence-sharded-k-rank", "alltoall-k-rank-layout-transport"}:

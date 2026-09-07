@@ -1,0 +1,733 @@
+import denote.GraphGears
+import denote.RelationCompiler
+import denote.KRankBWLayernormParam
+import denote.KRankBWLayernorm
+open TrainVerify.Denote
+namespace BWLayernormWredGraphK4B2S3D7DxDgammaDbeta
+def sm : GraphDecl := { numRanks := 1, nodes := [{ rank := 0, op := "OpName.FW_float", ins := [80], outs := [81] }, { rank := 0, op := "OpName.BW_layernorm", ins := [1, 2, 3, 4], outs := [10, 11, 12] }, { rank := 0, op := "OpName.FW_float", ins := [81], outs := [82] }] }
+def pm : GraphDecl := { numRanks := 4, nodes := [{ rank := 0, op := "OpName.FW_float", ins := [120], outs := [121] }, { rank := 0, op := "OpName.BW_layernorm", ins := [100, 104, 3, 4], outs := [108, 112, 116] }, { rank := 1, op := "OpName.FW_float", ins := [120], outs := [122] }, { rank := 1, op := "OpName.BW_layernorm", ins := [101, 105, 3, 4], outs := [109, 113, 117] }, { rank := 2, op := "OpName.FW_float", ins := [120], outs := [123] }, { rank := 2, op := "OpName.BW_layernorm", ins := [102, 106, 3, 4], outs := [110, 114, 118] }, { rank := 0, op := "OpName.CROSS_DP_WRED", ins := [600, 601, 602, 603], outs := [600] }, { rank := 3, op := "OpName.BW_layernorm", ins := [103, 107, 3, 4], outs := [111, 115, 119] }, { rank := 0, op := "OpName.FW_float", ins := [120], outs := [125] }] }
+end BWLayernormWredGraphK4B2S3D7DxDgammaDbeta
+/- AUTO-GENERATED closed relation state universe. -/
+
+open TrainVerify.Denote
+open TrainVerify.Denote.RelationCompiler
+
+namespace TrainVerify.Denote.GeneratedBWLayernormWredK4B2S3D7DxDgammaDbeta
+
+set_option maxRecDepth 100000
+set_option maxHeartbeats 500000
+noncomputable section
+
+private def fact_g : RelationFact :=
+  .sharded 1 [100, 101, 102, 103] 1 [2, 12, 7] [2, 3, 7]
+
+private def fact_x : RelationFact :=
+  .sharded 2 [104, 105, 106, 107] 1 [2, 12, 7] [2, 3, 7]
+
+private def fact_gamma : RelationFact :=
+  .sharded 3 [3] 0 [7] [7]
+
+private def fact_beta : RelationFact :=
+  .sharded 4 [4] 0 [7] [7]
+
+private def fact_dx : RelationFact :=
+  .sharded 10 [108, 109, 110, 111] 1 [2, 12, 7] [2, 3, 7]
+
+private def fact_dgamma : RelationFact :=
+  .reduction 11 [112, 113, 114, 115] [7]
+
+private def fact_dbeta : RelationFact :=
+  .reduction 12 [116, 117, 118, 119] [7]
+
+private def fact_w : RelationFact :=
+  .reduction 50 [600, 601, 602, 603] [5, 7]
+
+private def fact_j : RelationFact :=
+  .joined 50 600 [5, 7]
+
+private def public_anchor : RelationFact :=
+  .tensorShape .sm 3 [7]
+
+private def state_before : RelationState where
+  facts := [fact_g, fact_x, fact_gamma, fact_beta, public_anchor, fact_w]
+  nonempty := by decide
+
+private def state_after : RelationState where
+  facts := [fact_g, fact_x, fact_gamma, fact_beta, fact_dx, fact_dgamma, fact_dbeta, public_anchor, fact_j]
+  nonempty := by decide
+
+set_option maxHeartbeats 500000 in
+private def segment_000000_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_float", ins := [80], outs := [81] }, { rank := 0, op := "OpName.BW_layernorm", ins := [1, 2, 3, 4], outs := [10, 11, 12] }, { rank := 0, op := "OpName.FW_float", ins := [81], outs := [82] }]
+private def segment_000000_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_float", ins := [120], outs := [121] }, { rank := 0, op := "OpName.BW_layernorm", ins := [100, 104, 3, 4], outs := [108, 112, 116] }, { rank := 1, op := "OpName.FW_float", ins := [120], outs := [122] }, { rank := 1, op := "OpName.BW_layernorm", ins := [101, 105, 3, 4], outs := [109, 113, 117] }, { rank := 2, op := "OpName.FW_float", ins := [120], outs := [123] }, { rank := 2, op := "OpName.BW_layernorm", ins := [102, 106, 3, 4], outs := [110, 114, 118] }, { rank := 0, op := "OpName.CROSS_DP_WRED", ins := [600, 601, 602, 603], outs := [600] }, { rank := 3, op := "OpName.BW_layernorm", ins := [103, 107, 3, 4], outs := [111, 115, 119] }, { rank := 0, op := "OpName.FW_float", ins := [120], outs := [125] }]
+@[irreducible] private def segment_000000_sm_final (store : Store) : Store :=
+  segment_000000_sm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm) store
+@[irreducible] private def segment_000000_pm_final (store : Store) : Store :=
+  segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store
+
+private def segment_000000_frameable : RelationState where
+  facts := [fact_g, fact_x, fact_gamma, fact_beta, public_anchor]
+  nonempty := by native_decide
+
+set_option maxHeartbeats 500000 in
+private theorem segment_000000_four_input_middle_writer
+    (g : GraphDecl) (fullnodes before after : List NodeDecl)
+    (initialStore finalStore : Store) (target : NodeDecl)
+    (in0 in1 in2 in3 output : Tid)
+    (f : Tensor → Tensor → Tensor → Tensor → Tensor)
+    (hnodes : fullnodes = before ++ [target] ++ after)
+    (hfinal : finalStore = fullnodes.foldl (applyNodeDistributedFaithful g) initialStore)
+    (happly : ∀ t, applyNodeDistributedFaithful g t target output =
+      f (t in0) (t in1) (t in2) (t in3))
+    (hAfterNil : ∀ n ∈ after, n.outs ≠ [])
+    (hAfterOutput : ∀ n ∈ after, output ∉ n.outs)
+    (h0nil : ∀ n ∈ target :: after, n.outs ≠ [])
+    (h0 : ∀ n ∈ target :: after, in0 ∉ n.outs)
+    (h1nil : ∀ n ∈ target :: after, n.outs ≠ [])
+    (h1 : ∀ n ∈ target :: after, in1 ∉ n.outs)
+    (h2nil : ∀ n ∈ target :: after, n.outs ≠ [])
+    (h2 : ∀ n ∈ target :: after, in2 ∉ n.outs)
+    (h3nil : ∀ n ∈ target :: after, n.outs ≠ [])
+    (h3 : ∀ n ∈ target :: after, in3 ∉ n.outs) :
+    finalStore output = f (finalStore in0) (finalStore in1)
+      (finalStore in2) (finalStore in3) := by
+  have hfold : finalStore = (before ++ [target] ++ after).foldl
+      (applyNodeDistributedFaithful g) initialStore :=
+    hfinal.trans (congrArg (fun ns : List NodeDecl =>
+      ns.foldl (applyNodeDistributedFaithful g) initialStore) hnodes)
+  have hwriter := foldl_faithful_middle_writer g initialStore before after target output
+    (fun t => f (t in0) (t in1) (t in2) (t in3)) happly hAfterNil hAfterOutput
+  have hprefix : finalStore output = f
+      ((before.foldl (applyNodeDistributedFaithful g) initialStore) in0)
+      ((before.foldl (applyNodeDistributedFaithful g) initialStore) in1)
+      ((before.foldl (applyNodeDistributedFaithful g) initialStore) in2)
+      ((before.foldl (applyNodeDistributedFaithful g) initialStore) in3) :=
+    (congrArg (fun st : Store => st output) hfold).trans hwriter
+  have hread (tid : Tid) (hnil : ∀ n ∈ target :: after, n.outs ≠ [])
+      (hnot : ∀ n ∈ target :: after, tid ∉ n.outs) :
+      (before.foldl (applyNodeDistributedFaithful g) initialStore) tid = finalStore tid := by
+    have hp : (before.foldl (applyNodeDistributedFaithful g) initialStore) tid =
+        ((before ++ [target] ++ after).foldl (applyNodeDistributedFaithful g) initialStore) tid := by
+      simpa only [List.append_assoc, List.singleton_append] using
+        foldl_faithful_prefix_read_eq_final g initialStore before (target :: after) tid hnil hnot
+    exact hp.trans (congrArg (fun st : Store => st tid) hfold).symm
+  exact hprefix.trans (congrArg
+    (fun v : Tensor × Tensor × Tensor × Tensor => f v.1 v.2.1 v.2.2.1 v.2.2.2)
+    (congrArg₂ Prod.mk (hread in0 h0nil h0)
+      (congrArg₂ Prod.mk (hread in1 h1nil h1)
+        (congrArg₂ Prod.mk (hread in2 h2nil h2) (hread in3 h3nil h3)))))
+
+private theorem segment_000000_hSmdx (store : Store) :
+    (segment_000000_sm_final store) 10 = (bw_layernorm ((segment_000000_sm_final store) 1) ((segment_000000_sm_final store) 2) ((segment_000000_sm_final store) 3) ((segment_000000_sm_final store) 4)).1 := by
+  have hfinal : (segment_000000_sm_final store) = segment_000000_sm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm) store := by
+    unfold segment_000000_sm_final
+    rfl
+  have hnodes : segment_000000_sm_nodes = (segment_000000_sm_nodes.take 1) ++ [{ rank := 0, op := "OpName.BW_layernorm", ins := [1, 2, 3, 4], outs := [10, 11, 12] }] ++ (segment_000000_sm_nodes.drop 2) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm
+    segment_000000_sm_nodes (segment_000000_sm_nodes.take 1) (segment_000000_sm_nodes.drop 2)
+    store (segment_000000_sm_final store) { rank := 0, op := "OpName.BW_layernorm", ins := [1, 2, 3, 4], outs := [10, 11, 12] }
+    1 2 3 4 10 (fun a b c d => (bw_layernorm a b c d).1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dx_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm t 0 1 2 3 4 10 11 12
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdx0 (store : Store) :
+    (segment_000000_pm_final store) 108 = (bw_layernorm ((segment_000000_pm_final store) 100) ((segment_000000_pm_final store) 104) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).1 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 1) ++ [{ rank := 0, op := "OpName.BW_layernorm", ins := [100, 104, 3, 4], outs := [108, 112, 116] }] ++ (segment_000000_pm_nodes.drop 2) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 1) (segment_000000_pm_nodes.drop 2)
+    store (segment_000000_pm_final store) { rank := 0, op := "OpName.BW_layernorm", ins := [100, 104, 3, 4], outs := [108, 112, 116] }
+    100 104 3 4 108 (fun a b c d => (bw_layernorm a b c d).1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dx_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 0 100 104 3 4 108 112 116
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdx1 (store : Store) :
+    (segment_000000_pm_final store) 109 = (bw_layernorm ((segment_000000_pm_final store) 101) ((segment_000000_pm_final store) 105) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).1 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 3) ++ [{ rank := 1, op := "OpName.BW_layernorm", ins := [101, 105, 3, 4], outs := [109, 113, 117] }] ++ (segment_000000_pm_nodes.drop 4) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 3) (segment_000000_pm_nodes.drop 4)
+    store (segment_000000_pm_final store) { rank := 1, op := "OpName.BW_layernorm", ins := [101, 105, 3, 4], outs := [109, 113, 117] }
+    101 105 3 4 109 (fun a b c d => (bw_layernorm a b c d).1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dx_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 1 101 105 3 4 109 113 117
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdx2 (store : Store) :
+    (segment_000000_pm_final store) 110 = (bw_layernorm ((segment_000000_pm_final store) 102) ((segment_000000_pm_final store) 106) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).1 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 5) ++ [{ rank := 2, op := "OpName.BW_layernorm", ins := [102, 106, 3, 4], outs := [110, 114, 118] }] ++ (segment_000000_pm_nodes.drop 6) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 5) (segment_000000_pm_nodes.drop 6)
+    store (segment_000000_pm_final store) { rank := 2, op := "OpName.BW_layernorm", ins := [102, 106, 3, 4], outs := [110, 114, 118] }
+    102 106 3 4 110 (fun a b c d => (bw_layernorm a b c d).1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dx_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 2 102 106 3 4 110 114 118
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdx3 (store : Store) :
+    (segment_000000_pm_final store) 111 = (bw_layernorm ((segment_000000_pm_final store) 103) ((segment_000000_pm_final store) 107) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).1 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 7) ++ [{ rank := 3, op := "OpName.BW_layernorm", ins := [103, 107, 3, 4], outs := [111, 115, 119] }] ++ (segment_000000_pm_nodes.drop 8) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 7) (segment_000000_pm_nodes.drop 8)
+    store (segment_000000_pm_final store) { rank := 3, op := "OpName.BW_layernorm", ins := [103, 107, 3, 4], outs := [111, 115, 119] }
+    103 107 3 4 111 (fun a b c d => (bw_layernorm a b c d).1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dx_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 3 103 107 3 4 111 115 119
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hSmdgamma (store : Store) :
+    (segment_000000_sm_final store) 11 = (bw_layernorm ((segment_000000_sm_final store) 1) ((segment_000000_sm_final store) 2) ((segment_000000_sm_final store) 3) ((segment_000000_sm_final store) 4)).2.1 := by
+  have hfinal : (segment_000000_sm_final store) = segment_000000_sm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm) store := by
+    unfold segment_000000_sm_final
+    rfl
+  have hnodes : segment_000000_sm_nodes = (segment_000000_sm_nodes.take 1) ++ [{ rank := 0, op := "OpName.BW_layernorm", ins := [1, 2, 3, 4], outs := [10, 11, 12] }] ++ (segment_000000_sm_nodes.drop 2) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm
+    segment_000000_sm_nodes (segment_000000_sm_nodes.take 1) (segment_000000_sm_nodes.drop 2)
+    store (segment_000000_sm_final store) { rank := 0, op := "OpName.BW_layernorm", ins := [1, 2, 3, 4], outs := [10, 11, 12] }
+    1 2 3 4 11 (fun a b c d => (bw_layernorm a b c d).2.1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dw_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm t 0 1 2 3 4 10 11 12 (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdgamma0 (store : Store) :
+    (segment_000000_pm_final store) 112 = (bw_layernorm ((segment_000000_pm_final store) 100) ((segment_000000_pm_final store) 104) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).2.1 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 1) ++ [{ rank := 0, op := "OpName.BW_layernorm", ins := [100, 104, 3, 4], outs := [108, 112, 116] }] ++ (segment_000000_pm_nodes.drop 2) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 1) (segment_000000_pm_nodes.drop 2)
+    store (segment_000000_pm_final store) { rank := 0, op := "OpName.BW_layernorm", ins := [100, 104, 3, 4], outs := [108, 112, 116] }
+    100 104 3 4 112 (fun a b c d => (bw_layernorm a b c d).2.1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dw_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 0 100 104 3 4 108 112 116 (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdgamma1 (store : Store) :
+    (segment_000000_pm_final store) 113 = (bw_layernorm ((segment_000000_pm_final store) 101) ((segment_000000_pm_final store) 105) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).2.1 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 3) ++ [{ rank := 1, op := "OpName.BW_layernorm", ins := [101, 105, 3, 4], outs := [109, 113, 117] }] ++ (segment_000000_pm_nodes.drop 4) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 3) (segment_000000_pm_nodes.drop 4)
+    store (segment_000000_pm_final store) { rank := 1, op := "OpName.BW_layernorm", ins := [101, 105, 3, 4], outs := [109, 113, 117] }
+    101 105 3 4 113 (fun a b c d => (bw_layernorm a b c d).2.1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dw_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 1 101 105 3 4 109 113 117 (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdgamma2 (store : Store) :
+    (segment_000000_pm_final store) 114 = (bw_layernorm ((segment_000000_pm_final store) 102) ((segment_000000_pm_final store) 106) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).2.1 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 5) ++ [{ rank := 2, op := "OpName.BW_layernorm", ins := [102, 106, 3, 4], outs := [110, 114, 118] }] ++ (segment_000000_pm_nodes.drop 6) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 5) (segment_000000_pm_nodes.drop 6)
+    store (segment_000000_pm_final store) { rank := 2, op := "OpName.BW_layernorm", ins := [102, 106, 3, 4], outs := [110, 114, 118] }
+    102 106 3 4 114 (fun a b c d => (bw_layernorm a b c d).2.1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dw_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 2 102 106 3 4 110 114 118 (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdgamma3 (store : Store) :
+    (segment_000000_pm_final store) 115 = (bw_layernorm ((segment_000000_pm_final store) 103) ((segment_000000_pm_final store) 107) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).2.1 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 7) ++ [{ rank := 3, op := "OpName.BW_layernorm", ins := [103, 107, 3, 4], outs := [111, 115, 119] }] ++ (segment_000000_pm_nodes.drop 8) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 7) (segment_000000_pm_nodes.drop 8)
+    store (segment_000000_pm_final store) { rank := 3, op := "OpName.BW_layernorm", ins := [103, 107, 3, 4], outs := [111, 115, 119] }
+    103 107 3 4 115 (fun a b c d => (bw_layernorm a b c d).2.1)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_dw_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 3 103 107 3 4 111 115 119 (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hSmdbeta (store : Store) :
+    (segment_000000_sm_final store) 12 = (bw_layernorm ((segment_000000_sm_final store) 1) ((segment_000000_sm_final store) 2) ((segment_000000_sm_final store) 3) ((segment_000000_sm_final store) 4)).2.2 := by
+  have hfinal : (segment_000000_sm_final store) = segment_000000_sm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm) store := by
+    unfold segment_000000_sm_final
+    rfl
+  have hnodes : segment_000000_sm_nodes = (segment_000000_sm_nodes.take 1) ++ [{ rank := 0, op := "OpName.BW_layernorm", ins := [1, 2, 3, 4], outs := [10, 11, 12] }] ++ (segment_000000_sm_nodes.drop 2) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm
+    segment_000000_sm_nodes (segment_000000_sm_nodes.take 1) (segment_000000_sm_nodes.drop 2)
+    store (segment_000000_sm_final store) { rank := 0, op := "OpName.BW_layernorm", ins := [1, 2, 3, 4], outs := [10, 11, 12] }
+    1 2 3 4 12 (fun a b c d => (bw_layernorm a b c d).2.2)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_db_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm t 0 1 2 3 4 10 11 12 (by native_decide) (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdbeta0 (store : Store) :
+    (segment_000000_pm_final store) 116 = (bw_layernorm ((segment_000000_pm_final store) 100) ((segment_000000_pm_final store) 104) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).2.2 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 1) ++ [{ rank := 0, op := "OpName.BW_layernorm", ins := [100, 104, 3, 4], outs := [108, 112, 116] }] ++ (segment_000000_pm_nodes.drop 2) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 1) (segment_000000_pm_nodes.drop 2)
+    store (segment_000000_pm_final store) { rank := 0, op := "OpName.BW_layernorm", ins := [100, 104, 3, 4], outs := [108, 112, 116] }
+    100 104 3 4 116 (fun a b c d => (bw_layernorm a b c d).2.2)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_db_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 0 100 104 3 4 108 112 116 (by native_decide) (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdbeta1 (store : Store) :
+    (segment_000000_pm_final store) 117 = (bw_layernorm ((segment_000000_pm_final store) 101) ((segment_000000_pm_final store) 105) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).2.2 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 3) ++ [{ rank := 1, op := "OpName.BW_layernorm", ins := [101, 105, 3, 4], outs := [109, 113, 117] }] ++ (segment_000000_pm_nodes.drop 4) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 3) (segment_000000_pm_nodes.drop 4)
+    store (segment_000000_pm_final store) { rank := 1, op := "OpName.BW_layernorm", ins := [101, 105, 3, 4], outs := [109, 113, 117] }
+    101 105 3 4 117 (fun a b c d => (bw_layernorm a b c d).2.2)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_db_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 1 101 105 3 4 109 113 117 (by native_decide) (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdbeta2 (store : Store) :
+    (segment_000000_pm_final store) 118 = (bw_layernorm ((segment_000000_pm_final store) 102) ((segment_000000_pm_final store) 106) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).2.2 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 5) ++ [{ rank := 2, op := "OpName.BW_layernorm", ins := [102, 106, 3, 4], outs := [110, 114, 118] }] ++ (segment_000000_pm_nodes.drop 6) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 5) (segment_000000_pm_nodes.drop 6)
+    store (segment_000000_pm_final store) { rank := 2, op := "OpName.BW_layernorm", ins := [102, 106, 3, 4], outs := [110, 114, 118] }
+    102 106 3 4 118 (fun a b c d => (bw_layernorm a b c d).2.2)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_db_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 2 102 106 3 4 110 114 118 (by native_decide) (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_hPmdbeta3 (store : Store) :
+    (segment_000000_pm_final store) 119 = (bw_layernorm ((segment_000000_pm_final store) 103) ((segment_000000_pm_final store) 107) ((segment_000000_pm_final store) 3) ((segment_000000_pm_final store) 4)).2.2 := by
+  have hfinal : (segment_000000_pm_final store) = segment_000000_pm_nodes.foldl (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) store := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 7) ++ [{ rank := 3, op := "OpName.BW_layernorm", ins := [103, 107, 3, 4], outs := [111, 115, 119] }] ++ (segment_000000_pm_nodes.drop 8) := by native_decide
+  exact segment_000000_four_input_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+    segment_000000_pm_nodes (segment_000000_pm_nodes.take 7) (segment_000000_pm_nodes.drop 8)
+    store (segment_000000_pm_final store) { rank := 3, op := "OpName.BW_layernorm", ins := [103, 107, 3, 4], outs := [111, 115, 119] }
+    103 107 3 4 119 (fun a b c d => (bw_layernorm a b c d).2.2)
+    hnodes hfinal (by
+      intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
+      simp [applyNodeDistributed, applyNodeRingAttn]
+      exact applyNode_bw_layernorm_db_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 3 103 107 3 4 111 115 119 (by native_decide) (by native_decide)
+    ) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+
+private theorem segment_000000_wred_writer_0 (pmStore : Store) :
+    (segment_000000_pm_final pmStore) 600 = cross_dp_wred ([600, 601, 602, 603].map pmStore) := by
+  have hfinal : segment_000000_pm_final pmStore = segment_000000_pm_nodes.foldl
+      (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) pmStore := by
+    unfold segment_000000_pm_final
+    rfl
+  have hnodes : segment_000000_pm_nodes = (segment_000000_pm_nodes.take 6) ++ [{ rank := 0, op := "OpName.CROSS_DP_WRED", ins := [600, 601, 602, 603], outs := [600] }] ++ (segment_000000_pm_nodes.drop 7) := by native_decide
+  have hprefix : (segment_000000_pm_final pmStore) 600 =
+      cross_dp_wred ([600, 601, 602, 603].map ((segment_000000_pm_nodes.take 6).foldl
+        (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) pmStore)) := by
+    rw [hfinal, hnodes]
+    exact foldl_faithful_middle_writer BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm pmStore (segment_000000_pm_nodes.take 6) (segment_000000_pm_nodes.drop 7)
+      { rank := 0, op := "OpName.CROSS_DP_WRED", ins := [600, 601, 602, 603], outs := [600] } 600
+      (fun t => cross_dp_wred ([600, 601, 602, 603].map t)) (by
+        intro t
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
+          (hshuffle := by native_decide) (hunshuffle := by native_decide)
+          (hattn := by native_decide)]
+        unfold applyNodeDistributed
+        rw [if_neg (by native_decide), if_neg (by native_decide), if_neg (by native_decide), if_neg (by native_decide), if_neg (by native_decide), applyNodeRingAttn_eq_applyNode_of_not_ring]
+        · exact applyNode_cross_dp_wred_out BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm t 0 [600, 601, 602, 603] 600
+        · native_decide
+        · native_decide
+      ) (by native_decide) (by native_decide)
+  have hread0 : ((segment_000000_pm_nodes.take 6).foldl
+      (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) pmStore) 600 = pmStore 600 :=
+    foldl_applyNodeDistributedFaithful_at_not_written BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+      (segment_000000_pm_nodes.take 6) pmStore 600 (by native_decide) (by native_decide)
+  have hread1 : ((segment_000000_pm_nodes.take 6).foldl
+      (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) pmStore) 601 = pmStore 601 :=
+    foldl_applyNodeDistributedFaithful_at_not_written BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+      (segment_000000_pm_nodes.take 6) pmStore 601 (by native_decide) (by native_decide)
+  have hread2 : ((segment_000000_pm_nodes.take 6).foldl
+      (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) pmStore) 602 = pmStore 602 :=
+    foldl_applyNodeDistributedFaithful_at_not_written BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+      (segment_000000_pm_nodes.take 6) pmStore 602 (by native_decide) (by native_decide)
+  have hread3 : ((segment_000000_pm_nodes.take 6).foldl
+      (applyNodeDistributedFaithful BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm) pmStore) 603 = pmStore 603 :=
+    foldl_applyNodeDistributedFaithful_at_not_written BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm
+      (segment_000000_pm_nodes.take 6) pmStore 603 (by native_decide) (by native_decide)
+  simp only [List.map] at hprefix ⊢
+  rw [hread0, hread1, hread2, hread3] at hprefix
+  exact hprefix
+
+set_option maxHeartbeats 500000 in
+private theorem segment_000000_dx_semantic (smFinal pmFinal : Store)
+    (hg : ShardedRel (smFinal 1) [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] 1 [2, 12, 7] [2, 3, 7])
+    (hx : ShardedRel (smFinal 2) [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] 1 [2, 12, 7] [2, 3, 7])
+    (hgamma : ShardedRel (smFinal 3) [pmFinal 3] 0 [7] [7])
+    (hbeta : ShardedRel (smFinal 4) [pmFinal 4] 0 [7] [7])
+    (hSm : smFinal 10 = (bw_layernorm (smFinal 1) (smFinal 2) (smFinal 3) (smFinal 4)).1)
+    (hPm0 : pmFinal 108 = (bw_layernorm (pmFinal 100) (pmFinal 104) (pmFinal 3) (pmFinal 4)).1)
+    (hPm1 : pmFinal 109 = (bw_layernorm (pmFinal 101) (pmFinal 105) (pmFinal 3) (pmFinal 4)).1)
+    (hPm2 : pmFinal 110 = (bw_layernorm (pmFinal 102) (pmFinal 106) (pmFinal 3) (pmFinal 4)).1)
+    (hPm3 : pmFinal 111 = (bw_layernorm (pmFinal 103) (pmFinal 107) (pmFinal 3) (pmFinal 4)).1)
+    : fact_dx.Holds smFinal pmFinal := by
+  have hgValue : smFinal 1 = allGatherPrimDimN 1 4 0 [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] := by
+    simpa only [List.length_cons, List.length_nil] using hg.full_value
+  have hxValue : smFinal 2 = allGatherPrimDimN 1 4 0 [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] := by
+    simpa only [List.length_cons, List.length_nil] using hx.full_value
+  have hgammaShape : (pmFinal 3).shape = [7] := hgamma.shard_shapes _ (by simp)
+  have hgammaValue : smFinal 3 = pmFinal 3 := by
+    rw [hgamma.full_value]
+    simpa only [List.length_cons, List.length_nil] using
+      (allGatherPrimDimN_singleton_eq 0 (pmFinal 3) (by
+        rw [hgamma.shard_shapes _ (by simp)]; decide))
+  have hbetaShape : (pmFinal 4).shape = [7] := hbeta.shard_shapes _ (by simp)
+  have hbetaValue : smFinal 4 = pmFinal 4 := by
+    rw [hbeta.full_value]
+    simpa only [List.length_cons, List.length_nil] using
+      (allGatherPrimDimN_singleton_eq 0 (pmFinal 4) (by
+        rw [hbeta.shard_shapes _ (by simp)]; decide))
+  have hComm := TrainVerify.Denote.bw_layernorm_dx_allGatherPrimDimN_dim1_3d 4 2 3 7
+    [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] (pmFinal 3) (pmFinal 4)
+    (by decide) (by decide) (by decide) (by decide) rfl rfl hg.shard_shapes hx.shard_shapes
+  have hValue : smFinal 10 = allGatherPrimDimN 1 4 0 [pmFinal 108, pmFinal 109, pmFinal 110, pmFinal 111] := by
+    rw [hSm, hgValue, hxValue, hgammaValue, hbetaValue, hComm]
+    simp only [List.zipWith]
+    rw [← hPm0, ← hPm1, ← hPm2, ← hPm3]
+  have hShape0 : (pmFinal 108).shape = [2, 3, 7] := by
+    rw [hPm0, bw_layernorm_dx_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hx.shard_shapes _ (by simp)
+  have hShape1 : (pmFinal 109).shape = [2, 3, 7] := by
+    rw [hPm1, bw_layernorm_dx_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hx.shard_shapes _ (by simp)
+  have hShape2 : (pmFinal 110).shape = [2, 3, 7] := by
+    rw [hPm2, bw_layernorm_dx_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hx.shard_shapes _ (by simp)
+  have hShape3 : (pmFinal 111).shape = [2, 3, 7] := by
+    rw [hPm3, bw_layernorm_dx_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hx.shard_shapes _ (by simp)
+  have hFull : (smFinal 10).shape = [2, 12, 7] := by
+    rw [hSm, bw_layernorm_dx_shape _ _ _ _ 7 [12, 2] (by rw [hx.full_shape]; rfl)]
+    exact hx.full_shape
+  change ShardedRel (smFinal 10) [pmFinal 108, pmFinal 109, pmFinal 110, pmFinal 111] 1 [2, 12, 7] [2, 3, 7]
+  refine { full_value := ?_, full_shape := hFull, shards_nonempty := by simp, gather_dim_lt := by decide, shard_shapes := ?_, shape_contract := ?_ }
+  · simpa only [List.length_cons, List.length_nil] using hValue
+  · simp only [List.forall_mem_cons]
+    exact ⟨hShape0, hShape1, hShape2, hShape3, List.forall_mem_nil _⟩
+  · simp only [List.length_cons, List.length_nil]
+    decide
+
+set_option maxHeartbeats 500000 in
+private theorem segment_000000_dgamma_semantic (smFinal pmFinal : Store)
+    (hg : ShardedRel (smFinal 1) [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] 1 [2, 12, 7] [2, 3, 7])
+    (hx : ShardedRel (smFinal 2) [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] 1 [2, 12, 7] [2, 3, 7])
+    (hgamma : ShardedRel (smFinal 3) [pmFinal 3] 0 [7] [7])
+    (hbeta : ShardedRel (smFinal 4) [pmFinal 4] 0 [7] [7])
+    (hSm : smFinal 11 = (bw_layernorm (smFinal 1) (smFinal 2) (smFinal 3) (smFinal 4)).2.1)
+    (hPm0 : pmFinal 112 = (bw_layernorm (pmFinal 100) (pmFinal 104) (pmFinal 3) (pmFinal 4)).2.1)
+    (hPm1 : pmFinal 113 = (bw_layernorm (pmFinal 101) (pmFinal 105) (pmFinal 3) (pmFinal 4)).2.1)
+    (hPm2 : pmFinal 114 = (bw_layernorm (pmFinal 102) (pmFinal 106) (pmFinal 3) (pmFinal 4)).2.1)
+    (hPm3 : pmFinal 115 = (bw_layernorm (pmFinal 103) (pmFinal 107) (pmFinal 3) (pmFinal 4)).2.1)
+    : fact_dgamma.Holds smFinal pmFinal := by
+  have hgValue : smFinal 1 = allGatherPrimDimN 1 4 0 [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] := by
+    simpa only [List.length_cons, List.length_nil] using hg.full_value
+  have hxValue : smFinal 2 = allGatherPrimDimN 1 4 0 [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] := by
+    simpa only [List.length_cons, List.length_nil] using hx.full_value
+  have hgammaShape : (pmFinal 3).shape = [7] := hgamma.shard_shapes _ (by simp)
+  have hgammaValue : smFinal 3 = pmFinal 3 := by
+    rw [hgamma.full_value]
+    simpa only [List.length_cons, List.length_nil] using
+      (allGatherPrimDimN_singleton_eq 0 (pmFinal 3) (by
+        rw [hgamma.shard_shapes _ (by simp)]; decide))
+  have hbetaShape : (pmFinal 4).shape = [7] := hbeta.shard_shapes _ (by simp)
+  have hbetaValue : smFinal 4 = pmFinal 4 := by
+    rw [hbeta.full_value]
+    simpa only [List.length_cons, List.length_nil] using
+      (allGatherPrimDimN_singleton_eq 0 (pmFinal 4) (by
+        rw [hbeta.shard_shapes _ (by simp)]; decide))
+  have hComm := TrainVerify.Denote.bw_layernorm_dgamma_sequence_reduction_rank3 4 2 3 7
+    [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] (pmFinal 3) (pmFinal 4)
+    (by decide) (by decide) (by decide) (by decide) rfl rfl hg.shard_shapes hx.shard_shapes
+    hgammaShape hbetaShape
+  have hValue : smFinal 11 = tensorSum [pmFinal 112, pmFinal 113, pmFinal 114, pmFinal 115] := by
+    rw [hSm, hgValue, hxValue, hgammaValue, hbetaValue, hComm]
+    simp only [List.zipWith]
+    rw [← hPm0, ← hPm1, ← hPm2, ← hPm3]
+  have hShape0 : (pmFinal 112).shape = [7] := by
+    rw [hPm0, bw_layernorm_dw_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hgammaShape
+  have hShape1 : (pmFinal 113).shape = [7] := by
+    rw [hPm1, bw_layernorm_dw_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hgammaShape
+  have hShape2 : (pmFinal 114).shape = [7] := by
+    rw [hPm2, bw_layernorm_dw_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hgammaShape
+  have hShape3 : (pmFinal 115).shape = [7] := by
+    rw [hPm3, bw_layernorm_dw_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hgammaShape
+  have hFull : (smFinal 11).shape = [7] := by
+    rw [hSm, bw_layernorm_dw_shape _ _ _ _ 7 [12, 2] (by rw [hx.full_shape]; rfl)]
+    exact hgamma.full_shape
+  have hReduce : smFinal 11 = allReducePrim [pmFinal 112, pmFinal 113, pmFinal 114, pmFinal 115].length 0 [pmFinal 112, pmFinal 113, pmFinal 114, pmFinal 115] := by
+    rw [hValue]
+    rfl
+  change ReductionRel (smFinal 11) [pmFinal 112, pmFinal 113, pmFinal 114, pmFinal 115] [7]
+  refine { full_value := hReduce, full_shape := hFull, contributions_nonempty := by simp, contribution_shapes := ?_, reduced_shape := ?_ }
+  · simp only [List.forall_mem_cons]
+    exact ⟨hShape0, hShape1, hShape2, hShape3, List.forall_mem_nil _⟩
+  · rw [← hReduce]
+    exact hFull
+
+set_option maxHeartbeats 500000 in
+private theorem segment_000000_dbeta_semantic (smFinal pmFinal : Store)
+    (hg : ShardedRel (smFinal 1) [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] 1 [2, 12, 7] [2, 3, 7])
+    (hx : ShardedRel (smFinal 2) [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] 1 [2, 12, 7] [2, 3, 7])
+    (hgamma : ShardedRel (smFinal 3) [pmFinal 3] 0 [7] [7])
+    (hbeta : ShardedRel (smFinal 4) [pmFinal 4] 0 [7] [7])
+    (hSm : smFinal 12 = (bw_layernorm (smFinal 1) (smFinal 2) (smFinal 3) (smFinal 4)).2.2)
+    (hPm0 : pmFinal 116 = (bw_layernorm (pmFinal 100) (pmFinal 104) (pmFinal 3) (pmFinal 4)).2.2)
+    (hPm1 : pmFinal 117 = (bw_layernorm (pmFinal 101) (pmFinal 105) (pmFinal 3) (pmFinal 4)).2.2)
+    (hPm2 : pmFinal 118 = (bw_layernorm (pmFinal 102) (pmFinal 106) (pmFinal 3) (pmFinal 4)).2.2)
+    (hPm3 : pmFinal 119 = (bw_layernorm (pmFinal 103) (pmFinal 107) (pmFinal 3) (pmFinal 4)).2.2)
+    : fact_dbeta.Holds smFinal pmFinal := by
+  have hgValue : smFinal 1 = allGatherPrimDimN 1 4 0 [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] := by
+    simpa only [List.length_cons, List.length_nil] using hg.full_value
+  have hxValue : smFinal 2 = allGatherPrimDimN 1 4 0 [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] := by
+    simpa only [List.length_cons, List.length_nil] using hx.full_value
+  have hgammaShape : (pmFinal 3).shape = [7] := hgamma.shard_shapes _ (by simp)
+  have hgammaValue : smFinal 3 = pmFinal 3 := by
+    rw [hgamma.full_value]
+    simpa only [List.length_cons, List.length_nil] using
+      (allGatherPrimDimN_singleton_eq 0 (pmFinal 3) (by
+        rw [hgamma.shard_shapes _ (by simp)]; decide))
+  have hbetaShape : (pmFinal 4).shape = [7] := hbeta.shard_shapes _ (by simp)
+  have hbetaValue : smFinal 4 = pmFinal 4 := by
+    rw [hbeta.full_value]
+    simpa only [List.length_cons, List.length_nil] using
+      (allGatherPrimDimN_singleton_eq 0 (pmFinal 4) (by
+        rw [hbeta.shard_shapes _ (by simp)]; decide))
+  have hComm := TrainVerify.Denote.bw_layernorm_dbeta_sequence_reduction_rank3 4 2 3 7
+    [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] (pmFinal 3) (pmFinal 4)
+    (by decide) (by decide) (by decide) (by decide) rfl rfl hg.shard_shapes hx.shard_shapes
+    hgammaShape hbetaShape
+  have hValue : smFinal 12 = tensorSum [pmFinal 116, pmFinal 117, pmFinal 118, pmFinal 119] := by
+    rw [hSm, hgValue, hxValue, hgammaValue, hbetaValue, hComm]
+    simp only [List.zipWith]
+    rw [← hPm0, ← hPm1, ← hPm2, ← hPm3]
+  have hShape0 : (pmFinal 116).shape = [7] := by
+    rw [hPm0, bw_layernorm_db_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hbetaShape
+  have hShape1 : (pmFinal 117).shape = [7] := by
+    rw [hPm1, bw_layernorm_db_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hbetaShape
+  have hShape2 : (pmFinal 118).shape = [7] := by
+    rw [hPm2, bw_layernorm_db_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hbetaShape
+  have hShape3 : (pmFinal 119).shape = [7] := by
+    rw [hPm3, bw_layernorm_db_shape _ _ _ _ 7 [3, 2] (by rw [hx.shard_shapes _ (by simp)]; rfl)]
+    exact hbetaShape
+  have hFull : (smFinal 12).shape = [7] := by
+    rw [hSm, bw_layernorm_db_shape _ _ _ _ 7 [12, 2] (by rw [hx.full_shape]; rfl)]
+    exact hbeta.full_shape
+  have hReduce : smFinal 12 = allReducePrim [pmFinal 116, pmFinal 117, pmFinal 118, pmFinal 119].length 0 [pmFinal 116, pmFinal 117, pmFinal 118, pmFinal 119] := by
+    rw [hValue]
+    rfl
+  change ReductionRel (smFinal 12) [pmFinal 116, pmFinal 117, pmFinal 118, pmFinal 119] [7]
+  refine { full_value := hReduce, full_shape := hFull, contributions_nonempty := by simp, contribution_shapes := ?_, reduced_shape := ?_ }
+  · simp only [List.forall_mem_cons]
+    exact ⟨hShape0, hShape1, hShape2, hShape3, List.forall_mem_nil _⟩
+  · rw [← hReduce]
+    exact hFull
+
+set_option maxHeartbeats 500000 in
+private theorem segment_000000_sound (smStore pmStore : Store)
+    (hstate : state_before.Holds smStore pmStore) :
+    state_after.Holds (segment_000000_sm_final smStore) (segment_000000_pm_final pmStore) := by
+  let smFinal := segment_000000_sm_final smStore
+  let pmFinal := segment_000000_pm_final pmStore
+  have hFrameInitial : segment_000000_frameable.Holds smStore pmStore := by
+    intro fact hfact
+    exact hstate fact ((show segment_000000_frameable.facts ⊆ state_before.facts by native_decide) hfact)
+  have hframe : segment_000000_frameable.Holds smFinal pmFinal := by
+    unfold smFinal pmFinal segment_000000_sm_final segment_000000_pm_final
+    apply RelationState.Holds.fold_frame segment_000000_sm_nodes segment_000000_pm_nodes smStore pmStore hFrameInitial <;> native_decide
+  have hg : fact_g.Holds smFinal pmFinal := hframe _ (by native_decide)
+  change ShardedRel (smFinal 1) [pmFinal 100, pmFinal 101, pmFinal 102, pmFinal 103] 1 [2, 12, 7] [2, 3, 7] at hg
+  have hx : fact_x.Holds smFinal pmFinal := hframe _ (by native_decide)
+  change ShardedRel (smFinal 2) [pmFinal 104, pmFinal 105, pmFinal 106, pmFinal 107] 1 [2, 12, 7] [2, 3, 7] at hx
+  have hgamma : fact_gamma.Holds smFinal pmFinal := hframe _ (by native_decide)
+  change ShardedRel (smFinal 3) [pmFinal 3] 0 [7] [7] at hgamma
+  have hbeta : fact_beta.Holds smFinal pmFinal := hframe _ (by native_decide)
+  change ShardedRel (smFinal 4) [pmFinal 4] 0 [7] [7] at hbeta
+  have hout0 := segment_000000_dx_semantic smFinal pmFinal hg hx hgamma hbeta
+    (segment_000000_hSmdx smStore) (segment_000000_hPmdx0 pmStore) (segment_000000_hPmdx1 pmStore) (segment_000000_hPmdx2 pmStore) (segment_000000_hPmdx3 pmStore)
+  have hout1 := segment_000000_dgamma_semantic smFinal pmFinal hg hx hgamma hbeta
+    (segment_000000_hSmdgamma smStore) (segment_000000_hPmdgamma0 pmStore) (segment_000000_hPmdgamma1 pmStore) (segment_000000_hPmdgamma2 pmStore) (segment_000000_hPmdgamma3 pmStore)
+  have hout2 := segment_000000_dbeta_semantic smFinal pmFinal hg hx hgamma hbeta
+    (segment_000000_hSmdbeta smStore) (segment_000000_hPmdbeta0 pmStore) (segment_000000_hPmdbeta1 pmStore) (segment_000000_hPmdbeta2 pmStore) (segment_000000_hPmdbeta3 pmStore)
+  have hinWred0 : fact_w.Holds smStore pmStore :=
+    hstate fact_w (by native_decide)
+  change ReductionRel (smStore 50) ([600, 601, 602, 603].map pmStore) [5, 7] at hinWred0
+  have hWredWriter0 := segment_000000_wred_writer_0 pmStore
+  change pmFinal 600 = cross_dp_wred ([600, 601, 602, 603].map pmStore) at hWredWriter0
+  have hWredReduce0 : pmFinal 600 =
+      allReducePrim ([600, 601, 602, 603].map pmStore).length 0 ([600, 601, 602, 603].map pmStore) := by
+    rw [hWredWriter0]
+    exact cross_dp_wred_eq_allReducePrim _ (by simp)
+  have hSmRead0 : smFinal 50 = smStore 50 := by
+    unfold smFinal segment_000000_sm_final
+    exact foldl_applyNodeDistributedFaithful_at_not_written BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm
+      segment_000000_sm_nodes smStore 50 (by native_decide) (by native_decide)
+  have hJoined0 : smFinal 50 = pmFinal 600 := by
+    rw [hSmRead0]
+    exact hinWred0.full_value.trans hWredReduce0.symm
+  have houtWred0 : fact_j.Holds smFinal pmFinal := by
+    change smFinal 50 = pmFinal 600 ∧ _ ∧ _
+    refine ⟨hJoined0, ?_, ?_⟩
+    · rw [hSmRead0]
+      exact hinWred0.full_shape
+    · rw [← hJoined0, hSmRead0]
+      exact hinWred0.full_shape
+  intro fact hfact
+  have covered : fact ∈ [fact_dx, fact_dgamma, fact_dbeta, fact_j] ++ segment_000000_frameable.facts :=
+    (show state_after.facts ⊆ [fact_dx, fact_dgamma, fact_dbeta, fact_j] ++ segment_000000_frameable.facts by native_decide) hfact
+  simp only [List.mem_append] at covered
+  rcases covered with fresh | old
+  · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh
+    rcases fresh with rfl | rfl | rfl | rfl
+    · exact hout0
+    · exact hout1
+    · exact hout2
+    · exact houtWred0
+  · exact hframe fact old
+
+set_option maxRecDepth 8192 in
+private def segment_000000 : ClosedDepSegmentCertificate BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.sm BWLayernormWredGraphK4B2S3D7DxDgammaDbeta.pm state_before state_after where
+  smNodes := segment_000000_sm_nodes
+  pmNodes := segment_000000_pm_nodes
+  sound := by
+    intro smStore pmStore hstate
+    have h := segment_000000_sound smStore pmStore hstate
+    unfold segment_000000_sm_final segment_000000_pm_final at h
+    exact h
+
+#print axioms segment_000000_sound
+#print axioms segment_000000
+end
+end TrainVerify.Denote.GeneratedBWLayernormWredK4B2S3D7DxDgammaDbeta
