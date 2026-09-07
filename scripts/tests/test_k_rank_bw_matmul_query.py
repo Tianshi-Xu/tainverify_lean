@@ -220,3 +220,17 @@ def witness_source(k=3,b=2,h=3,q=5,n=7,m=11,projections=(".1",".2"),view=False):
     ir,rel=renderer_fixture(k,b,h,q,n,m,projections,view)
     return fixture_source(ir,rel,render_closed_segment,pm_num_ranks=k).replace("SyntheticBWLayernorm","SyntheticBWMatmulQuery").replace("import denote.KRankBWLayernorm","import denote.KRankBWMatmulQuery\nimport denote.KRankMatmulQueryAxis")
 
+
+
+def combined_witness_source():
+    cases=({"k":1,"projections":(".1",)}, {"k":2,"projections":(".2",)},
+           {"k":3}, {"k":4,"b":1,"h":4,"q":4,"n":16,"m":16}, {"k":5,"view":True})
+    sources=[witness_source(**kw).replace("SyntheticBWMatmulQuery",f"MatmulQueryCase{i}") for i,kw in enumerate(cases)]
+    imports=list(dict.fromkeys(line for src in sources for line in src.splitlines() if line.startswith("import ")))
+    return "\n".join(imports)+"\n"+"\n".join("\n".join(line for line in src.splitlines() if not line.startswith("import ")) for src in sources)+"\n"
+
+
+def test_matmul_query_checked_in_witness_matches_generator():
+    from pathlib import Path
+    path=Path(__file__).resolve().parents[2]/"trainverify/denote/GeneratedBWMatmulQueryWitness.lean"
+    assert path.read_text()==combined_witness_source()

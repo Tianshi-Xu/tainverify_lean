@@ -182,7 +182,11 @@ def render_closed_bw_matmul_query_segment(ir, relation, segment_id: str) -> str:
         helpers[slot] = hs, hp
     if vt:
         hvs = writer("hViewSm", ir.sm_graph_ref, "smStore", smf, smn, smframe, vt.sm_node_indices[0]-ss, vs)
-        hvp = writer("hViewPm", ir.pm_graph_ref, "pmStore", pmf, pmn, pmframe, vt.pm_node_indices[0]-ps, vp)
+        # Frame-only copies were checked against the same exact view above.
+        # Extract the last identical writer, not an overwritten earlier copy.
+        view_index = max(i for i in range(ps, pe) if ir.pm_nodes[i].outs == vp.outs)
+        hvp = writer("hViewPm", ir.pm_graph_ref, "pmStore", pmf, pmn, pmframe,
+                     view_index-ps, ir.pm_nodes[view_index])
     transpose_shape = f"{segment_id}_transpose_shape"
     lines.extend([f"private theorem {transpose_shape} (t : Tensor) (a b c d : Nat)",
         "    (ht : t.shape = [a,b,c,d]) : (transpose2d t).shape = [a,b,d,c] := by",
@@ -246,8 +250,9 @@ def render_closed_bw_matmul_query_segment(ir, relation, segment_id: str) -> str:
                 "    simp only [List.forall_mem_cons]",
                 "    exact ⟨" + ", ".join(f"hShape{r}" for r in range(k)) + ", List.forall_mem_nil _⟩",
                 f"  have {proof} : {out.fact_id}.Holds smFinal pmFinal := by",
-                "    exact { full_value := hRV, full_shape := hFull, contributions_nonempty := List.cons_ne_nil _ _,",
-                "      contribution_shapes := hShapes, reduced_shape := by rw [←hRV]; exact hFull }"])
+                "    exact {", "      full_value := hRV", "      full_shape := hFull",
+                "      contributions_nonempty := List.cons_ne_nil _ _",
+                "      contribution_shapes := hShapes", "      reduced_shape := by simp only [List.map]; rw [←hRV]; exact hFull }"])
     if vt:
         lines.extend([f"  have hvi : {vi.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
             f"  have hVS := {hvs} smStore", f"  have hVP := {hvp} pmStore",
@@ -271,5 +276,5 @@ def render_closed_bw_matmul_query_segment(ir, relation, segment_id: str) -> str:
     lines.extend(["  · exact hframe fact old", "",
         f"private def {segment_id} : ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
         f"  smNodes := {smn}", f"  pmNodes := {pmn}",
-        f"  sound := by intro smStore pmStore h; exact {segment_id}_sound smStore pmStore h", ""])
+        f"  sound := by intro smStore pmStore h; have h' := {segment_id}_sound smStore pmStore h; unfold {smf} {pmf} at h'; exact h'", ""])
     return "\n".join(lines)
