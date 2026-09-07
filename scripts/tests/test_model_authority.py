@@ -1253,7 +1253,8 @@ def test_shared_relation_dag_content_addresses_facts_certificates_and_transition
     )
     assert "Chain.lean" in bundle
     assert list(bundle)[-1] == "Public.lean"
-    assert list(bundle).index("Chain.lean") < list(bundle).index("Target2Public.lean")
+    assert list(bundle).index("Chain.lean") < list(bundle).index("Public.lean")
+    assert not any(path.startswith("Target") for path in bundle)
     public = bundle["Public.lean"].decode("utf-8")
     assert public.count("private theorem SharedProjection_initial_state") == 1
     assert public.count("theorem prove_goal_") == 3

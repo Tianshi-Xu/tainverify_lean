@@ -11498,6 +11498,81 @@ def _compose_multi_graph_shared_bundle(
     return bundle
 
 
+def _shared_public_initial_contract(model, ir: GoalIR, source_cache: dict) -> tuple:
+    """Authenticate the exact Lean premises; Python InitGoal unions are not proofs.
+
+    The current external renderer names graph-ref + InitEnv. Re-read the public
+    authority because GoalIR does not retain the actual shape-environment refs.
+    Distinct/local contracts need an explicit equivalence adapter, not a fallback
+    target bundle or a stronger exported proposition.
+    """
+    import os
+    try:
+        from . import parser as p
+    except ImportError:
+        import parser as p
+
+    def read(path):
+        if path not in source_cache:
+            with open(path, encoding="utf-8") as handle:
+                source_cache[path] = handle.read()
+        return source_cache[path]
+
+    try:
+        path = os.path.join(model.root, "trainverify", *ir.public_statement_module.split(".")) + ".lean"
+        text = read(path)
+        name = ir.public_statement_ref.rsplit(".", 1)[-1]
+        block = p.extract_def_block(text, name)
+        if hashlib.sha256(block.encode("utf-8")).hexdigest() != model.targets[ir.n].public_statement_digest:
+            raise ValueError("public statement source digest mismatch")
+
+        def qualify(ref):
+            if "." in ref:
+                return ref
+            try:
+                return p._qualified_definition_name(ref, text)
+            except ValueError:
+                generated = read(os.path.join(model.root, p.GEN_DIR, p.GEN_FILE))
+                return p._qualified_definition_name(ref, text, generated)
+
+        compact = re.search(
+            r"CoarseLineageHoldsWithInit(?:DistributedFaithful(?:WithContract)?)?"
+            r"\s+(\S+)\s+(\S+)\s+\S+\s+(\S+)\s+(\S+)\s+(\S+)", block,
+        )
+        if compact is not None:
+            refs = tuple(qualify(ref) for ref in compact.groups())
+        else:
+            scope = p._public_scope_from_statement(text, ir.public_statement_module, name)
+            envs = []
+            for store in ("initSM", "initPM"):
+                matches = set(re.findall(rf"StoreShapesHold\s+{store}\s+([A-Za-z0-9_.]+)", block))
+                if len(matches) != 1:
+                    raise ValueError(f"unsupported {store} environment authority")
+                envs.append(qualify(matches.pop()))
+            refs = (qualify(scope[2]), qualify(scope[3]), *envs,
+                    qualify(p.parse_full_init_goals_name(text, ir.n)))
+        expected = (ir.sm_graph_ref, ir.pm_graph_ref, ir.sm_graph_ref + "InitEnv",
+                    ir.pm_graph_ref + "InitEnv", ir.init_goals_ref)
+        if refs != expected:
+            raise ValueError(f"graph/env/InitGoals mismatch: source={refs!r}, renderer={expected!r}")
+        contract_ref = p.parse_public_statement_contract_ref(text, ir.n)
+        if contract_ref != ir.public_statement_contract_ref:
+            raise ValueError("optional contract source reference mismatch")
+        return (
+            refs, contract_ref, ir.public_statement_uses_contract_wrapper,
+            ir.sm_num_ranks, ir.pm_num_ranks, ir.sm_nodes, ir.pm_nodes,
+            ir.sm_replica_groups, ir.pm_replica_groups, ir.sm_shapes, ir.pm_shapes,
+            ir.full_init_goal_ids, ir.init_lineages,
+            ir.sm_input_value_classes, ir.pm_input_value_classes,
+            ir.sm_input_value_classes_ref, ir.pm_input_value_classes_ref,
+            ir.packed_cu_contracts, ir.tensor_value_bound_contracts,
+            _external_contract_arguments(ir, include_optional_contracts=bool(
+                ir.public_statement_uses_contract_wrapper or contract_ref)),
+        )
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"target {ir.n} shared initial contract mismatch or unsupported: {exc}") from exc
+
+
 def compose_shared_closed_bundle(
     model,
     relation_dag,
@@ -11510,10 +11585,8 @@ def compose_shared_closed_bundle(
     """Render the global content-addressed chain and all exact projections."""
     try:
         from .model_authority import materialize_target_ir
-        from .model_compiler import materialize_target_relation_plan
     except ImportError:
         from trainverify.bridge_emitter.model_authority import materialize_target_ir
-        from trainverify.bridge_emitter.model_compiler import materialize_target_relation_plan
 
     _validate_closed_namespace(namespace)
     if any(
@@ -11582,40 +11655,49 @@ def compose_shared_closed_bundle(
         relation_dag.projections.values(),
         key=lambda item: (len(item.transition_keys), -item.goal_id),
     )
-    merged_init_lineages = {}
-    full_init_goal_ids = set()
-    for query in model.targets.values():
-        full_init_goal_ids.update(query.full_init_goal_ids)
-        for tid, lineage in query.init_lineages.items():
-            previous = merged_init_lineages.get(tid)
-            if previous is not None and previous != lineage:
-                raise ValueError(f"conflicting shared-bundle InitGoal lineage for tid {tid}")
-            merged_init_lineages[tid] = lineage
-    representative_ir = replace(
-        materialize_target_ir(model, representative.goal_id),
-        init_lineages=merged_init_lineages,
-        full_init_goal_ids=tuple(sorted(full_init_goal_ids)),
-    )
+    # Only the default single-graph route shares initial authority. Specialized
+    # multi-graph/shared-prefix branches above keep their existing contracts.
+    if tuple(relation_dag.projections) != tuple(model.targets):
+        raise ValueError("shared public projections do not exactly cover model targets")
+    target_irs = {
+        goal_id: materialize_target_ir(model, goal_id) for goal_id in model.targets
+    }
+    representative_ir = target_irs[representative.goal_id]
+    source_cache = {}
+    initial_contract = _shared_public_initial_contract(model, representative_ir, source_cache)
+    for goal_id, ir in target_irs.items():
+        if _shared_public_initial_contract(model, ir, source_cache) != initial_contract:
+            raise ValueError(
+                f"target {goal_id} shared initial contract mismatch with target "
+                f"{representative.goal_id}; no exact contract equivalence adapter"
+            )
     relation = relation_dag.global_relation
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.segments:
+        raise ValueError("shared closed bundle requires a nonempty global chain")
+    final_state = next(
+        (state for state in chain.states if state.state_id == chain.segments[-1].post_state_id), None
+    )
+    for goal_id, projection in relation_dag.projections.items():
+        target = relation_dag.facts.get(projection.terminal_fact_key)
+        records = [fact for fact in chain.relation_facts if fact.source == target]
+        if (len(records) != 1 or final_state is None
+                or records[0].fact_id not in final_state.fact_ids):
+            raise ValueError(f"target {goal_id} projection terminal is not retained in global final state")
     bundle = compose_closed_dependent_bundle(
         representative_ir,
         relation,
         namespace,
         module_prefix,
         max_source_bytes=max_source_bytes,
+        include_public=False,
     )
-    # Replace the representative-only Public module after all projected modules
-    # are inserted so terminal publication order remains Public/Main.
-    bundle.pop("Public.lean", None)
     public_parts = [
         render_closed_external_initial_state(
             representative_ir, relation, namespace
         ).rstrip()
     ]
     needs_plain_bridge = False
-    representative_goal_id = representative.goal_id
-    target_public_imports = []
-    target_aliases = []
     expected_segments = len(relation.dependent_chain_plan.segments)
     for goal_id, projection in relation_dag.projections.items():
         ir = materialize_target_ir(model, goal_id)
@@ -11623,43 +11705,15 @@ def compose_shared_closed_bundle(
             ir.public_statement_uses_faithful_evaluator
         )
         target = relation_dag.facts[projection.terminal_fact_key]
-        if goal_id == representative_goal_id:
-            public_parts.append(render_closed_public_theorem(
-                ir,
-                relation,
-                namespace,
-                explicit_target_source=target,
-                declaration_prefix=f"{namespace}_goal_{goal_id}",
-                include_external=False,
-            ).rstrip())
-            continue
-        projected_relation = materialize_target_relation_plan(
-            model, relation_dag.proof_dag, relation_dag, goal_id
-        )
-        local_namespace = f"{namespace}Target{goal_id}"
-        local_prefix = f"{module_prefix}.Target{goal_id}"
-        local = compose_closed_dependent_bundle(
+        public_parts.append(render_closed_public_theorem(
             ir,
-            projected_relation,
-            local_namespace,
-            local_prefix,
-            max_source_bytes=max_source_bytes,
-        )
-        expected_segments += len(projected_relation.dependent_chain_plan.segments)
-        for relative, payload in local.items():
-            flattened = f"Target{goal_id}{relative}"
-            source = payload.decode("utf-8").replace(
-                local_prefix + ".", local_prefix
-            )
-            bundle[flattened] = source.encode("utf-8")
-        target_public_imports.append(f"{module_prefix}.Target{goal_id}Public")
-        target_aliases.extend([
-            f"theorem prove_goal_{goal_id}_closed : {ir.public_statement_ref} := by",
-            f"  exact TrainVerify.Denote.{local_namespace}.prove_goal_{goal_id}_closed",
-            "",
-        ])
-    public_parts.extend(target_aliases)
-    imports = [f"{module_prefix}.Chain", *target_public_imports]
+            relation,
+            namespace,
+            explicit_target_source=target,
+            declaration_prefix=f"{namespace}_goal_{goal_id}",
+            include_external=False,
+        ).rstrip())
+    imports = [f"{module_prefix}.Chain"]
     imports.extend(
         query.public_statement_module for query in model.targets.values()
         if query.public_statement_module not in imports
