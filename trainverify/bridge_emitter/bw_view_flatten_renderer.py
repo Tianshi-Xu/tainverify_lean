@@ -15,10 +15,14 @@ def render_closed_bw_view_flatten_segment(ir, relation, segment_id):
         raise ValueError("BW_view flatten requires one atomic transition")
     tr={t.transition_id:t for t in relation.transition_specs}[seg.transition_ids[0]]
     axes={"bw-view-flatten-sequence-sharded-k-rank":1,"bw-view-flatten-head-sharded-k-rank":2,
-          "fw-view-flatten-sequence-sharded-k-rank":1,"fw-view-flatten-head-sharded-k-rank":2}
+          "fw-view-flatten-sequence-sharded-k-rank":1,"fw-view-flatten-head-sharded-k-rank":2,
+          "fw-view-unflatten-sequence-sharded-k-rank":1,"fw-view-unflatten-head-sharded-k-rank":2,
+          "bw-view-unflatten-sequence-sharded-k-rank":1,"bw-view-unflatten-head-sharded-k-rank":2}
     if tr.rule_id not in axes:
         raise ValueError("BW_view flatten rule is unsupported")
     dim=axes[tr.rule_id]
+    inverse=tr.rule_id in {"fw-view-unflatten-sequence-sharded-k-rank","fw-view-unflatten-head-sharded-k-rank",
+                           "bw-view-unflatten-sequence-sharded-k-rank","bw-view-unflatten-head-sharded-k-rank"}
     spec=get_closed_rule_spec(tr.rule_id)
     arity=2 if spec.op=="BW_view" else 1
     c=_select_exact_typed_certificate(relation,tr,spec.rule_id,spec.lean_theorems[0],spec.certificate_type,
@@ -28,14 +32,19 @@ def render_closed_bw_view_flatten_segment(ir, relation, segment_id):
     if any(r.source.layout!="sharded" or r.source.gather_dim!=dim for r in (x,y)):
         raise ValueError("view source/record axis mismatch")
     k=c.rank_count
-    if k<1 or len(x.shard_shape)!=4:
+    shape4=y.shard_shape if inverse else x.shard_shape
+    if k<1 or len(shape4)!=4:
         raise ValueError("BW_view flatten rank/shape domain mismatch")
-    b,s,n,d=x.shard_shape
+    b,s,n,d=shape4
     full_in=(b,s*k,n,d) if dim==1 else (b,s,n*k,d)
     full_out=(b,s*k,n*d) if dim==1 else (b,s,n*k*d)
+    shard_in=(b,s,n,d);shard_out=(b,s,n*d)
+    if inverse:
+        full_in,full_out=full_out,full_in
+        shard_in,shard_out=shard_out,shard_in
     if (any(v<=0 for v in (b,s,n,d)) or x.kind!="sharded" or y.kind!="sharded"
             or x.gather_dim!=dim or y.gather_dim!=dim
-            or x.full_shape!=full_in or y.full_shape!=full_out or y.shard_shape!=(b,s,n*d)
+            or x.full_shape!=full_in or y.full_shape!=full_out or x.shard_shape!=shard_in or y.shard_shape!=shard_out
             or len(x.pm_tids)!=k or len(y.pm_tids)!=k):
         raise ValueError("BW_view flatten exact shape/axis authority mismatch")
     states={st.state_id:st for st in chain.states}

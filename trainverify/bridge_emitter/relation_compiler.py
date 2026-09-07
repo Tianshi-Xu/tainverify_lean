@@ -7327,25 +7327,32 @@ def advance_k_rank_bw_view_flatten_frontiers(plan, frontiers, layouts):
         arity=2 if sm.op=="BW_view" else 1
         prefix="bw" if sm.op=="BW_view" else "fw"
         # Leave other valid view families to their own relation rule.
-        if (len(sm.input_shapes)!=arity or len(sm.input_shapes[0])!=4 or len(sm.output_shape)!=3):
+        if (len(sm.input_shapes)!=arity or (len(sm.input_shapes[0]),len(sm.output_shape)) not in ((4,3),(3,4))):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
+        inverse=len(sm.output_shape)==4
         if (sm.side!="sm" or sm.rank!=0 or tuple(p.rank for p in pms)!=tuple(range(k))
                 or any(p.side!="pm" for p in pms)
                 or any(len(p.input_shapes)!=arity or len(p.input_bindings)!=arity for p in steps)
-                or any(len(p.input_shapes[0])!=4 for p in pms)):
+                or any(len(p.input_shapes[0])!=(3 if inverse else 4) or len(p.output_shape)!=(4 if inverse else 3) for p in pms)):
             raise RelationCompositionError("BW_view flatten writer/input authority mismatch")
-        b,s,n,d=tuple(pms[0].input_shapes[0])
-        if tuple(sm.input_shapes[0])==(b,s*k,n,d):
+        b,s,n,d=tuple(pms[0].output_shape if inverse else pms[0].input_shapes[0])
+        full4=tuple(sm.output_shape if inverse else sm.input_shapes[0])
+        if full4==(b,s*k,n,d):
             dim=1;full=(b,s*k,n,d);full_out=(b,s*k,n*d)
             rule=f"{prefix}-view-flatten-sequence-sharded-k-rank"
             theorem="TrainVerify.Denote.fw_view_allGatherPrimDimN_dim1_rank4_to_rank3"
-        elif tuple(sm.input_shapes[0])==(b,s,n*k,d):
+        elif full4==(b,s,n*k,d):
             dim=2;full=(b,s,n*k,d);full_out=(b,s,n*k*d)
             rule=f"{prefix}-view-flatten-head-sharded-k-rank"
             theorem="TrainVerify.Denote.fw_view_allGatherPrimDimN_dim2_rank4_to_rank3"
         else:
             raise RelationCompositionError("BW_view flatten input gather shape mismatch")
         shard=(b,s,n,d);shard_out=(b,s,n*d)
+        if inverse:
+            full,full_out=full_out,full
+            shard,shard_out=shard_out,shard
+            rule=f"{prefix}-view-unflatten-{'sequence' if dim==1 else 'head'}-sharded-k-rank"
+            theorem=f"TrainVerify.Denote.fw_view_unflatten_allGather_dim{dim}_rank3"
         if (any(v<=0 for v in (b,s,n,d))
                 or tuple(sm.input_shapes[0])!=full or tuple(sm.output_shape)!=full_out
                 or any(tuple(p.input_shapes[0])!=shard or tuple(p.output_shape)!=shard_out for p in pms)
@@ -10718,6 +10725,30 @@ _register_closed_rule_specs(
         ("TrainVerify.Denote.tensorSum_allGather_dim_K",),
         "BW_multiref", "bw_multiref_sum_renderer:render_closed_k_rank_bw_multiref_sum_segment",
         ("denote.KRankBWMultiref",),
+    ),
+    ClosedRuleSpec(
+        "fw-view-unflatten-sequence-sharded-k-rank", KRankBWViewFlattenCertificate,
+        ("TrainVerify.Denote.fw_view_unflatten_allGather_dim1_rank3",),
+        "FW_view", "bw_view_flatten_renderer:render_closed_bw_view_flatten_segment",
+        ("denote.KRankViewUnflatten",),
+    ),
+    ClosedRuleSpec(
+        "fw-view-unflatten-head-sharded-k-rank", KRankBWViewFlattenCertificate,
+        ("TrainVerify.Denote.fw_view_unflatten_allGather_dim2_rank3",),
+        "FW_view", "bw_view_flatten_renderer:render_closed_bw_view_flatten_segment",
+        ("denote.KRankViewUnflatten",),
+    ),
+    ClosedRuleSpec(
+        "bw-view-unflatten-sequence-sharded-k-rank", KRankBWViewFlattenCertificate,
+        ("TrainVerify.Denote.fw_view_unflatten_allGather_dim1_rank3",),
+        "BW_view", "bw_view_flatten_renderer:render_closed_bw_view_flatten_segment",
+        ("denote.KRankViewUnflatten",),
+    ),
+    ClosedRuleSpec(
+        "bw-view-unflatten-head-sharded-k-rank", KRankBWViewFlattenCertificate,
+        ("TrainVerify.Denote.fw_view_unflatten_allGather_dim2_rank3",),
+        "BW_view", "bw_view_flatten_renderer:render_closed_bw_view_flatten_segment",
+        ("denote.KRankViewUnflatten",),
     ),
     ClosedRuleSpec(
         "fw-view-flatten-sequence-sharded-k-rank", KRankBWViewFlattenCertificate,
