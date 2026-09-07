@@ -1,5 +1,157 @@
-"""Closed sparse/full-frame renderer for typed BW_linear dX reductions."""
+"""Closed sparse/full-frame renderers for typed BW_linear dX relations."""
 from __future__ import annotations
+
+
+def render_closed_k_rank_bw_linear_dx_sequence_segment(ir, relation, segment_id: str) -> str:
+    """One ordered SM/PM frame, arbitrary positive sequence-sharded dX."""
+    try:
+        from .composer import _node_text, _render_mixed_final_value, _select_exact_typed_certificate, _shape_text
+        from .relation_compiler import get_closed_rule_spec
+    except ImportError:
+        from composer import _node_text, _render_mixed_final_value, _select_exact_typed_certificate, _shape_text
+        from relation_compiler import get_closed_rule_spec
+    spec = get_closed_rule_spec("bw-linear-dx-sequence-sharded-k-rank")
+    chain = relation.dependent_chain_plan
+    seg = next((s for s in chain.segments if s.segment_id == segment_id), None)
+    if seg is None or len(seg.transition_ids) != 1:
+        raise ValueError("sequence dX requires exactly one typed transition")
+    transitions = {t.transition_id: t for t in relation.transition_specs}
+    t = transitions[seg.transition_ids[0]]
+    c = _select_exact_typed_certificate(relation, t, spec.rule_id, spec.lean_theorems[0],
+        spec.certificate_type, lambda c: (tuple(sorted(c.input_facts)), (c.output_fact,)))
+    if (c.family != "sequence-sharded" or len(c.input_facts) != 3
+            or c.output_layout != "sharded" or c.gather_dim != 1):
+        raise ValueError("sequence dX semantic certificate mismatch")
+    records = {r.source: r for r in chain.relation_facts}
+    try:
+        g, x, w = (records[f] for f in c.input_facts)
+        out = records[c.output_fact]
+    except KeyError as exc:
+        raise ValueError("sequence dX fact is not materialized") from exc
+    k = c.rank_count
+    if (k <= 0 or any(r.kind != "sharded" or r.gather_dim != 1
+            or len(r.pm_tids) != k or len(r.shard_shape) != 3 for r in (g, x, out))
+            or w.kind != "sharded" or w.gather_dim not in (0, 1) or len(w.pm_tids) != 1
+            or w.full_shape != w.shard_shape or len(w.full_shape) != 2):
+        raise ValueError("sequence dX rank/layout/weight authority mismatch")
+    b, s, o = g.shard_shape
+    i = x.shard_shape[2]
+    if (min(b, s, o, i) <= 0 or x.shard_shape != (b, s, i)
+            or g.full_shape != (b, s*k, o) or x.full_shape != (b, s*k, i)
+            or out.full_shape != x.full_shape or out.shard_shape != x.shard_shape
+            or w.full_shape != (o, i)):
+        raise ValueError("sequence dX exact shape contract mismatch")
+    states = {s.state_id: s for s in chain.states}
+    before, after = states[seg.pre_state_id], states[seg.post_state_id]
+    if (not {r.fact_id for r in (g,x,w)} <= set(before.fact_ids)
+            or out.fact_id not in after.fact_ids
+            or not set(after.fact_ids) <= set(before.fact_ids) | {out.fact_id}):
+        raise ValueError("sequence dX live state mismatch")
+    ss, se = seg.sm_range; ps, pe = seg.pm_range
+    if (len(t.sm_node_indices) != 1 or len(t.pm_node_indices) != k
+            or len(set(t.pm_node_indices)) != k
+            or not set(t.sm_node_indices) <= set(range(ss,se))
+            or not set(t.pm_node_indices) <= set(range(ps,pe))
+            or not 0 <= ss <= se <= len(ir.sm_nodes) or not 0 <= ps <= pe <= len(ir.pm_nodes)
+            or c.sm_step_id != f"sm:{t.sm_node_indices[0]}:0"
+            or c.pm_step_ids != tuple(f"pm:{p}:0" for p in t.pm_node_indices)):
+        raise ValueError("sequence dX exact writer footprint mismatch")
+    sm = ir.sm_nodes[t.sm_node_indices[0]]
+    pms = tuple(ir.pm_nodes[p] for p in t.pm_node_indices)
+    def check_node(n, rank, ins, output):
+        if (n.op != "BW_linear" or n.rank != rank or n.params or tuple(n.ins) != ins
+                or len(n.outs) != 2 or len(set(n.outs)) != 2 or n.outs[0] != output):
+            raise ValueError("sequence dX writer rank/roles/order mismatch")
+    check_node(sm,0,(g.sm_tid,x.sm_tid,w.sm_tid),out.sm_tid)
+    for r,n in enumerate(pms):
+        check_node(n,r,(g.pm_tids[r],x.pm_tids[r],w.pm_tids[0]),out.pm_tids[r])
+    smframe, pmframe = list(ir.sm_nodes[ss:se]), list(ir.pm_nodes[ps:pe])
+    # All retained relation/authority reads survive the entire frozen frame.
+    by_id = {r.fact_id:r for r in chain.relation_facts}
+    authority = {a.fact_id:a for a in chain.authority_facts}
+    if chain.anchor_fact is not None:
+        authority[chain.anchor_fact.fact_id] = chain.anchor_fact
+    live_sm, live_pm = set(), set()
+    for fid in set(before.fact_ids) | set(after.fact_ids):
+        if fid in by_id:
+            r=by_id[fid];live_sm.add(r.sm_tid);live_pm.update(r.pm_tids)
+            if r.joined_pm_tid is not None: live_pm.add(r.joined_pm_tid)
+            if r.metadata_tid is not None: live_sm.add(r.metadata_tid);live_pm.add(r.metadata_tid)
+        elif fid in authority:
+            a=authority[fid]
+            if a.kind == "tensor_shape": (live_sm if a.side == "sm" else live_pm).add(a.tid)
+            elif a.kind == "tensor_eq":
+                (live_sm if a.left_side == "sm" else live_pm).add(a.left_tid)
+                (live_sm if a.right_side == "sm" else live_pm).add(a.right_tid)
+            else: raise ValueError("sequence dX unsupported frame authority")
+        else: raise ValueError("sequence dX unknown live fact")
+    for frame,start,owned,live,allowed in ((smframe,ss,set(t.sm_node_indices),live_sm,{out.sm_tid}),
+            (pmframe,ps,set(t.pm_node_indices),live_pm,set(out.pm_tids))):
+        for pos,n in enumerate(frame,start):
+            if set(n.outs) & (live - (allowed if pos in owned else set())):
+                raise ValueError("sequence dX frame overwrites live authority")
+        for tid in allowed:
+            if sum(tid in n.outs for n in frame) != 1:
+                raise ValueError("sequence dX output has multiple writers")
+    sn,pn,sf,pf=(f"{segment_id}_{suffix}" for suffix in ("sm_nodes","pm_nodes","sm_final","pm_final"))
+    lines=[f"private def {sn} : List NodeDecl := [{', '.join(_node_text(n) for n in smframe)}]",
+        f"private def {pn} : List NodeDecl := [{', '.join(_node_text(n) for n in pmframe)}]",
+        f"@[irreducible] private def {sf} (s : Store) : Store := {sn}.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) s",
+        f"@[irreducible] private def {pf} (s : Store) : Store := {pn}.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) s", ""]
+    def writer(name,graph,fn,nn,frame,pos,n):
+        final=f"({fn} store)";th=f"{segment_id}_{name}"
+        expr=f"(bw_linear ({{store}} {n.ins[0]}) ({{store}} {n.ins[1]}) ({{store}} {n.ins[2]})).1"
+        lines.extend([f"private theorem {th} (store : Store) : {final} {n.outs[0]} = {expr.format(store=final)} := by",
+            f"  have hfinal : {final} = {nn}.foldl (applyNodeDistributedFaithful {graph}) store := by unfold {fn}; rfl"])
+        helper=_render_mixed_final_value(name="hout",graph=graph,initial_store="store",final_store=final,final_equality="hfinal",nodes_name=nn,nodes=frame,position=pos,output_tid=n.outs[0],input_tids=tuple(n.ins),written_tids={v for n in frame for v in n.outs},expression=expr,apply_lines=[
+            "rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+            "simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"exact applyNode_bw_linear_fst_out {graph} t {n.rank} {' '.join(map(str,(*n.ins,*n.outs)))} (by native_decide)"])
+        lines.extend(z[2:] if z.startswith("  ") else z for z in helper);lines.extend(["  exact hout",""])
+        return th
+    hs=writer("hSmWriter",ir.sm_graph_ref,sf,sn,smframe,t.sm_node_indices[0]-ss,sm)
+    hp=[writer(f"hPmWriter{r}",ir.pm_graph_ref,pf,pn,pmframe,pos-ps,n) for r,(pos,n) in enumerate(zip(t.pm_node_indices,pms))]
+    vals=lambda r: "["+", ".join(f"pmFinal {v}" for v in r.pm_tids)+"]"
+    shape=lambda sh: _shape_text(list(sh))
+    gl,xl,ol=map(vals,(g,x,out));gf,gs,xf,xs,wf=map(shape,(g.full_shape,g.shard_shape,x.full_shape,x.shard_shape,w.full_shape))
+    lines.extend(["set_option maxHeartbeats 500000 in",f"private theorem {segment_id}_sound (smStore pmStore : Store) (hstate : {before.state_id}.Holds smStore pmStore) : {after.state_id}.Holds ({sf} smStore) ({pf} pmStore) := by",
+        f" let smFinal := {sf} smStore",f" let pmFinal := {pf} pmStore",
+        f" have hframe : {before.state_id}.Holds smFinal pmFinal := by unfold smFinal pmFinal {sf} {pf}; apply RelationState.Holds.fold_frame {sn} {pn} smStore pmStore hstate <;> native_decide",
+        f" have hg : {g.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        f" change ShardedRel (smFinal {g.sm_tid}) {gl} 1 {gf} {gs} at hg",
+        f" have hx : {x.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        f" change ShardedRel (smFinal {x.sm_tid}) {xl} 1 {xf} {xs} at hx",
+        f" have hw : {w.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        f" change ShardedRel (smFinal {w.sm_tid}) [pmFinal {w.pm_tids[0]}] {w.gather_dim} {wf} {wf} at hw",
+        f" have hwEq : smFinal {w.sm_tid} = pmFinal {w.pm_tids[0]} := by rw [hw.full_value]; exact allGatherPrimDimN_singleton_eq {w.gather_dim} _ (by rw [hw.shard_shapes _ (by simp)]; decide)",
+        f" have hgV : smFinal {g.sm_tid} = allGatherPrimDimN 1 {k} 0 {gl} := by simpa only [List.length_cons,List.length_nil] using hg.full_value",
+        f" have hS := {hs} smStore"])
+    for r,th in enumerate(hp): lines.append(f" have hP{r} := {th} pmStore")
+    local_list="["+", ".join(f"(bw_linear (pmFinal {gt}) (pmFinal {xt}) (pmFinal {w.pm_tids[0]})).1" for gt,xt in zip(g.pm_tids,x.pm_tids))+"]"
+    lines.extend([f" have hcomm := {c.lean_theorem} {k} {b} {s} {o} {i} {gl} {xl} (smFinal {x.sm_tid}) (pmFinal {w.pm_tids[0]})",
+        "   (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl hg.shard_shapes hx.shard_shapes hx.full_shape (hw.shard_shapes _ (by simp))",
+        f" have hcommExplicit : (bw_linear (allGatherPrimDimN 1 {k} 0 {gl}) (smFinal {x.sm_tid}) (pmFinal {w.pm_tids[0]})).1 = allGatherPrimDimN 1 {k} 0 {local_list} := by simpa only [List.zipWith] using hcomm",
+        f" have hV : smFinal {out.sm_tid} = allGatherPrimDimN 1 {k} 0 {ol} := by",
+        "   rw [hS, hgV, hwEq, hcommExplicit]",
+        "   rw ["+", ".join(f"← hP{r}" for r in range(k))+"]",
+        f" have hFull : (smFinal {out.sm_tid}).shape = {xf} := by rw [hS]; exact bw_linear_3d_fst_shape {b} {s*k} {o} {i} _ _ _ hg.full_shape hx.full_shape hw.full_shape"])
+    for r in range(k):
+        lines.append(f" have hShape{r} : (pmFinal {out.pm_tids[r]}).shape = {xs} := by rw [hP{r}]; exact bw_linear_3d_fst_shape {b} {s} {o} {i} _ _ _ (hg.shard_shapes _ (by simp)) (hx.shard_shapes _ (by simp)) (hw.shard_shapes _ (by simp))")
+    lines.extend([f" have hout : {out.fact_id}.Holds smFinal pmFinal := by",
+        f"   change ShardedRel (smFinal {out.sm_tid}) {ol} 1 {xf} {xs}",
+        "   refine { full_value := ?_, full_shape := hFull, shards_nonempty := by simp, gather_dim_lt := by decide, shard_shapes := ?_, shape_contract := ?_ }",
+        "   · simpa only [List.length_cons,List.length_nil] using hV",
+        "   · simp only [List.forall_mem_cons]; exact ⟨"+", ".join(f"hShape{r}" for r in range(k))+", List.forall_mem_nil _⟩",
+        "   · simp only [List.length_cons,List.length_nil]; decide",
+        " intro fact hfact",
+        f" have hc : fact ∈ [{out.fact_id}] ++ {before.state_id}.facts := (show {after.state_id}.facts ⊆ [{out.fact_id}] ++ {before.state_id}.facts by native_decide) hfact",
+        " simp only [List.mem_append] at hc", " rcases hc with fresh | old",
+        " · simp only [List.mem_cons,List.not_mem_nil,or_false] at fresh; subst fact; exact hout",
+        " · exact hframe fact old", "",
+        f"private def {segment_id} : ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f" smNodes := {sn}",f" pmNodes := {pn}",
+        f" sound := by intro a b h; have z := {segment_id}_sound a b h; unfold {sf} {pf} at z; exact z", ""])
+    return "\n".join(lines)
 
 
 def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> str:

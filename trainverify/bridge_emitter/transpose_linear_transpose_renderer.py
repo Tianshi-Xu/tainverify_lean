@@ -9,16 +9,12 @@ def render_closed_transpose_linear_transpose_segment(ir, relation, segment_id: s
  except ImportError:
   from composer import _node_text,_render_mixed_final_value,_select_exact_typed_certificate,_shape_text
   from relation_compiler import KRankTransposeRelationCertificate,KRankBWLinearDxCertificate,KRankBWLinearDwReductionCertificate
- lr="bw-linear-dx-sequence-sharded-rank4";lcontracts={
-  "TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g169":((1,8,32),(1,2,32),(1,8,32),(1,2,32),(32,32),True),
-  "TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g143":((1,8,32),(1,2,32),(1,8,128),(1,2,128),(32,128),False),
- };tr="transpose-sharded-k-rank"
+ lr="bw-linear-dx-sequence-sharded-k-rank"; lth="TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3";tr="transpose-sharded-k-rank"
  tths={"TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim1_to_dim2_rank4","TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim1_rank4"}
  chain=relation.dependent_chain_plan;seg=next((s for s in chain.segments if s.segment_id==segment_id),None)
  if seg is None or len(seg.transition_ids) not in (1,2,3,4):raise ValueError("sequence-linear requires dX, optional dW, and optional transpose pair")
  tm={t.transition_id:t for t in relation.transition_specs};ts=tuple(tm[x] for x in seg.transition_ids);lt=next((t for t in ts if t.rule_id==lr),None);dt=next((t for t in ts if t.rule_id=="bw-linear-dw-sequence-reduction-rank4"),None);tts=tuple(t for t in ts if t.rule_id==tr)
- lth=lt.lean_theorem if lt is not None else None;lspec=lcontracts.get(lth)
- if (lt is None or lspec is None
+ if (lt is None or lt.lean_theorem != lth
      or (len(tts) not in (0,2)) or (len(tts)==2 and {t.lean_theorem for t in tts}!=tths)
      or len(ts)!=1+(1 if dt else 0)+len(tts)):raise ValueError("transpose/linear typed family mismatch")
  lc=_select_exact_typed_certificate(relation,lt,lr,lth,KRankBWLinearDxCertificate,lambda c:(tuple(sorted(c.input_facts)),(c.output_fact,)));tcs=[]
@@ -32,7 +28,11 @@ def render_closed_transpose_linear_transpose_segment(ir, relation, segment_id: s
  fresh_ids={lo.fact_id,*[o.fact_id for _,_,_,o in trs]}|({ldwo.fact_id} if ldwo else set())
  if not {lg.fact_id,lx.fact_id,lw.fact_id,*[i.fact_id for _,_,i,_ in trs]}<=set(before.fact_ids) or not fresh_ids<=set(after.fact_ids):raise ValueError("transpose/linear/transpose liveness mismatch")
  if not set(after.fact_ids)<=(fresh_ids|set(before.fact_ids)):raise ValueError("transpose/linear/transpose post-state mismatch")
- gfull,gshard,xfull,xshard,wshape,needs_chunks=lspec
+ gfull,gshard,xfull,xshard,wshape=lg.full_shape,lg.shard_shape,lx.full_shape,lx.shard_shape,lw.full_shape
+ needs_chunks=dc is not None and dc.lean_theorem.endswith("g170")
+ if (lc.rank_count!=4 or gfull!=(1,8,32) or gshard!=(1,2,32)
+     or xfull not in ((1,8,32),(1,8,128)) or xshard!=(1,2,xfull[2])
+     or wshape!=(32,xfull[2])):raise ValueError("transpose/linear compound theorem shape mismatch")
  if (lg.kind!="sharded" or lg.gather_dim!=1 or lg.full_shape!=gfull or lg.shard_shape!=gshard
      or lx.kind!="sharded" or lx.gather_dim!=1 or lx.full_shape!=xfull or lx.shard_shape!=xshard
      or lo.kind!="sharded" or lo.gather_dim!=1 or lo.full_shape!=xfull or lo.shard_shape!=xshard
@@ -85,13 +85,9 @@ def render_closed_transpose_linear_transpose_segment(ir, relation, segment_id: s
   lines.extend([f" have hLP{r}:={hlP[r]} pmStore",f" change pmFinal {lo.pm_tids[r]}=(bw_linear (pmFinal {lg.pm_tids[r]}) (pmFinal {lx.pm_tids[r]}) (pmFinal {lw.pm_tids[0]})).1 at hLP{r}"])
   if dc:lines.extend([f" have hDP{r}:={hdP[r]} pmStore",f" change pmFinal {ldwo.pm_tids[r]}=(bw_linear (pmFinal {lg.pm_tids[r]}) (pmFinal {lx.pm_tids[r]}) (pmFinal {lw.pm_tids[0]})).2 at hDP{r}"])
   if needs_chunks:lines.append(f" have hxC{r}:chunkPrimDimN 1 4 {r} (smFinal {lx.sm_tid})=pmFinal {lx.pm_tids[r]}:=by rw [hlxV];simpa [List.getD,List.getElem?_cons_zero,List.getElem?_cons_succ] using (chunkPrimDimN_allGatherPrimDimN_dim1_4_1_2_32 {lxl} {r} (by omega) (by simp) hlx.shard_shapes)")
- if needs_chunks:
-  hcall=f"{lc.lean_theorem} "+" ".join(f"(pmFinal {u})" for u in lg.pm_tids)+f" (smFinal {lx.sm_tid}) (pmFinal {lw.pm_tids[0]}) "+" ".join("(hlg.shard_shapes _ (by simp))" for _ in range(4))+" hlx.full_shape (hw.shard_shapes _ (by simp))"
-  local_rw=", ".join(f"hLP{r},←hxC{r}" for r in range(4))
- else:
-  hcall=f"{lc.lean_theorem} "+" ".join(f"(pmFinal {u})" for u in lg.pm_tids)+f" (smFinal {lx.sm_tid}) "+" ".join(f"(pmFinal {u})" for u in lx.pm_tids)+f" (pmFinal {lw.pm_tids[0]}) "+" ".join("(hlg.shard_shapes _ (by simp))" for _ in range(4))+" hlx.full_shape "+" ".join("(hlx.shard_shapes _ (by simp))" for _ in range(4))+" (hw.shard_shapes _ (by simp))"
-  local_rw=", ".join(f"←hLP{r}" for r in range(4))
- lines.extend([f" have hLC:={hcall}",f" have hLV:smFinal {lo.sm_tid}=allGatherPrimDimN 1 4 0 {lol}:=by rw [hLS,hlgV,hwEq,hLC];rw [{local_rw}]",f" have hLVL:smFinal {lo.sm_tid}=allGatherPrimDimN 1 {lol}.length 0 {lol}:=by simpa only [List.length_cons,List.length_nil] using hLV",f" have hLFull:(smFinal {lo.sm_tid}).shape={xf}:=by rw [hLS];exact bw_linear_3d_fst_shape {gfull[0]} {gfull[1]} {gfull[2]} {xfull[2]} _ _ _ hlg.full_shape hlx.full_shape hw.full_shape"])
+ hcall=f"{lc.lean_theorem} 4 1 2 32 {xfull[2]} {lgl} {lxl} (smFinal {lx.sm_tid}) (pmFinal {lw.pm_tids[0]}) (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl hlg.shard_shapes hlx.shard_shapes hlx.full_shape (hw.shard_shapes _ (by simp))"
+ local_rw=", ".join(f"←hLP{r}" for r in range(4))
+ lines.extend([f" have hLC:={hcall}"," simp only [List.zipWith] at hLC",f" have hLV:smFinal {lo.sm_tid}=allGatherPrimDimN 1 4 0 {lol}:=by rw [hLS,hlgV,hwEq,hLC];rw [{local_rw}]",f" have hLVL:smFinal {lo.sm_tid}=allGatherPrimDimN 1 {lol}.length 0 {lol}:=by simpa only [List.length_cons,List.length_nil] using hLV",f" have hLFull:(smFinal {lo.sm_tid}).shape={xf}:=by rw [hLS];exact bw_linear_3d_fst_shape {gfull[0]} {gfull[1]} {gfull[2]} {xfull[2]} _ _ _ hlg.full_shape hlx.full_shape hw.full_shape"])
  for r in range(4):lines.append(f" have hLShape{r}:(pmFinal {lo.pm_tids[r]}).shape={xs}:=by rw [hLP{r}];exact bw_linear_3d_fst_shape {gshard[0]} {gshard[1]} {gshard[2]} {xshard[2]} _ _ _ (hlg.shard_shapes _ (by simp)) (hlx.shard_shapes _ (by simp)) (hw.shard_shapes _ (by simp))")
  lines.extend([f" have hLShapes:∀z∈{lol},z.shape={xs}:=by simp only [List.forall_mem_cons];exact ⟨hLShape0,hLShape1,hLShape2,hLShape3,List.forall_mem_nil _⟩",f" have houtL:{lo.fact_id}.Holds smFinal pmFinal:=by exact {{full_value:=hLVL,full_shape:=hLFull,shards_nonempty:=List.cons_ne_nil _ _,gather_dim_lt:=by native_decide,shard_shapes:=hLShapes,shape_contract:=by simp only [List.map,List.length_cons,List.length_nil];native_decide}}"])
  if dc:

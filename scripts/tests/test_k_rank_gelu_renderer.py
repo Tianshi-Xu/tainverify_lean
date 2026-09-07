@@ -214,7 +214,7 @@ def test_bw_and_collective_singleton_backends_are_registry_driven():
         "bw-layernorm-dx-dim1-k-rank",
         "bw-linear-dx-column-sharded-k-rank",
         "bw-linear-dx-row-reduction-rank4",
-        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-linear-dx-sequence-sharded-k-rank",
         "bw-multiref-sum-sharded-k-rank",
         "bw-sum-scalar-broadcast-dim2-k-rank",
         "bw-view-joined",

@@ -7,18 +7,18 @@ registry because its renderer choice depends on the whole atomic family.
 
 def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
     """Return the lazy renderer binding for a supported BW compound family."""
-    if (family.count("bw-linear-dx-sequence-sharded-rank4") == 1
+    if (family.count("bw-linear-dx-sequence-sharded-k-rank") == 1
             and family.count("bw-linear-dw-sequence-reduction-rank4") == 1
             and len(family) == 2):
         return "transpose_linear_transpose_renderer:render_closed_transpose_linear_transpose_segment"
     if (family.count("transpose-sharded-k-rank") == 2
-            and family.count("bw-linear-dx-sequence-sharded-rank4") == 1
+            and family.count("bw-linear-dx-sequence-sharded-k-rank") == 1
             and family.count("bw-linear-dw-sequence-reduction-rank4") == 1
             and len(family) == 4):
         return "transpose_linear_transpose_renderer:render_closed_transpose_linear_transpose_segment"
     if family == (
         "transpose-sharded-k-rank",
-        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-linear-dx-sequence-sharded-k-rank",
         "transpose-sharded-k-rank",
     ):
         return "transpose_linear_transpose_renderer:render_closed_transpose_linear_transpose_segment"
@@ -33,13 +33,13 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
         "bw-matmul-batch-sharded-rank4",
     ):
         return "bw_matmul_batch_pair_renderer:render_closed_paired_batch_bw_matmul_segment"
-    if (family.count("bw-linear-dx-sequence-sharded-rank4") == 1
+    if (family.count("bw-linear-dx-sequence-sharded-k-rank") == 1
             and family.count("bw-linear-dw-sequence-reduction-rank4") == 1
             and family.count("bw-matmul-batch-sharded-rank4") == 2
             and len(family) == 4):
         return "bw_linear_matmul_quad_renderer:render_closed_bw_linear_matmul_quad_segment"
     if family == (
-        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-linear-dx-sequence-sharded-k-rank",
         "bw-matmul-batch-sharded-rank4",
         "bw-matmul-batch-sharded-rank4",
     ):

@@ -7762,14 +7762,34 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
         if any(tuple(x.output_shape)!=piece_out for x in pms) or any(s!=pm_g[0] for s in pm_g) or any(s!=pm_x[0] for s in pm_x) or any(s!=pm_w[0] for s in pm_w):
             raise RelationCompositionError("BW_linear dX PM shapes disagree across ranks")
         input_facts=[];input_frontiers=[];input_layouts=[]
-        if layout=="sharded" and full_out[:2]==(1,8) and piece_out[:2]==(1,2) and full_out[2]==piece_out[2] and pm_g[0]==(1,2,32) and pm_w[0]==tuple(sm.input_shapes[2]):
-            if k != 4:
-                raise RelationCompositionError("sequence-sharded BW_linear dX remains rank-4")
+        if (layout=="sharded" and len(piece_out)==3 and len(pm_g[0])==3
+                and all(v > 0 for v in (*piece_out, pm_g[0][2]))
+                and full_out==(piece_out[0],piece_out[1]*k,piece_out[2])
+                and tuple(sm.input_shapes[1])==full_out and pm_x[0]==piece_out
+                and pm_g[0][:2]==piece_out[:2]
+                and tuple(sm.input_shapes[0])==(piece_out[0],piece_out[1]*k,pm_g[0][2])
+                and tuple(sm.input_shapes[2])==pm_w[0]==(pm_g[0][2],piece_out[2])
+                and len(set(wpms))==1
+                and (k > 1 or (wsm.startswith("init:")
+                     and ir.init_lineages.get(int(wsm.split(":",1)[1])) is not None
+                     and ir.init_lineages[int(wsm.split(":",1)[1])].gatherDim in (None,0)))):
             family="sequence-sharded";dim=1
-            input_facts=[RelationFactSpec("sharded",grefs,gather_dim=1),RelationFactSpec("sharded",xrefs,gather_dim=1),initial_fact(wsm,wpms)]
+            # The shared weight must be the exact singleton public InitGoal,
+            # not merely a full-shaped per-rank tensor.
+            if not wsm.startswith("init:") or not wpms[0].startswith("init:"):
+                raise RelationCompositionError("sequence BW_linear dX weight is not initial")
+            lineage=ir.init_lineages.get(int(wsm.split(":",1)[1]))
+            if (lineage is None or lineage.replicated
+                    or tuple(lineage.tsShape)!=pm_w[0]
+                    or tuple(tuple(s) for s in lineage.tpShapes)!=(pm_w[0],)
+                    or tuple(lineage.tps)!=((0,int(wpms[0].split(":",1)[1])),)):
+                raise RelationCompositionError("sequence BW_linear dX weight lineage shape/rank mismatch")
+            wfact=init_lineage_relation_fact(lineage)
+            if wfact.layout!="sharded" or wfact.step_triple!=(wsm,wpms[0]):
+                raise RelationCompositionError("sequence BW_linear dX weight binding mismatch")
+            input_facts=[RelationFactSpec("sharded",grefs,gather_dim=1),RelationFactSpec("sharded",xrefs,gather_dim=1),wfact]
             input_frontiers=[x.step_triple for x in input_facts];input_layouts=[x.layout for x in input_facts]
-            theorem=("TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g169" if full_out[2]==32
-                     else "TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g143")
+            theorem="TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3"
         elif (layout=="sharded" and len(piece_out)==3 and piece_out[:2]==(1,8)
                 and len(pm_g[0])==3 and pm_g[0][:2]==(1,8)
                 and piece_out[2]>0 and pm_g[0][2]>0
@@ -7830,7 +7850,8 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
                 f"unsupported BW_linear dX relation topology: layout={layout}, output={full_out}/{piece_out}, g={tuple(sm.input_shapes[0])}/{pm_g[0]}, w={tuple(sm.input_shapes[2])}/{pm_w[0]}"
             )
         output=RelationFactSpec(layout,tuple(frontier),gather_dim=dim)
-        rule_id=("bw-linear-dx-row-reduction-k-rank"
+        rule_id=("bw-linear-dx-sequence-sharded-k-rank" if family=="sequence-sharded"
+                 else "bw-linear-dx-row-reduction-k-rank"
                  if theorem=="TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3"
                  else "bw-linear-dx-column-sharded-k-rank"
                  if theorem=="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
@@ -10508,13 +10529,10 @@ _register_closed_rule_specs(
         (),
     ),
     ClosedRuleSpec(
-        "bw-linear-dx-sequence-sharded-rank4", KRankBWLinearDxCertificate,
-        (
-            "TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g169",
-            "TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g143",
-        ),
-        "BW_linear", "transpose_linear_transpose_renderer:render_closed_transpose_linear_transpose_segment",
-        (),
+        "bw-linear-dx-sequence-sharded-k-rank", KRankBWLinearDxCertificate,
+        ("TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3",),
+        "BW_linear", "bw_linear_dx_renderer:render_closed_k_rank_bw_linear_dx_sequence_segment",
+        ("denote.KRankBWLinearDxSequence",),
     ),
     ClosedRuleSpec(
         "bw-multiref-sum-sharded-k-rank", KRankBWMultirefSumCertificate,

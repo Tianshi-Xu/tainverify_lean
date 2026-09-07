@@ -1644,7 +1644,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     bw_attention = next(s for s in relation.dependent_chain_plan.segments
                         if s.segment_id == "segment_000223")
     assert tuple(transitions[item].rule_id for item in bw_attention.transition_ids) == (
-        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-linear-dx-sequence-sharded-k-rank",
         "bw-matmul-batch-sharded-rank4",
         "bw-matmul-batch-sharded-rank4",
     )
@@ -1795,7 +1795,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
                                       if s.segment_id == "segment_000264")
     assert tuple(transitions[item].rule_id for item in transpose_linear_transpose.transition_ids) == (
         "transpose-sharded-k-rank",
-        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-linear-dx-sequence-sharded-k-rank",
         "transpose-sharded-k-rank",
     )
     transpose_linear_transpose_source = render_closed_segment(
@@ -1843,7 +1843,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     sequence_linear = next(s for s in relation.dependent_chain_plan.segments
                            if s.segment_id == "segment_000295")
     assert tuple(transitions[item].rule_id for item in sequence_linear.transition_ids) == (
-        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-linear-dx-sequence-sharded-k-rank",
     )
     sequence_linear_source = render_closed_segment(
         ir, relation, sequence_linear.segment_id
@@ -1897,10 +1897,10 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     wide_sequence_linear = next(s for s in relation.dependent_chain_plan.segments
                                 if s.segment_id == "segment_000330")
     assert tuple(transitions[item].rule_id for item in wide_sequence_linear.transition_ids) == (
-        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-linear-dx-sequence-sharded-k-rank",
     )
     assert transitions[wide_sequence_linear.transition_ids[0]].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dx_dp_split_dim1_4_g143"
+        "TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3"
     )
     wide_sequence_linear_source = render_closed_segment(
         ir, relation, wide_sequence_linear.segment_id
@@ -1951,7 +1951,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     framed_sequence_linear = next(s for s in relation.dependent_chain_plan.segments
                                   if s.segment_id == "segment_000362")
     assert tuple(transitions[item].rule_id for item in framed_sequence_linear.transition_ids) == (
-        "bw-linear-dx-sequence-sharded-rank4",
+        "bw-linear-dx-sequence-sharded-k-rank",
     )
     framed_sequence_linear_source = render_closed_segment(
         ir, relation, framed_sequence_linear.segment_id
