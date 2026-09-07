@@ -47,12 +47,23 @@ Python tests. These are bounded conditional proofs, not fresh public closure.
 Independent source review found and closed a mixed-column shape-helper migration
 omission using a batch-2 exact Lean regression.
 
-The fresh TP2 shared DAG now reaches the missing `BW_matmul` second-output
-contraction-reduction producer upstream of ReduceScatter (SM 104 / PM 355–356).
-The inputs are query-axis shards; legacy backward matmul rules still assume
-four ranks and fixed dimensions. TP4 reaches the independent `BW_softmax` fixed
-rank-4 shape gate first. These are the next active proof/compiler capability
-gaps, not newly established upstream numerical bugs.
+Query-axis BW_matmul projections and gradient reduction, head-axis BW_matmul
+projections, and orthogonally sharded BW_softmax now have generic value semantics
+and compiler backends. Their mathematical leaves kernel-check with the same
+three axioms under a 500000-heartbeat ceiling. Five query-matmul, five head-matmul
+and six softmax conditional witness cases were checked. Seven affected legacy
+real GPT frames passed exact Lean replay, plus the query-matmul/view frame.
+
+Forward rank-4→rank-3 views reuse the checked backward flattening theorem and
+renderer with the actual FW unary apply-node API. Coherently changing a source
+fact's axis while retaining the materialized record axis was reproduced and is
+now rejected in the new head/softmax/view consumers and migrated mixed paths.
+
+Both fresh TP2 and TP4 shared DAGs now stop at the rank-3→rank-4 forward view
+producer before transpose (SM 11, TP2 PM 36–37). Its inverse-flattening theorem
+has been added and kernel-checked; compiler integration is the next active slice.
+These remain proof/compiler capability gaps, not established upstream bugs or
+whole-model public closure.
 
 For plan2/runtime4, the expanded capture contains both scale units and gradient
 reducers. Export still rejects this case: raw integer tensor IDs alias distinct

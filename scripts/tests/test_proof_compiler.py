@@ -1627,7 +1627,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
                       if s.segment_id == "segment_000217")
     assert tuple(transitions[item].rule_id for item in bw_softmax.transition_ids) == (
         "transpose-sharded-k-rank",
-        "bw-softmax-sharded-dim1-rank4",
+        "bw-softmax-sharded-dim1-k-rank",
     )
     bw_softmax_source = render_closed_segment(ir, relation, bw_softmax.segment_id)
     assert "private def segment_000217" in bw_softmax_source
@@ -1645,8 +1645,8 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
                         if s.segment_id == "segment_000223")
     assert tuple(transitions[item].rule_id for item in bw_attention.transition_ids) == (
         "bw-linear-dx-sequence-sharded-k-rank",
-        "bw-matmul-batch-sharded-rank4",
-        "bw-matmul-batch-sharded-rank4",
+        "bw-matmul-head-sharded-k-rank",
+        "bw-matmul-head-sharded-k-rank",
     )
     bw_attention_source = render_closed_segment(
         ir, relation, bw_attention.segment_id
@@ -1752,8 +1752,8 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     paired_batch_matmul = next(s for s in relation.dependent_chain_plan.segments
                                if s.segment_id == "segment_000254")
     assert tuple(transitions[item].rule_id for item in paired_batch_matmul.transition_ids) == (
-        "bw-matmul-batch-sharded-rank4",
-        "bw-matmul-batch-sharded-rank4",
+        "bw-matmul-head-sharded-k-rank",
+        "bw-matmul-head-sharded-k-rank",
     )
     paired_batch_matmul_source = render_closed_segment(
         ir, relation, paired_batch_matmul.segment_id
@@ -1763,7 +1763,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     softmax_transpose = next(s for s in relation.dependent_chain_plan.segments
                              if s.segment_id == "segment_000256")
     assert tuple(transitions[item].rule_id for item in softmax_transpose.transition_ids) == (
-        "bw-softmax-sharded-dim2-rank4",
+        "bw-softmax-sharded-dim2-k-rank",
         "transpose-sharded-k-rank",
     )
     softmax_transpose_source = render_closed_segment(
@@ -1864,7 +1864,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     dim3_transpose_softmax = next(s for s in relation.dependent_chain_plan.segments
                                   if s.segment_id == "segment_000305")
     assert tuple(transitions[item].rule_id for item in dim3_transpose_softmax.transition_ids) == (
-        "bw-softmax-sharded-dim2-rank4",
+        "bw-softmax-sharded-dim2-k-rank",
         "transpose-sharded-k-rank",
     )
     dim3_transpose_softmax_source = render_closed_segment(
@@ -1913,7 +1913,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
         "transpose-sharded-k-rank",
         "allreduce-reconstruction-k-rank",
         "full-producer-chunks-k-rank",
-        "bw-softmax-sharded-dim2-rank4",
+        "bw-softmax-sharded-dim2-k-rank",
         "allgather-reconstruction-k-rank",
     )
     reconstruction_softmax_source = render_closed_segment(

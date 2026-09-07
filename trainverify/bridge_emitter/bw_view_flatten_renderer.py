@@ -14,15 +14,19 @@ def render_closed_bw_view_flatten_segment(ir, relation, segment_id):
     if seg is None or len(seg.transition_ids)!=1:
         raise ValueError("BW_view flatten requires one atomic transition")
     tr={t.transition_id:t for t in relation.transition_specs}[seg.transition_ids[0]]
-    axes={"bw-view-flatten-sequence-sharded-k-rank":1,"bw-view-flatten-head-sharded-k-rank":2}
+    axes={"bw-view-flatten-sequence-sharded-k-rank":1,"bw-view-flatten-head-sharded-k-rank":2,
+          "fw-view-flatten-sequence-sharded-k-rank":1,"fw-view-flatten-head-sharded-k-rank":2}
     if tr.rule_id not in axes:
         raise ValueError("BW_view flatten rule is unsupported")
     dim=axes[tr.rule_id]
     spec=get_closed_rule_spec(tr.rule_id)
+    arity=2 if spec.op=="BW_view" else 1
     c=_select_exact_typed_certificate(relation,tr,spec.rule_id,spec.lean_theorems[0],spec.certificate_type,
         lambda c:((c.input_fact,),(c.output_fact,)))
     records={r.source:r for r in chain.relation_facts}
     x,y=records[c.input_fact],records[c.output_fact]
+    if any(r.source.layout!="sharded" or r.source.gather_dim!=dim for r in (x,y)):
+        raise ValueError("view source/record axis mismatch")
     k=c.rank_count
     if k<1 or len(x.shard_shape)!=4:
         raise ValueError("BW_view flatten rank/shape domain mismatch")
@@ -49,7 +53,7 @@ def render_closed_bw_view_flatten_segment(ir, relation, segment_id):
     sm=ir.sm_nodes[tr.sm_node_indices[0]];pms=tuple(ir.pm_nodes[i] for i in tr.pm_node_indices)
     for node,rank,inp,out,shape in ((sm,0,x.sm_tid,y.sm_tid,y.full_shape),*(
             (node,r,x.pm_tids[r],y.pm_tids[r],y.shard_shape) for r,node in enumerate(pms))):
-        if (node.rank!=rank or node.op!="BW_view" or len(node.ins)!=2 or node.ins[0]!=inp
+        if (node.rank!=rank or node.op!=spec.op or len(node.ins)!=arity or node.ins[0]!=inp
                 or node.outs!=[out] or tuple(node.params)!=shape):
             raise ValueError("BW_view flatten writer roles/order/parameters mismatch")
     sf=ir.sm_nodes[ss:se];pf=ir.pm_nodes[ps:pe]
@@ -69,7 +73,7 @@ def render_closed_bw_view_flatten_segment(ir, relation, segment_id):
             input_tids=(node.ins[0],),written_tids={tid for item in frame for tid in item.outs},expression=expr,
             apply_lines=["rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle:=by native_decide) (hunshuffle:=by native_decide) (hattn:=by native_decide)]",
                 "simp [applyNodeDistributed,applyNodeRingAttn]",
-                f"exact applyNode_bw_view_out {graph} t {node.rank} {node.params[0]} {_shape_text(list(node.params[1:]))} {node.ins[0]} {node.ins[1]} {node.outs[0]}"])
+                f"exact {'applyNode_bw_view_out' if arity==2 else 'applyNode_fw_view_out'} {graph} t {node.rank} {node.params[0]} {_shape_text(list(node.params[1:]))} {' '.join(str(tid) for tid in node.ins)} {node.outs[0]}"])
         lines.extend(line[2:] if line.startswith("  ") else line for line in helper)
         lines.append("  exact hout")
         return theorem

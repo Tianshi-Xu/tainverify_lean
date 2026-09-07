@@ -9,7 +9,7 @@ def render_closed_bw_linear_matmul_batch_segment(ir,relation,segment_id):
  except ImportError:
   from composer import _node_text,_render_mixed_final_value,_select_exact_typed_certificate
   from relation_compiler import KRankBWLinearDxCertificate,KRankBWMatmulCertificate
- lr="bw-linear-dx-sequence-sharded-k-rank";mr="bw-matmul-batch-sharded-rank4";lth="TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3";mths={".1":"TrainVerify.Denote.bw_matmul_fst_split_dim1_4_1_4_8_8",".2":"TrainVerify.Denote.bw_matmul_snd_split_batchdim1_1_4_8_8"}
+ lr="bw-linear-dx-sequence-sharded-k-rank";mr="bw-matmul-head-sharded-k-rank";lth="TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3";mths={".1":"TrainVerify.Denote.bw_matmul_fst_head_gather_rank4",".2":"TrainVerify.Denote.bw_matmul_snd_head_gather_rank4"}
  chain=relation.dependent_chain_plan;seg=next((z for z in chain.segments if z.segment_id==segment_id),None)
  if seg is None or len(seg.transition_ids)!=3: raise ValueError("BW_linear/matmul batch segment requires three transitions")
  by={t.transition_id:t for t in relation.transition_specs};ts=tuple(by[x] for x in seg.transition_ids);lt=next((t for t in ts if t.rule_id==lr),None);mts=tuple(t for t in ts if t.rule_id==mr)
@@ -18,13 +18,15 @@ def render_closed_bw_linear_matmul_batch_segment(ir,relation,segment_id):
  mcs=[]
  for t in mts:
   c=_select_exact_typed_certificate(relation,t,mr,t.lean_theorem,KRankBWMatmulCertificate,lambda x:(tuple(sorted(x.input_facts)),(x.output_fact,)))
-  if c.projection not in mths or t.lean_theorem!=mths[c.projection] or c.family!="batch-sharded": raise ValueError("BW_matmul projection/theorem mismatch")
+  if c.projection not in mths or t.lean_theorem!=mths[c.projection] or c.family!="head-sharded": raise ValueError("BW_matmul projection/theorem mismatch")
   mcs.append(c)
  mc={c.projection:c for c in mcs};mf,ms=mc[".1"],mc[".2"]
  if mf.input_facts!=ms.input_facts: raise ValueError("BW_matmul projections do not share inputs")
  rec={r.source:r for r in chain.relation_facts}
  try:lg,lx,lw=(rec[f] for f in lc.input_facts);lo=rec[lc.output_fact];mg,mx,my=(rec[f] for f in mf.input_facts);mfo=rec[mf.output_fact];mso=rec[ms.output_fact]
  except KeyError as exc: raise ValueError("BW_linear/matmul fact missing") from exc
+ if any(r.source.layout!="sharded" or r.source.gather_dim!=1 for r in (mg,mx,my,mfo,mso)):
+  raise ValueError("head BW_matmul source/record axis mismatch")
  states={z.state_id:z for z in chain.states};before,after=states[seg.pre_state_id],states[seg.post_state_id]
  if not {lg.fact_id,lx.fact_id,lw.fact_id,mg.fact_id,mx.fact_id,my.fact_id}<=set(before.fact_ids) or not {lo.fact_id,mfo.fact_id,mso.fact_id}<=set(after.fact_ids): raise ValueError("BW_linear/matmul facts are not live")
  if any(r.kind!="sharded" or r.gather_dim!=1 for r in (lg,lx,lo,mg,mx,my,mfo,mso)) or lw.kind!="sharded": raise ValueError("BW_linear/matmul layouts mismatch")
@@ -66,7 +68,13 @@ def render_closed_bw_linear_matmul_batch_segment(ir,relation,segment_id):
    else: lines.extend([f" have h{name}C{q}:chunkPrimDimN 1 4 {q} (smFinal {r.sm_tid})=pmFinal {r.pm_tids[q]}:=by rw [h{name}V];simpa [List.getD,List.getElem?_cons_zero,List.getElem?_cons_succ] using ({roundth} "+" ".join(f"(pmFinal {u})" for u in r.pm_tids)+" "+" ".join(f"(h{name}.shard_shapes _ (by simp))" for _ in range(4))+f" {q} (by omega))"])
  lines.extend([f" have hLCraw:={lc.lean_theorem} 4 1 2 32 32 {lgl} {lxl} (smFinal {lx.sm_tid}) (pmFinal {lw.pm_tids[0]}) (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl hlg.shard_shapes hlx.shard_shapes hlx.full_shape (hlw.shard_shapes _ (by simp))", " have hLC := hLCraw", " simp only [List.zipWith] at hLC", f" have hLOV:smFinal {lo.sm_tid}=allGatherPrimDimN 1 4 0 {lol}:=by rw [hLS,hlgV,hlwEq,hLC];rw ["+", ".join(f"←hLP{r}" for r in range(4))+"]"])
  # matmul theorem equalities
- lines.extend([f" have hMF:={mf.lean_theorem} (smFinal {mg.sm_tid}) (smFinal {my.sm_tid}) hmg.full_shape hmy.full_shape",f" have hMFV:smFinal {mfo.sm_tid}=allGatherPrimDimN 1 4 0 {mfl}:=by rw [hMS0,hMF];rw ["+", ".join(f"hMP0_{r},←hmgC{r},←hmyC{r}" for r in range(4))+"]",f" have hMS:={ms.lean_theorem} (smFinal {mx.sm_tid}) "+" ".join(f"(pmFinal {u})" for u in mg.pm_tids)+" hmx.full_shape "+" ".join(f"(hmg.shard_shapes _ (by simp))" for _ in range(4)),f" have hMSV:smFinal {mso.sm_tid}=allGatherPrimDimN 1 4 0 {msl}:=by rw [hMS1,hmgV,hMS];rw ["+", ".join(f"hMP1_{r},←hmxC{r}" for r in range(4))+"]"])
+ lines.extend([
+  f" have hMF:={mf.lean_theorem} 4 1 1 8 8 8 {mgl} {mxl} {myl} (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl rfl hmg.shard_shapes hmx.shard_shapes hmy.shard_shapes",
+  " simp only [List.zipWith,bw_matmul,batchedMatmulBwd] at hMF",
+  f" have hMFV:smFinal {mfo.sm_tid}=allGatherPrimDimN 1 4 0 {mfl}:=by rw [hMS0,hmgV,hmyV,hMF];rw ["+", ".join(f"←hMP0_{r}" for r in range(4))+"]",
+  f" have hMS:={ms.lean_theorem} 4 1 1 8 8 8 {mgl} {mxl} {myl} (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl rfl hmg.shard_shapes hmx.shard_shapes hmy.shard_shapes",
+  " simp only [List.zipWith,bw_matmul,batchedMatmulBwd] at hMS",
+  f" have hMSV:smFinal {mso.sm_tid}=allGatherPrimDimN 1 4 0 {msl}:=by rw [hMS1,hmxV,hmgV,hMS];rw ["+", ".join(f"←hMP1_{r}" for r in range(4))+"]"])
  # package three ShardedRel outputs
  for name,o,l,val,full,shard,shape_src in (("LO",lo,lol,"hLOV","[1,8,32]","[1,2,32]","hlx"),("MF",mfo,mfl,"hMFV","[1,4,8,8]","[1,1,8,8]","hmg"),("MS",mso,msl,"hMSV","[1,4,8,8]","[1,1,8,8]","hmg")):
   if name=="LO":

@@ -11,8 +11,8 @@ def render_closed_transpose_bw_softmax_segment(ir, relation, segment_id: str) ->
         from relation_compiler import KRankTransposeRelationCertificate, KRankBWSoftmaxCertificate
     trule="transpose-sharded-k-rank"
     softmax_contracts={
-      "bw-softmax-sharded-dim1-rank4":("TrainVerify.Denote.softmaxBwd_split_dim1_4_1_4_8_8_g234",1,(1,1,8,8)),
-      "bw-softmax-sharded-dim2-rank4":("TrainVerify.Denote.bw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g164",2,(1,4,2,8)),
+      "bw-softmax-sharded-dim1-k-rank":("TrainVerify.Denote.bw_softmax_allGatherPrimDimN_dim1_rank4",1,(1,1,8,8)),
+      "bw-softmax-sharded-dim2-k-rank":("TrainVerify.Denote.bw_softmax_allGatherPrimDimN_dim2_rank4",2,(1,4,2,8)),
     }
     transpose_contracts={
       "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim2_to_dim1_rank4":(2,(1,4,8,8),(1,4,2,8),1,(1,8,4,8),(1,2,4,8)),
@@ -31,6 +31,8 @@ def render_closed_transpose_bw_softmax_segment(ir, relation, segment_id: str) ->
     rec={r.source:r for r in chain.relation_facts}
     try: ti,to=rec[tc.input_fact],rec[tc.output_fact];sg,sy,so=rec[sc.gradient_fact],rec[sc.activation_fact],rec[sc.output_fact]
     except KeyError as exc: raise ValueError("transpose/BW_softmax fact missing") from exc
+    if any(r.source.layout!="sharded" or r.source.gather_dim!=soft_dim for r in (sg,sy,so)):
+      raise ValueError("BW_softmax source/record axis mismatch")
     states={x.state_id:x for x in chain.states};before,after=states[seg.pre_state_id],states[seg.post_state_id]
     if not {ti.fact_id,sg.fact_id,sy.fact_id}<=set(before.fact_ids) or not {to.fact_id,so.fact_id}<=set(after.fact_ids): raise ValueError("transpose/BW_softmax facts are not live")
     if not set(after.fact_ids)<=({to.fact_id,so.fact_id}|set(before.fact_ids)): raise ValueError("transpose/BW_softmax post-state introduces unproved fact")
@@ -46,6 +48,10 @@ def render_closed_transpose_bw_softmax_segment(ir, relation, segment_id: str) ->
     tn=ir.sm_nodes[tr_sm[0]];sn=ir.sm_nodes[sf_sm[0]];tp=tuple(ir.pm_nodes[i] for i in tr_pm);sp=tuple(ir.pm_nodes[i] for i in sf_pm)
     if tn.op!="BW_transpose" or len(tn.ins)!=2 or tn.outs!=[to.sm_tid] or tuple(tn.params)!=(1,2) or tn.ins[0]!=ti.sm_tid: raise ValueError("transpose SM writer is invalid")
     if tuple(n.rank for n in tp)!=(0,1,2,3) or any(n.op!="BW_transpose" or len(n.ins)!=2 or tuple(n.params)!=(1,2) or n.ins[0]!=ti.pm_tids[r] or n.outs!=[to.pm_tids[r]] for r,n in enumerate(tp)): raise ValueError("transpose PM writers are invalid")
+    if (sn.rank != 0 or tuple(sn.params or []) != sc.parameters
+            or any(tuple(n.params or []) != sc.parameters for n in sp)
+            or any(len(r.pm_tids) != 4 for r in (sg,sy,so))):
+      raise ValueError("BW_softmax parameter/rank authority mismatch")
     if sn.op!="BW_softmax" or tuple(sn.ins)!=(sg.sm_tid,sy.sm_tid) or sn.outs!=[so.sm_tid]: raise ValueError("BW_softmax SM writer is invalid")
     if tuple(n.rank for n in sp)!=(0,1,2,3) or any(n.op!="BW_softmax" or tuple(n.ins)!=(sg.pm_tids[r],sy.pm_tids[r]) or n.outs!=[so.pm_tids[r]] for r,n in enumerate(sp)): raise ValueError("BW_softmax PM writers are invalid")
     if tc.sm_step_id!=f"sm:{tr_sm[0]}:0" or tc.pm_step_ids!=tuple(f"pm:{i}:0" for i in tr_pm) or sc.sm_step_id!=f"sm:{sf_sm[0]}:0" or sc.pm_step_ids!=tuple(f"pm:{i}:0" for i in sf_pm): raise ValueError("transpose/BW_softmax certificate footprint was tampered")
@@ -62,18 +68,20 @@ def render_closed_transpose_bw_softmax_segment(ir, relation, segment_id: str) ->
     htP=[helper(f"hTransposePm{r}",ir.pm_graph_ref,"pmStore",pmf,pmn,pmframe,i-ps,n,"transpose") for r,(i,n) in enumerate(zip(tr_pm,tp))]
     hsP=[helper(f"hSoftmaxPm{r}",ir.pm_graph_ref,"pmStore",pmf,pmn,pmframe,i-ps,n,"softmax") for r,(i,n) in enumerate(zip(sf_pm,sp))]
     til="["+", ".join(f"pmFinal {u}" for u in ti.pm_tids)+"]";tol="["+", ".join(f"pmFinal {u}" for u in to.pm_tids)+"]";gl="["+", ".join(f"pmFinal {u}" for u in sg.pm_tids)+"]";yl="["+", ".join(f"pmFinal {u}" for u in sy.pm_tids)+"]";ol="["+", ".join(f"pmFinal {u}" for u in so.pm_tids)+"]"
-    soft_shard_text=_shape_text(list(soft_shard));soft_shape_args=" ".join(str(x) for x in soft_shard[:3]);soft_fn="softmaxBwd" if soft_dim==1 else "bw_softmax"
+    soft_shard_text=_shape_text(list(soft_shard));soft_shape_args=" ".join(str(x) for x in soft_shard[:3]);soft_fn="bw_softmax"
     tin_shard_text=_shape_text(list(tin_shard));tout_full_text=_shape_text(list(tout_full));tout_shard_text=_shape_text(list(tout_shard))
     tin_symbolic=list(tin_shard);tin_symbolic[tin_dim]=f"{tin_shard[tin_dim]} * {til}.length";tin_symbolic_text="["+", ".join(map(str,tin_symbolic))+"]"
     lines.extend(["set_option maxHeartbeats 500000 in",f"private theorem {segment_id}_sound (smStore pmStore : Store) (hstate : {before.state_id}.Holds smStore pmStore) : {after.state_id}.Holds ({smf} smStore) ({pmf} pmStore) := by",f"    let smFinal := {smf} smStore",f"    let pmFinal := {pmf} pmStore",f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",f"      unfold smFinal pmFinal {smf} {pmf}",f"      apply RelationState.Holds.fold_frame {smn} {pmn} smStore pmStore hstate","      · native_decide","      · native_decide","      · native_decide","      · native_decide",f"    have hti : {ti.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",f"    change ShardedRel (smFinal {ti.sm_tid}) {til} {tin_dim} {tin_symbolic_text} {tin_shard_text} at hti",f"    have hg : {sg.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",f"    change ShardedRel (smFinal {sg.sm_tid}) {gl} {soft_dim} [1, 4, 8, 8] {soft_shard_text} at hg",f"    have hy : {sy.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",f"    change ShardedRel (smFinal {sy.sm_tid}) {yl} {soft_dim} [1, 4, 8, 8] {soft_shard_text} at hy",f"    have hTsm := {htS} smStore",f"    change smFinal {to.sm_tid} = transposeAxes 1 2 (smFinal {ti.sm_tid}) at hTsm",f"    have hSsm := {hsS} smStore",f"    change smFinal {so.sm_tid} = {soft_fn} (smFinal {sg.sm_tid}) (smFinal {sy.sm_tid}) at hSsm"])
     for r in range(4): lines.extend([f"    have hTpm{r} := {htP[r]} pmStore",f"    change pmFinal {to.pm_tids[r]} = transposeAxes 1 2 (pmFinal {ti.pm_tids[r]}) at hTpm{r}",f"    have hSpm{r} := {hsP[r]} pmStore",f"    change pmFinal {so.pm_tids[r]} = {soft_fn} (pmFinal {sg.pm_tids[r]}) (pmFinal {sy.pm_tids[r]}) at hSpm{r}",f"    have hgShape{r} := hg.shard_shapes (pmFinal {sg.pm_tids[r]}) (by simp)",f"    have hyShape{r} := hy.shard_shapes (pmFinal {sy.pm_tids[r]}) (by simp)",f"    have hSShape{r} : (pmFinal {so.pm_tids[r]}).shape = {soft_shard_text} := by rw [hSpm{r}]; exact bw_softmax_shape_d8_g234 _ _ {soft_shape_args} hyShape{r}"])
     lines.extend([f"    have htRaw := {tc.lean_theorem} hti",f"    have houtT : {to.fact_id}.Holds smFinal pmFinal := by",f"      change ShardedRel (smFinal {to.sm_tid}) {tol} {tout_dim} {tout_full_text} {tout_shard_text}","      rw [hTsm, "+", ".join(f"hTpm{r}" for r in range(4))+"]","      simpa using htRaw",f"    have hgValue : smFinal {sg.sm_tid} = allGatherPrimDimN {soft_dim} 4 0 {gl} := by simpa only [List.length_cons, List.length_nil] using hg.full_value",f"    have hyValue : smFinal {sy.sm_tid} = allGatherPrimDimN {soft_dim} 4 0 {yl} := by simpa only [List.length_cons, List.length_nil] using hy.full_value"])
-    if soft_dim == 1:
-      for name,rel,lst in (("g",sg,gl),("y",sy,yl)):
-        for r in range(4): lines.extend([f"    have h{name}Chunk{r} : chunkPrimDimN 1 4 {r} (smFinal {rel.sm_tid}) = pmFinal {rel.pm_tids[r]} := by",f"      rw [h{name}Value]",f"      simpa [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ] using (chunk1_gather1_roundtrip_1_1_8_8" ,*(f"        (pmFinal {u})" for u in rel.pm_tids),*(f"        (h{name}Shape{q})" for q in range(4)),f"        {r} (by omega))"])
-      lines.extend([f"    have hcomm := {sc.lean_theorem} (smFinal {sg.sm_tid}) (smFinal {sy.sm_tid}) hg.full_shape hy.full_shape",f"    have hSValue : smFinal {so.sm_tid} = allGatherPrimDimN 1 4 0 {ol} := by","      rw [hSsm, hcomm]","      rw ["+", ".join(f"hSpm{r}, ← hgChunk{r}, ← hyChunk{r}" for r in range(4))+"]"])
-    else:
-      lines.extend([f"    have hcomm := {sc.lean_theorem}",*(f"      (pmFinal {u})" for u in sg.pm_tids),*(f"      (pmFinal {u})" for u in sy.pm_tids),*(f"      hgShape{r}" for r in range(4)),*(f"      hyShape{r}" for r in range(4)),f"    have hSValue : smFinal {so.sm_tid} = allGatherPrimDimN 2 4 0 {ol} := by","      rw [hSsm, hgValue, hyValue, hcomm]","      rw ["+", ".join(f"← hSpm{r}" for r in range(4))+"]"])
+    # Keep the transpose half's checked K=4 shape domain; only migrate softmax ABI.
+    soft_args=" ".join(map(str,soft_shard))
+    lines.extend([f"    have hcomm := {sc.lean_theorem} {gl} {yl} 4 {soft_args}",
+      "      (by omega) (by omega) (by omega) (by omega) (by omega)",
+      "      (by simp) (by simp) hg.shard_shapes hy.shard_shapes",
+      f"    have hSValue : smFinal {so.sm_tid} = allGatherPrimDimN {soft_dim} 4 0 {ol} := by",
+      "      rw [hSsm, hgValue, hyValue, hcomm]", "      simp only [List.zipWith]",
+      "      rw ["+", ".join(f"← hSpm{r}" for r in range(4))+"]"])
     lines.extend([f"    have hSValueList : smFinal {so.sm_tid} = allGatherPrimDimN {soft_dim} {ol}.length 0 {ol} := by simpa only [List.length_cons, List.length_nil] using hSValue",f"    have hSFullShape : (smFinal {so.sm_tid}).shape = [1, 4, 8, 8] := by rw [hSsm]; exact bw_softmax_shape_d8_g234 _ _ 1 4 8 hy.full_shape",f"    have hSShapes : ∀ z ∈ {ol}, z.shape = {soft_shard_text} := by","      simp only [List.forall_mem_cons]","      exact ⟨"+", ".join(f"hSShape{r}" for r in range(4))+", List.forall_mem_nil _⟩",f"    have houtS : {so.fact_id}.Holds smFinal pmFinal := by",f"      change ShardedRel (smFinal {so.sm_tid}) {ol} {soft_dim} [1, 4, 8, 8] {soft_shard_text}","      exact { full_value := hSValueList, full_shape := hSFullShape, shards_nonempty := List.cons_ne_nil _ _, gather_dim_lt := by native_decide, shard_shapes := hSShapes, shape_contract := by simp only [List.map, List.length_cons, List.length_nil]; native_decide }"])
     lines.extend(["    intro fact hfact",f"    have covered : fact ∈ [{to.fact_id}, {so.fact_id}] ++ {before.state_id}.facts := by",f"      exact (show {after.state_id}.facts ⊆ [{to.fact_id}, {so.fact_id}] ++ {before.state_id}.facts by native_decide) hfact","    simp only [List.mem_append] at covered","    rcases covered with fresh | old","    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh","      rcases fresh with rfl | rfl","      · exact houtT","      · exact houtS","    · exact hframe fact old","","set_option maxRecDepth 8192 in",f"private def {segment_id} : ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",f"  smNodes := {smn}",f"  pmNodes := {pmn}","  sound := by intro smStore pmStore hstate; exact "+f"{segment_id}_sound smStore pmStore hstate",""])
     return "\n".join(lines)

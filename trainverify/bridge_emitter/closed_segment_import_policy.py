@@ -53,6 +53,14 @@ def plan_closed_segment_imports(
             module = "denote.KRankBWLinearDxColumnGeneral"
         elif theorem == "TrainVerify.Denote.bw_linear_dw_input_allGatherPrimDimN_dim2_rank3":
             module = "denote.KRankBWLinearDwColumn"
+        elif theorem in {
+            "TrainVerify.Denote.bw_softmax_allGatherPrimDimN_dim1_rank4",
+            "TrainVerify.Denote.bw_softmax_allGatherPrimDimN_dim2_rank4",
+        }:
+            module = "denote.KRankBWSoftmaxGeneral"
+        elif theorem in {"TrainVerify.Denote.bw_matmul_fst_head_gather_rank4",
+                         "TrainVerify.Denote.bw_matmul_snd_head_gather_rank4"}:
+            module = "denote.KRankBWMatmulHead"
         elif theorem == "TrainVerify.Denote.tensorSum_allGather_dim_K":
             module = "denote.KRankBWMultiref"
         elif theorem == "TrainVerify.Denote.bw_layernorm_dx_allGatherPrimDimN_dim1_3d":

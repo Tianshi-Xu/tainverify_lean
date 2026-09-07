@@ -7206,44 +7206,59 @@ class KRankBWSoftmaxCertificate:
     sm_step_id: str
     pm_step_ids: tuple[str, ...]
     lean_theorem: str
+    parameters: tuple[int, ...] = ()
 
 
 def advance_k_rank_bw_softmax_frontiers(plan, frontiers, layouts):
-    if len(frontiers)!=len(layouts):
+    """Transport actual BW_softmax inputs along positive rank-4 row axes."""
+    if len(frontiers) != len(layouts):
         raise RelationCompositionError("K-rank BW_softmax frontier/layout arity mismatch")
-    by_id={s.step_id:s for s in plan.steps};certs=[];rewritten=[];rewritten_layouts=[]
-    for frontier,layout in zip(frontiers,layouts):
-        if layout!="sharded" or len(frontier)!=5:
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        try: sm=by_id[frontier[0]];pms=tuple(by_id[x] for x in frontier[1:])
+    by_id = {s.step_id: s for s in plan.steps}
+    certs, rewritten, rewritten_layouts = [], [], []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 2:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm = by_id[frontier[0]]
+            pms = tuple(by_id[x] for x in frontier[1:])
         except KeyError:
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if sm.op!="BW_softmax" or sm.side!="sm" or any(x.op!="BW_softmax" or x.side!="pm" for x in pms):
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if tuple(int(x.rank) for x in pms)!=(0,1,2,3) or len(sm.input_bindings)!=2 or any(len(x.input_bindings)!=2 for x in pms):
-            raise RelationCompositionError("rank-4 BW_softmax writer/input authority mismatch")
-        full=tuple(sm.output_shape);shards=tuple(tuple(x.output_shape) for x in pms)
-        if full!=(1,4,8,8) or any(x!=shards[0] for x in shards):
-            raise RelationCompositionError("BW_softmax output is outside checked rank-4 shapes")
-        shard=shards[0]
-        candidates=[d for d in (1,2) if full[d]==shard[d]*4 and all(full[i]==shard[i] for i in range(4) if i!=d)]
-        if len(candidates)!=1: raise RelationCompositionError(f"BW_softmax axis is not unique orthogonal sharding: {candidates}")
-        dim=candidates[0]
-        if any(tuple(shape)!=full for shape in sm.input_shapes) or any(any(tuple(shape)!=shard for shape in x.input_shapes) for x in pms):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm.op != "BW_softmax" or sm.side != "sm" or any(x.op != "BW_softmax" or x.side != "pm" for x in pms):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        k = len(pms)
+        if (sm.rank != 0 or tuple(x.rank for x in pms) != tuple(range(k))
+                or any(len(x.input_bindings) != 2 for x in (sm, *pms))):
+            raise RelationCompositionError("K-rank BW_softmax writer/input authority mismatch")
+        params = tuple(sm.parameters)
+        if any(tuple(x.parameters) != params for x in pms):
+            raise RelationCompositionError("BW_softmax parameter authority drift")
+        full = tuple(sm.output_shape)
+        shards = tuple(tuple(x.output_shape) for x in pms)
+        if (len(full) != 4 or any(len(x) != 4 or min(x) <= 0 for x in shards)
+                or min(full) <= 0 or any(x != shards[0] for x in shards)):
+            raise RelationCompositionError("BW_softmax requires positive uniform rank-4 shapes")
+        shard = shards[0]
+        candidates = [d for d in (1, 2) if full[d] == shard[d] * k
+                      and all(full[i] == shard[i] for i in range(4) if i != d)]
+        # A singleton gather is identical on either axis; use canonical dim1.
+        if not candidates or (k != 1 and len(candidates) != 1):
+            raise RelationCompositionError(f"BW_softmax axis is not orthogonal sharding: {candidates}")
+        dim = candidates[0]
+        if (tuple(sm.input_shapes) != (full, full)
+                or any(tuple(x.input_shapes) != (shard, shard) for x in pms)):
             raise RelationCompositionError("BW_softmax input shapes do not preserve output sharding")
-        grefs=(sm.input_bindings[0],*(x.input_bindings[0] for x in pms))
-        yrefs=(sm.input_bindings[1],*(x.input_bindings[1] for x in pms))
-        gfact=RelationFactSpec("sharded",grefs,gather_dim=dim)
-        yfact=RelationFactSpec("sharded",yrefs,gather_dim=dim)
-        output=RelationFactSpec("sharded",tuple(frontier),gather_dim=dim)
-        theorem=("TrainVerify.Denote.softmaxBwd_split_dim1_4_1_4_8_8_g234" if dim==1
-                 else "TrainVerify.Denote.bw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g164")
+        grefs = (sm.input_bindings[0], *(x.input_bindings[0] for x in pms))
+        xrefs = (sm.input_bindings[1], *(x.input_bindings[1] for x in pms))
+        spec = get_closed_rule_spec(f"bw-softmax-sharded-dim{dim}-k-rank")
         certs.append(KRankBWSoftmaxCertificate(
-            rule_id=f"bw-softmax-sharded-dim{dim}-rank4",rank_count=4,gather_dim=dim,
-            gradient_fact=gfact,activation_fact=yfact,output_fact=output,
-            sm_step_id=sm.step_id,pm_step_ids=tuple(x.step_id for x in pms),lean_theorem=theorem))
-        rewritten.extend((grefs,yrefs));rewritten_layouts.extend(("sharded","sharded"))
-    return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
+            rule_id=spec.rule_id, rank_count=k, gather_dim=dim,
+            gradient_fact=RelationFactSpec("sharded", grefs, gather_dim=dim),
+            activation_fact=RelationFactSpec("sharded", xrefs, gather_dim=dim),
+            output_fact=RelationFactSpec("sharded", tuple(frontier), gather_dim=dim),
+            sm_step_id=sm.step_id, pm_step_ids=tuple(x.step_id for x in pms),
+            lean_theorem=spec.lean_theorems[0], parameters=params))
+        rewritten.extend((grefs, xrefs)); rewritten_layouts.extend(("sharded", "sharded"))
+    return tuple(certs), tuple(rewritten), tuple(rewritten_layouts)
 
 
 @dataclass(frozen=True)
@@ -7306,25 +7321,27 @@ def advance_k_rank_bw_view_flatten_frontiers(plan, frontiers, layouts):
     for frontier,layout in zip(frontiers,layouts):
         steps=tuple(by_id.get(ref) for ref in frontier)
         if (layout!="sharded" or len(steps)<2 or any(step is None for step in steps)
-                or any(step.op!="BW_view" for step in steps)):
+                or steps[0].op not in ("BW_view","FW_view") or any(step.op!=steps[0].op for step in steps)):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         sm,*pms=steps;k=len(pms)
+        arity=2 if sm.op=="BW_view" else 1
+        prefix="bw" if sm.op=="BW_view" else "fw"
         # Leave other valid view families to their own relation rule.
-        if (len(sm.input_shapes)!=2 or len(sm.input_shapes[0])!=4 or len(sm.output_shape)!=3):
+        if (len(sm.input_shapes)!=arity or len(sm.input_shapes[0])!=4 or len(sm.output_shape)!=3):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         if (sm.side!="sm" or sm.rank!=0 or tuple(p.rank for p in pms)!=tuple(range(k))
                 or any(p.side!="pm" for p in pms)
-                or any(len(p.input_shapes)!=2 or len(p.input_bindings)!=2 for p in steps)
+                or any(len(p.input_shapes)!=arity or len(p.input_bindings)!=arity for p in steps)
                 or any(len(p.input_shapes[0])!=4 for p in pms)):
             raise RelationCompositionError("BW_view flatten writer/input authority mismatch")
         b,s,n,d=tuple(pms[0].input_shapes[0])
         if tuple(sm.input_shapes[0])==(b,s*k,n,d):
             dim=1;full=(b,s*k,n,d);full_out=(b,s*k,n*d)
-            rule="bw-view-flatten-sequence-sharded-k-rank"
+            rule=f"{prefix}-view-flatten-sequence-sharded-k-rank"
             theorem="TrainVerify.Denote.fw_view_allGatherPrimDimN_dim1_rank4_to_rank3"
         elif tuple(sm.input_shapes[0])==(b,s,n*k,d):
             dim=2;full=(b,s,n*k,d);full_out=(b,s,n*k*d)
-            rule="bw-view-flatten-head-sharded-k-rank"
+            rule=f"{prefix}-view-flatten-head-sharded-k-rank"
             theorem="TrainVerify.Denote.fw_view_allGatherPrimDimN_dim2_rank4_to_rank3"
         else:
             raise RelationCompositionError("BW_view flatten input gather shape mismatch")
@@ -7332,7 +7349,7 @@ def advance_k_rank_bw_view_flatten_frontiers(plan, frontiers, layouts):
         if (any(v<=0 for v in (b,s,n,d))
                 or tuple(sm.input_shapes[0])!=full or tuple(sm.output_shape)!=full_out
                 or any(tuple(p.input_shapes[0])!=shard or tuple(p.output_shape)!=shard_out for p in pms)
-                or any(tuple(p.input_shapes[1])!=tuple(p.output_shape) or tuple(p.parameters)!=tuple(p.output_shape) for p in steps)):
+                or any((arity==2 and tuple(p.input_shapes[1])!=tuple(p.output_shape)) or tuple(p.parameters)!=tuple(p.output_shape) for p in steps)):
             raise RelationCompositionError("BW_view flatten shape/parameter authority mismatch")
         refs=tuple(p.input_bindings[0] for p in steps)
         inp=RelationFactSpec("sharded",refs,gather_dim=dim)
@@ -7478,6 +7495,22 @@ class KRankBWMatmulCertificate:
     lean_theorem: str
 
 
+def bw_matmul_head_shape_spec(k, full_inputs, local_inputs, full_output, local_output, projection, layout):
+    if (k<1 or len(full_inputs)!=3 or len(local_inputs)!=3
+            or any(len(sh)!=4 for sh in (*full_inputs,*local_inputs,full_output,local_output))):
+        raise RelationCompositionError("BW_matmul head requires rank-4 shapes")
+    b,h,q,m=local_inputs[0];n=local_inputs[1][3]
+    if any(v<=0 for v in (b,h,q,n,m)):
+        raise RelationCompositionError("BW_matmul head dimensions must be positive")
+    full=((b,h*k,q,m),(b,h*k,q,n),(b,h*k,n,m))
+    local=((b,h,q,m),(b,h,q,n),(b,h,n,m))
+    slot={".1":1,".2":2}.get(projection)
+    if (tuple(map(tuple,full_inputs))!=full or tuple(map(tuple,local_inputs))!=local
+            or slot is None or layout!="sharded" or tuple(full_output)!=full[slot] or tuple(local_output)!=local[slot]):
+        raise RelationCompositionError("BW_matmul head shape/projection equations mismatch")
+    return b,h,q,n,m
+
+
 def bw_matmul_query_shape_spec(k, full_inputs, local_inputs, full_output, local_output, projection, layout):
     """Check every rank-4 query equation; also shared by the untrusted-payload renderer."""
     if (type(k) is not int or k <= 0 or len(full_inputs) != 3 or len(local_inputs) != 3
@@ -7500,6 +7533,12 @@ def bw_matmul_query_shape_spec(k, full_inputs, local_inputs, full_output, local_
 
 
 _register_closed_rule_specs(
+    ClosedRuleSpec(
+        "bw-matmul-head-sharded-k-rank", KRankBWMatmulCertificate,
+        ("TrainVerify.Denote.bw_matmul_fst_head_gather_rank4", "TrainVerify.Denote.bw_matmul_snd_head_gather_rank4"),
+        "BW_matmul", "bw_matmul_head_renderer:render_closed_bw_matmul_head_segment",
+        ("denote.KRankBWMatmulHead",),
+    ),
     ClosedRuleSpec(
         "bw-matmul-fst-query-sharded-k-rank", KRankBWMatmulCertificate,
         ("TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_query_axis_rank4",),
@@ -7544,6 +7583,23 @@ def advance_k_rank_bw_matmul_frontiers(plan, frontiers, layouts):
         k=len(pms)
         if any(len(s.input_bindings) != 3 or len(s.input_shapes) != 3 for s in (sm,*pms)):
             raise RelationCompositionError("BW_matmul input authority arity mismatch")
+        head = k>1 and any(len(sm.input_shapes[a])==4 and len(pms[0].input_shapes[a])==4
+                             and sm.input_shapes[a][1]==pms[0].input_shapes[a][1]*k for a in range(3))
+        if head:
+            if (sm.rank!=0 or tuple(p.rank for p in pms)!=tuple(range(k))
+                    or any(s.parameters for s in (sm,*pms))
+                    or sm.output_projection not in (".1",".2")
+                    or any(p.output_projection!=sm.output_projection for p in pms)):
+                raise RelationCompositionError("BW_matmul head writer authority mismatch")
+            for p in pms:
+                bw_matmul_head_shape_spec(k,sm.input_shapes,p.input_shapes,sm.output_shape,p.output_shape,sm.output_projection,layout)
+            refs=tuple((sm.input_bindings[a],*(p.input_bindings[a] for p in pms)) for a in range(3))
+            facts=tuple(RelationFactSpec("sharded",f,gather_dim=1) for f in refs)
+            theorem="TrainVerify.Denote.bw_matmul_fst_head_gather_rank4" if sm.output_projection==".1" else "TrainVerify.Denote.bw_matmul_snd_head_gather_rank4"
+            certs.append(KRankBWMatmulCertificate("bw-matmul-head-sharded-k-rank","head-sharded",sm.output_projection,k,facts,
+                RelationFactSpec("sharded",tuple(frontier),gather_dim=1),sm.step_id,tuple(p.step_id for p in pms),theorem))
+            rewritten.extend(refs);rewritten_layouts.extend(("sharded",)*3)
+            continue
         # Query axis is explicit, not inferred from coincident dimensions (K=1).
         # Non-query families retain their existing K=4 domain.
         query = (len(set(p.input_bindings[2] for p in pms)) == 1
@@ -7604,10 +7660,6 @@ def advance_k_rank_bw_matmul_frontiers(plan, frontiers, layouts):
                 ("fst-contraction-reduction","TrainVerify.Denote.bw_matmul_fst_split_dW_1_4_8_8"),
             (".2",(("sharded",3),("joined",None),("sharded",3)),"sharded",3):
                 ("snd-g-sharded","TrainVerify.Denote.bw_matmul_snd_split_1_4_8_8"),
-            (".1",(("sharded",1),("sharded",1),("sharded",1)),"sharded",1):
-                ("batch-sharded","TrainVerify.Denote.bw_matmul_fst_split_dim1_4_1_4_8_8"),
-            (".2",(("sharded",1),("sharded",1),("sharded",1)),"sharded",1):
-                ("batch-sharded","TrainVerify.Denote.bw_matmul_snd_split_batchdim1_1_4_8_8"),
         }
         try: family,theorem=family_theorem[sig]
         except KeyError as exc: raise RelationCompositionError(f"unsupported BW_matmul relation signature: {sig}") from exc
@@ -10596,6 +10648,18 @@ def _merge_footprints(*ref_groups: tuple[str, ...]) -> tuple[tuple[int, ...], tu
 
 _register_closed_rule_specs(
     ClosedRuleSpec(
+        "bw-softmax-sharded-dim1-k-rank", KRankBWSoftmaxCertificate,
+        ("TrainVerify.Denote.bw_softmax_allGatherPrimDimN_dim1_rank4",),
+        "BW_softmax", "bw_softmax_renderer:render_closed_k_rank_bw_softmax_segment",
+        ("denote.KRankBWSoftmaxGeneral",),
+    ),
+    ClosedRuleSpec(
+        "bw-softmax-sharded-dim2-k-rank", KRankBWSoftmaxCertificate,
+        ("TrainVerify.Denote.bw_softmax_allGatherPrimDimN_dim2_rank4",),
+        "BW_softmax", "bw_softmax_renderer:render_closed_k_rank_bw_softmax_segment",
+        ("denote.KRankBWSoftmaxGeneral",),
+    ),
+    ClosedRuleSpec(
         "bw-add-identity-sharded-k-rank", KRankBWAddIdentityCertificate,
         ("TrainVerify.Denote.bw_add2_fst_same_shape", "TrainVerify.Denote.bw_add2_snd_same_shape"),
         "BW_add", "bw_add_identity_renderer:render_closed_k_rank_bw_add_identity_segment",
@@ -10654,6 +10718,18 @@ _register_closed_rule_specs(
         ("TrainVerify.Denote.tensorSum_allGather_dim_K",),
         "BW_multiref", "bw_multiref_sum_renderer:render_closed_k_rank_bw_multiref_sum_segment",
         ("denote.KRankBWMultiref",),
+    ),
+    ClosedRuleSpec(
+        "fw-view-flatten-sequence-sharded-k-rank", KRankBWViewFlattenCertificate,
+        ("TrainVerify.Denote.fw_view_allGatherPrimDimN_dim1_rank4_to_rank3",),
+        "FW_view", "bw_view_flatten_renderer:render_closed_bw_view_flatten_segment",
+        ("denote.KRankViewFlatten",),
+    ),
+    ClosedRuleSpec(
+        "fw-view-flatten-head-sharded-k-rank", KRankBWViewFlattenCertificate,
+        ("TrainVerify.Denote.fw_view_allGatherPrimDimN_dim2_rank4_to_rank3",),
+        "FW_view", "bw_view_flatten_renderer:render_closed_bw_view_flatten_segment",
+        ("denote.KRankViewFlatten",),
     ),
     ClosedRuleSpec(
         "bw-view-flatten-head-sharded-k-rank", KRankBWViewFlattenCertificate,

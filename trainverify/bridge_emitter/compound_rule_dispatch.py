@@ -31,19 +31,19 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
             and set(family) <= query_rules | {"bw-view-joined"}):
         return "bw_matmul_query_renderer:render_closed_bw_matmul_query_segment"
     if family == (
-        "bw-matmul-batch-sharded-rank4",
-        "bw-matmul-batch-sharded-rank4",
+        "bw-matmul-head-sharded-k-rank",
+        "bw-matmul-head-sharded-k-rank",
     ):
-        return "bw_matmul_batch_pair_renderer:render_closed_paired_batch_bw_matmul_segment"
+        return "bw_matmul_head_renderer:render_closed_bw_matmul_head_segment"
     if (family.count("bw-linear-dx-sequence-sharded-k-rank") == 1
             and family.count("bw-linear-dw-sequence-reduction-rank4") == 1
-            and family.count("bw-matmul-batch-sharded-rank4") == 2
+            and family.count("bw-matmul-head-sharded-k-rank") == 2
             and len(family) == 4):
         return "bw_linear_matmul_quad_renderer:render_closed_bw_linear_matmul_quad_segment"
     if family == (
         "bw-linear-dx-sequence-sharded-k-rank",
-        "bw-matmul-batch-sharded-rank4",
-        "bw-matmul-batch-sharded-rank4",
+        "bw-matmul-head-sharded-k-rank",
+        "bw-matmul-head-sharded-k-rank",
     ):
         return "bw_linear_matmul_batch_renderer:render_closed_bw_linear_matmul_batch_segment"
     if family in {
@@ -67,8 +67,8 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
     if family == ("bw-view-joined", "div-sharded-k-rank-dim2"):
         return "bw_view_bw_div_renderer:render_closed_bw_view_bw_div_segment"
     if family in {
-        ("transpose-sharded-k-rank", "bw-softmax-sharded-dim1-rank4"),
-        ("bw-softmax-sharded-dim2-rank4", "transpose-sharded-k-rank"),
+        ("transpose-sharded-k-rank", "bw-softmax-sharded-dim1-k-rank"),
+        ("bw-softmax-sharded-dim2-k-rank", "transpose-sharded-k-rank"),
     }:
         return "transpose_bw_softmax_renderer:render_closed_transpose_bw_softmax_segment"
     if (family.count("bw-linear-dw-output-row-sharded-rank4") == 1
@@ -98,7 +98,7 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
         "transpose-sharded-k-rank",
         "allreduce-reconstruction-k-rank",
         "full-producer-chunks-k-rank",
-        "bw-softmax-sharded-dim2-rank4",
+        "bw-softmax-sharded-dim2-k-rank",
         "allgather-reconstruction-k-rank",
     ):
         return "reconstruction_softmax_renderer:render_closed_reconstruction_softmax_segment"
