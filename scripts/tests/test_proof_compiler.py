@@ -1561,7 +1561,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
         ir, relation, bw_linear_column.segment_id
     )
     assert "private def segment_000195" in bw_linear_column_source
-    assert "bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3" in bw_linear_column_source
+    assert "bw_linear_dx_column_allGather_rank3" in bw_linear_column_source
 
     bw_gelu = next(s for s in relation.dependent_chain_plan.segments
                    if s.segment_id == "segment_000197")
@@ -1688,7 +1688,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
         ir, relation, mixed_backward.segment_id
     )
     assert "private def segment_000228" in mixed_backward_source
-    assert "bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3" in mixed_backward_source
+    assert "bw_linear_dx_column_allGather_rank3" in mixed_backward_source
     column_certs = [c for c in relation.certificates
                     if getattr(c, "family", None) == "column-sharded"]
     assert column_certs and all(c.rule_id == "bw-linear-dx-column-sharded-k-rank"

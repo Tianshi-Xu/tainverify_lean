@@ -9,9 +9,6 @@ def render_closed_k_rank_bw_sum_segment(ir, relation, segment_id: str) -> str:
         from composer import _node_text, _shape_text, _render_mixed_final_value
         from relation_compiler import get_closed_rule_spec
 
-    spec = get_closed_rule_spec("bw-sum-scalar-broadcast-dim2-k-rank")
-    rule_id = spec.rule_id
-    theorem = spec.lean_theorems[0]
     chain = relation.dependent_chain_plan
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
     if segment is None or len(segment.transition_ids) != 1:
@@ -19,7 +16,14 @@ def render_closed_k_rank_bw_sum_segment(ir, relation, segment_id: str) -> str:
     transition = {item.transition_id: item for item in relation.transition_specs}[
         segment.transition_ids[0]
     ]
-    if transition.rule_id != rule_id or transition.lean_theorem != theorem:
+    axes = {"bw-sum-scalar-broadcast-dim1-k-rank": 1,
+            "bw-sum-scalar-broadcast-dim2-k-rank": 2}
+    if transition.rule_id not in axes:
+        raise ValueError("BW_sum rule identity is unsupported")
+    dim = axes[transition.rule_id]
+    spec = get_closed_rule_spec(transition.rule_id)
+    theorem = spec.lean_theorems[0]
+    if transition.lean_theorem != theorem:
         raise ValueError("bw-sum-scalar-broadcast-dim2-k-rank theorem identity mismatch")
     records = {item.source: item for item in chain.relation_facts}
     try:
@@ -67,16 +71,16 @@ def render_closed_k_rank_bw_sum_segment(ir, relation, segment_id: str) -> str:
     k = len(post.pm_tids)
     full_shape_meta = activation.full_shape
     shard_shape_meta = activation.shard_shape
-    if (k < 2 or certificate.rank_count != k or certificate.gather_dim != 2
+    if (k < 2 or certificate.rank_count != k or certificate.gather_dim != dim
             or gradient.kind != "reduction" or len(gradient.pm_tids) != 1
             or gradient.full_shape != (1,) or gradient.shard_shape != (1,)
-            or activation.kind != "sharded" or activation.gather_dim != 2
-            or post.kind != "sharded" or post.gather_dim != 2
+            or activation.kind != "sharded" or activation.gather_dim != dim
+            or post.kind != "sharded" or post.gather_dim != dim
             or len(activation.pm_tids) != k
             or len(full_shape_meta) != 3 or len(shard_shape_meta) != 3
             or any(value <= 0 for value in shard_shape_meta)
-            or full_shape_meta[2] != shard_shape_meta[2] * k
-            or full_shape_meta[:2] != shard_shape_meta[:2]
+            or full_shape_meta != tuple(value*k if axis==dim else value
+                                        for axis,value in enumerate(shard_shape_meta))
             or (activation.full_shape, activation.shard_shape)
                != (post.full_shape, post.shard_shape)):
         raise ValueError("K-rank BW_sum relation metadata is not exact")
@@ -186,9 +190,9 @@ def render_closed_k_rank_bw_sum_segment(ir, relation, segment_id: str) -> str:
         f"      {_shape_text(list(gradient.full_shape))} at hg",
         f"    have hgValue : smFinal {gradient.sm_tid} = pmFinal {gradient.pm_tids[0]} :=",
         "      ReductionRel.singleton_value hg",
-        f"    change ShardedRel (smFinal {activation.sm_tid}) {activation_list} 2 {full_shape} {shard_shape} at hx",
+        f"    change ShardedRel (smFinal {activation.sm_tid}) {activation_list} {dim} {full_shape} {shard_shape} at hx",
         f"    have hxValue : smFinal {activation.sm_tid} =",
-        f"        allGatherPrimDimN 2 {k} 0 {activation_list} := by",
+        f"        allGatherPrimDimN {dim} {k} 0 {activation_list} := by",
         "      simpa only [List.length_cons, List.length_nil] using hx.full_value",
         f"    have hSmWriter : smFinal {sm_node.outs[0]} =",
         f"        bw_sum (smFinal {sm_node.ins[0]}) (smFinal {sm_node.ins[1]}) := by",
@@ -202,19 +206,20 @@ def render_closed_k_rank_bw_sum_segment(ir, relation, segment_id: str) -> str:
             f"    have hXShape{rank} := hx.shard_shapes (pmFinal {activation.pm_tids[rank]}) (by simp)",
         ])
     d0, d1, d2 = shard_shape_meta
+    positive = "(by native_decide)" if dim == 2 else "(by decide) (by decide) (by decide)"
     lines.extend([
         f"    have hcomm : bw_sum (smFinal {gradient.sm_tid})",
-        f"        (allGatherPrimDimN 2 {k} 0 {activation_list}) =",
-        f"        allGatherPrimDimN 2 {k} 0 {mapped_activation_list} := by",
+        f"        (allGatherPrimDimN {dim} {k} 0 {activation_list}) =",
+        f"        allGatherPrimDimN {dim} {k} 0 {mapped_activation_list} := by",
         "      simpa only [List.length_cons, List.length_nil, List.map] using",
         f"        ({theorem}",
         f"          (smFinal {gradient.sm_tid}) {activation_list} {d0} {d1} {d2}",
-        "          hx.shards_nonempty (by native_decide) hx.shard_shapes)",
+        f"          hx.shards_nonempty {positive} hx.shard_shapes)",
         f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
-        f"      change ShardedRel (smFinal {post.sm_tid}) {out_list} 2 {full_shape} {shard_shape}",
+        f"      change ShardedRel (smFinal {post.sm_tid}) {out_list} {dim} {full_shape} {shard_shape}",
         "      constructor",
         "      · change smFinal " + str(post.sm_tid) +
-        f" = allGatherPrimDimN 2 {k} 0 {out_list}",
+        f" = allGatherPrimDimN {dim} {k} 0 {out_list}",
         "        rw [hSmWriter, hxValue, hcomm, hgValue]",
         "        rw [" + ", ".join(f"← hPmWriter{rank}" for rank in range(k)) + "]",
         "      · rw [hSmWriter, bw_sum_shape, hx.full_shape]",

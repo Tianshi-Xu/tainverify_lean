@@ -1,5 +1,5 @@
 import denote.RelationCompiler
-import denote.KRankBWLinearDxColumn
+import denote.KRankBWLinearDxColumnGeneral
 import denote.KRankBWLinearDwColumn
 open TrainVerify.Denote TrainVerify.Denote.RelationCompiler
 namespace SyntheticBWLinearDwColumn
@@ -418,10 +418,11 @@ private theorem segment_000000_sound (smStore pmStore : Store)
       rw [hPmDwWriter2]
       exact bw_linear_3d_snd_shape 1 8 7 5 _ _ _
         hg.2.2 hxShape2 hwShape2
-    have hcomm := TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3 (pmFinal 1000)
-      (smFinal 200) [pmFinal 2000, pmFinal 2001, pmFinal 2002] [pmFinal 3000, pmFinal 3001, pmFinal 3002] 7 5 (by decide) (by decide)
-      (by simp) (by simp) hg.2.2 hx.full_shape hx.shard_shapes hw.shard_shapes
-    simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hcomm
+    have hcomm := TrainVerify.Denote.bw_linear_dx_column_allGather_rank3 3 1 8 7 5
+      (pmFinal 1000) (smFinal 200) [pmFinal 2000, pmFinal 2001, pmFinal 2002] [pmFinal 3000, pmFinal 3001, pmFinal 3002]
+      (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl
+      hg.2.2 hx.full_shape hx.shard_shapes hw.shard_shapes
+    simp only [List.zipWith_cons_cons, List.zipWith_nil_left] at hcomm
     have hOutValue : smFinal 400 = allGatherPrimDimN 2 3 0 [pmFinal 4000, pmFinal 4001, pmFinal 4002] := by
       rw [hSmWriter, hg.1, hwValue, hcomm]
       rw [← hPmWriter0, ← hPmWriter1, ← hPmWriter2]

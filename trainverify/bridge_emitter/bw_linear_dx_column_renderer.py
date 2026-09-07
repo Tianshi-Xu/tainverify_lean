@@ -192,11 +192,12 @@ def _render_column_single_output(ir, relation, segment_id: str, *, dw: bool) -> 
             lines.extend(item[2:] if item.startswith("  ") else item for item in helper);lines.extend(["  exact hout",""]);return theorem_name
         view_sm_helper=view_writer("hViewSm",ir.sm_graph_ref,"smStore",sm_final_name,sm_nodes_name,sm_frame,view_transition.sm_node_indices[0]-sm_start,view_sm_node)
         view_pm_helper=view_writer("hViewPm",ir.pm_graph_ref,"pmStore",pm_final_name,pm_nodes_name,pm_frame,view_transition.pm_node_indices[0]-pm_start,view_pm_node)
+    b,s=gradient.full_shape[:2]
     lines.extend([
         f"private theorem {segment_id}_{derivative}_shape (g x w : Tensor) (o i : Nat)",
-        "    (hg : g.shape = [1,8,o]) (hx : x.shape = [1,8,i])",
-        f"    (hw : w.shape = [o,i]) : (bw_linear g x w){projection}.shape = {'[o,i]' if dw else '[1,8,i]'} :=",
-        f"  bw_linear_3d_{'snd' if dw else 'fst'}_shape 1 8 o i g x w hg hx hw", "",
+        f"    (hg : g.shape = [{b},{s},o]) (hx : x.shape = [{b},{s},i])",
+        f"    (hw : w.shape = [o,i]) : (bw_linear g x w){projection}.shape = {'[o,i]' if dw else f'[{b},{s},i]'} :=",
+        f"  bw_linear_3d_{'snd' if dw else 'fst'}_shape {b} {s} o i g x w hg hx hw", "",
     ])
     xlist = "[" + ", ".join(f"pmFinal {tid}" for tid in activation.pm_tids) + "]"
     wlist = "[" + ", ".join(f"pmFinal {tid}" for tid in weight.pm_tids) + "]"
@@ -302,23 +303,29 @@ def render_dynamic_column_commute(theorem, gradient, activation, weight):
     """Common list ABI for singleton and shared dX/dW column frames."""
     xs="["+", ".join(f"pmFinal {t}" for t in activation.pm_tids)+"]"
     ws="["+", ".join(f"pmFinal {t}" for t in weight.pm_tids)+"]"
-    return [f"    have hcomm := {theorem} (pmFinal {gradient.joined_pm_tid})",
-            f"      (smFinal {activation.sm_tid}) {xs} {ws} {gradient.full_shape[2]} {activation.shard_shape[2]} (by decide) (by decide)",
-            "      (by simp) (by simp) hg.2.2 hx.full_shape hx.shard_shapes hw.shard_shapes",
-            "    simp only [List.length_cons, List.length_nil, List.zipWith_cons_cons, List.zipWith_nil_left] at hcomm"]
+    k=len(activation.pm_tids);b,s,o=gradient.full_shape;d=activation.shard_shape[2]
+    return [f"    have hcomm := {theorem} {k} {b} {s} {o} {d}",
+            f"      (pmFinal {gradient.joined_pm_tid}) (smFinal {activation.sm_tid}) {xs} {ws}",
+            "      (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl",
+            "      hg.2.2 hx.full_shape hx.shard_shapes hw.shard_shapes",
+            "    simp only [List.zipWith_cons_cons, List.zipWith_nil_left] at hcomm"]
 
 
 def column_dx_shape_spec(gradient, activation, weight, output, k, *, dw=False):
     """Validate shared column roles and the selected dX/dW output contract."""
-    if (k < 1 or len(gradient.full_shape) != 3 or gradient.full_shape[:2] != (1,8)
-            or len(activation.shard_shape) != 3 or activation.shard_shape[:2] != (1,8)):
+    if (k < 1 or len(gradient.full_shape) != 3
+            or len(activation.shard_shape) != 3
+            or activation.shard_shape[:2] != gradient.full_shape[:2]):
         raise ValueError("column dX tensor ranks or row shape are unsupported")
+    b,s=gradient.full_shape[:2]
+    if b<=0 or s<=0 or (dw and (b,s)!=(1,8)):
+        raise ValueError("column derivative theorem batch/sequence domain mismatch")
     o,d=gradient.full_shape[2],activation.shard_shape[2]
-    expected_output=((o,d*k),(o,d)) if dw else ((1,8,d*k),(1,8,d))
+    expected_output=((o,d*k),(o,d)) if dw else ((b,s,d*k),(b,s,d))
     if (o <= 0 or d <= 0 or gradient.kind != "joined" or gradient.pm_tids != ()
             or gradient.joined_pm_tid is None
             or activation.kind != "sharded" or activation.gather_dim != 2
-            or activation.full_shape != (1,8,d*k) or len(activation.pm_tids) != k
+            or activation.full_shape != (b,s,d*k) or len(activation.pm_tids) != k
             or weight.kind != "sharded" or weight.gather_dim != 1
             or weight.full_shape != (o,d*k) or weight.shard_shape != (o,d)
             or len(weight.pm_tids) != k
@@ -326,5 +333,5 @@ def column_dx_shape_spec(gradient, activation, weight, output, k, *, dw=False):
             or (output.full_shape,output.shard_shape) != expected_output
             or len(output.pm_tids) != k):
         raise ValueError("column dX role shapes/layouts are inconsistent")
-    return {"gradient": (1,8,o), "activation": ((1,8,d*k),(1,8,d)),
+    return {"gradient": (b,s,o), "activation": ((b,s,d*k),(b,s,d)),
             "weight": ((o,d*k),(o,d)), "output": expected_output}

@@ -4,11 +4,11 @@ from trainverify.bridge_emitter import relation_compiler as rc
 from trainverify.bridge_emitter.parser import LineageGoal
 
 RULE="bw-linear-dx-column-sharded-k-rank"
-THEOREM="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
+THEOREM="TrainVerify.Denote.bw_linear_dx_column_allGather_rank3"
 
 
-def matcher_fixture(k=3,o=32,d=32):
-    full=(1,8,d*k); shard=(1,8,d); fw=(o,d*k); sw=(o,d); gradient=(1,8,o)
+def matcher_fixture(k=3,o=32,d=32,*,b=1,s=8):
+    full=(b,s,d*k); shard=(b,s,d); fw=(o,d*k); sw=(o,d); gradient=(b,s,o)
     sm=SimpleNamespace(step_id="sm:0:0",op="BW_linear",side="sm",rank=0,
         output_projection=".1",parameters=(),input_bindings=("sm:g:0","sm:x:0","init:700"),
         input_shapes=(gradient,full,fw),output_shape=full)
@@ -18,6 +18,21 @@ def matcher_fixture(k=3,o=32,d=32):
     ir=SimpleNamespace(init_lineages={700:LineageGoal(700,list(fw),[(r,701+r) for r in range(k)],
         [list(sw) for _ in range(k)],gatherDim=1)})
     return SimpleNamespace(steps=(sm,*pms)),ir,(sm.step_id,*(p.step_id for p in pms))
+
+
+@pytest.mark.parametrize("case",((2,1,16,64,32),(4,1,16,64,16),(3,2,5,7,11),(1,3,2,1,4),(5,2,1,3,2)))
+def test_column_general_batch_sequence_matcher(case):
+    k,b,s,o,d=case
+    plan,ir,f=matcher_fixture(k,o,d,b=b,s=s)
+    certs,_,_=rc.advance_k_rank_bw_linear_dx_frontiers(plan,ir,(f,),("sharded",))
+    assert certs[0].lean_theorem=="TrainVerify.Denote.bw_linear_dx_column_allGather_rank3"
+
+
+def test_column_general_batch_sequence_renderer():
+    from trainverify.bridge_emitter.bw_linear_dx_column_renderer import render_closed_k_rank_bw_linear_dx_column_segment
+    ir,rel=renderer_fixture(3,7,11,b=2,s=5)
+    source=render_closed_k_rank_bw_linear_dx_column_segment(ir,rel,"segment_000000")
+    assert "bw_linear_dx_column_allGather_rank3 3 2 5 7 11" in source
 
 
 @pytest.mark.parametrize("k",(1,2,3,4,5))
@@ -30,7 +45,7 @@ def test_column_matcher_dynamic_rank(k):
     assert c.input_facts[2].gather_dim==1
 
 
-def renderer_fixture(k=3,o=32,d=32):
+def renderer_fixture(k=3,o=32,d=32,*,b=1,s=8):
     from dataclasses import replace
     from scripts.tests.test_k_rank_bw_sum import _bw_linear_dx_renderer_fixture
     from trainverify.bridge_emitter.composer import _typed_certificate_digest
@@ -41,11 +56,11 @@ def renderer_fixture(k=3,o=32,d=32):
     xf=rc.RelationFactSpec("sharded",("sm:x",*(f"pm:x:{r}" for r in range(k))),gather_dim=2)
     wf=replace(w.source,gather_dim=1)
     of=replace(out.source,layout="sharded",gather_dim=2)
-    records=(replace(g,source=gf,kind="joined",pm_tids=(),joined_pm_tid=1000,full_shape=(1,8,o),shard_shape=(1,8,o),gather_dim=None),
+    records=(replace(g,source=gf,kind="joined",pm_tids=(),joined_pm_tid=1000,full_shape=(b,s,o),shard_shape=(b,s,o),gather_dim=None),
         replace(x,source=xf,kind="sharded",pm_tids=tuple(2000+r for r in range(k)),joined_pm_tid=None,
-            full_shape=(1,8,d*k),shard_shape=(1,8,d),gather_dim=2),
+            full_shape=(b,s,d*k),shard_shape=(b,s,d),gather_dim=2),
         replace(w,source=wf,full_shape=(o,d*k),shard_shape=(o,d),gather_dim=1),
-        replace(out,source=of,kind="sharded",gather_dim=2,full_shape=(1,8,d*k),shard_shape=(1,8,d)))
+        replace(out,source=of,kind="sharded",gather_dim=2,full_shape=(b,s,d*k),shard_shape=(b,s,d)))
     c=replace(rel.certificates[0],rule_id=RULE,family="column-sharded",output_layout="sharded",gather_dim=2,
         input_facts=(gf,xf,wf),output_fact=of,lean_theorem=THEOREM)
     t=replace(rel.transition_specs[0],rule_id=RULE,pre_facts=tuple(sorted(c.input_facts)),post_facts=(of,),
@@ -68,11 +83,11 @@ def test_column_renderer_dynamic_rank(k):
     assert "bw_linear_dx_wsplit_dim1_4_g213" not in source
 
 
-def witness_source(k=3,o=32,d=32):
+def witness_source(k=3,o=32,d=32,*,b=1,s=8):
     from scripts.tests.test_k_rank_bw_layernorm import fixture_source
     from trainverify.bridge_emitter.bw_linear_dx_column_renderer import render_closed_k_rank_bw_linear_dx_column_segment
-    ir,rel=renderer_fixture(k,o,d)
-    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_dx_column_segment).replace("SyntheticBWLayernorm","SyntheticBWLinearDxColumn").replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumn")
+    ir,rel=renderer_fixture(k,o,d,b=b,s=s)
+    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_dx_column_segment).replace("SyntheticBWLayernorm","SyntheticBWLinearDxColumn").replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumnGeneral")
 
 
 @pytest.mark.parametrize("mutation",("rank","parameters","activation","gradient","weight","lineage-shape","lineage-rank","lineage-axis","input-shape-arity"))
@@ -90,6 +105,20 @@ def test_column_matcher_rejects_malformed_authority(mutation):
     elif mutation=="input-shape-arity": pms[0].input_shapes=((1,8,32),)
     with pytest.raises(rc.RelationCompositionError):
         rc.advance_k_rank_bw_linear_dx_frontiers(plan,ir,(f,),("sharded",))
+
+
+def general_witness_source():
+    cases=((1,3,2,1,4),(2,1,16,64,32),(3,2,5,7,11),(4,1,16,64,16),(5,2,1,3,2))
+    sources=[witness_source(k,o,d,b=b,s=s).replace("SyntheticBWLinearDxColumn",f"ColumnCase{n}")
+             for n,(k,b,s,o,d) in enumerate(cases)]
+    imports=list(dict.fromkeys(line for source in sources for line in source.splitlines() if line.startswith("import ")))
+    return "\n".join(imports)+"\n"+"\n".join("\n".join(line for line in source.splitlines() if not line.startswith("import ")) for source in sources)+"\n"
+
+
+def test_column_general_witness_matches_generator():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    assert (root/"trainverify/denote/GeneratedBWLinearDxColumnGeneralWitness.lean").read_text()==general_witness_source()
 
 
 def test_column_committed_witness_matches_renderer():
@@ -160,14 +189,14 @@ def test_column_dual_production_header_imports_theorem():
     ir.public_statement_module="denote.GeneratedKRankBWLinearDxColumnWitness"
     bundle=compose_closed_dependent_bundle(ir,rel,"ColumnHeaderAudit","denote.ColumnHeaderAudit",include_public=False,require_full_graph=False)
     segments=[v.decode() for p,v in bundle.items() if p.startswith("Segment")]
-    assert segments and any("import denote.KRankBWLinearDxColumn\n" in s and "import denote.KRankBWLinearDwColumn\n" in s and THEOREM in s for s in segments)
+    assert segments and any("import denote.KRankBWLinearDxColumnGeneral\n" in s and "import denote.KRankBWLinearDwColumn\n" in s and THEOREM in s for s in segments)
 
 
 def dual_witness_source(o=32,d=32):
     from scripts.tests.test_k_rank_bw_layernorm import fixture_source
     from trainverify.bridge_emitter.bw_linear_column_dual_renderer import render_closed_k_rank_bw_linear_column_dual_segment
     ir,rel=dual_fixture(4,o,d)
-    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_column_dual_segment).replace("SyntheticBWLayernorm","SyntheticBWLinearDxColumn").replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumn\nimport denote.KRankBWLinearDwColumn")
+    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_column_dual_segment).replace("SyntheticBWLayernorm","SyntheticBWLinearDxColumn").replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumnGeneral\nimport denote.KRankBWLinearDwColumn")
 
 
 @pytest.mark.parametrize("mutation",("rank","pairing","record-shape","parameters","digest","type"))
@@ -210,7 +239,7 @@ def test_column_variable_width_matcher(k,o,d):
 def test_column_variable_width_renderer(k,o,d):
     source=witness_source(k,o,d)
     assert THEOREM in source
-    assert f"{o} {d} (by decide) (by decide)" in source
+    assert f"{THEOREM} {k} 1 8 {o} {d}" in source
 
 @pytest.mark.parametrize("o,d",((0,5),(7,0),(-1,5),(7,-1)))
 def test_column_rejects_nonpositive_widths(o,d):

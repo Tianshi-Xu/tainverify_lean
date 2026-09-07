@@ -80,9 +80,9 @@ def witness_source(k=3, b=2, s=3, d=7):
     return fixture_source(ir, rel, render_closed_k_rank_bw_layernorm_dx_segment)
 
 
-def fixture_source(ir, rel, render):
+def fixture_source(ir, rel, render, *, pm_num_ranks=None):
     from trainverify.bridge_emitter.composer import _node_text
-    k = len(ir.pm_nodes)
+    k = len(ir.pm_nodes) if pm_num_ranks is None else pm_num_ranks
     lines = ["import denote.RelationCompiler", "import denote.KRankBWLayernorm",
              "open TrainVerify.Denote TrainVerify.Denote.RelationCompiler",
              "namespace SyntheticBWLayernorm", "noncomputable section"]

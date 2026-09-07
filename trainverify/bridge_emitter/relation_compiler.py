@@ -7321,10 +7321,14 @@ def advance_k_rank_bw_sum_frontiers(plan, ir, frontiers, layouts):
         if not shards or any(shape!=shards[0] for shape in shards):
             raise RelationCompositionError("K-rank BW_sum output shard shapes disagree")
         shard=shards[0]
-        if (len(full)!=3 or len(shard)!=3 or any(value<=0 for value in shard)
-                or full[2]!=shard[2]*k
-                or full[:2]!=shard[:2]):
-            raise RelationCompositionError("BW_sum is outside checked dim-2 theorem domain")
+        if len(full)!=3 or len(shard)!=3 or any(value<=0 for value in shard):
+            raise RelationCompositionError("BW_sum requires positive rank-3 shapes")
+        if full==(shard[0],shard[1],shard[2]*k):
+            dim=2
+        elif full==(shard[0],shard[1]*k,shard[2]):
+            dim=1
+        else:
+            raise RelationCompositionError("BW_sum is outside checked dim-1/dim-2 theorem domain")
         sm_inputs=tuple(tuple(shape) for shape in sm.input_shapes)
         pm_inputs=tuple(tuple(tuple(shape) for shape in x.input_shapes) for x in pms)
         if sm_inputs!=((1,),full) or any(shapes!=((1,),shard) for shapes in pm_inputs):
@@ -7338,13 +7342,17 @@ def advance_k_rank_bw_sum_frontiers(plan, ir, frontiers, layouts):
         if gfact.layout!="reduction" or gfact.step_triple!=(grefs[0],grefs[0]):
             raise RelationCompositionError("BW_sum scalar InitGoal is not exact reduction authority")
         xrefs=(sm.input_bindings[1],*(x.input_bindings[1] for x in pms))
-        xfact=RelationFactSpec("sharded",xrefs,gather_dim=2)
-        output=RelationFactSpec("sharded",tuple(frontier),gather_dim=2)
+        xfact=RelationFactSpec("sharded",xrefs,gather_dim=dim)
+        output=RelationFactSpec("sharded",tuple(frontier),gather_dim=dim)
+        rule, theorem = {
+            1: ("bw-sum-scalar-broadcast-dim1-k-rank", "TrainVerify.Denote.bw_sum_allGatherPrimDimN_dim1_rank3"),
+            2: ("bw-sum-scalar-broadcast-dim2-k-rank", "TrainVerify.Denote.bw_sum_allGatherPrimDimN_dim2_rank3"),
+        }[dim]
         certs.append(KRankBWSumCertificate(
-            rule_id="bw-sum-scalar-broadcast-dim2-k-rank",rank_count=k,gather_dim=2,
+            rule_id=rule,rank_count=k,gather_dim=dim,
             gradient_fact=gfact,activation_fact=xfact,output_fact=output,
             sm_step_id=sm.step_id,pm_step_ids=tuple(x.step_id for x in pms),
-            lean_theorem="TrainVerify.Denote.bw_sum_allGatherPrimDimN_dim2_rank3"))
+            lean_theorem=theorem))
         rewritten.extend((gfact.step_triple,xrefs));rewritten_layouts.extend((gfact.layout,"sharded"))
     return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
 
@@ -7790,10 +7798,10 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
             input_facts=[RelationFactSpec("sharded",grefs,gather_dim=1),RelationFactSpec("sharded",xrefs,gather_dim=1),wfact]
             input_frontiers=[x.step_triple for x in input_facts];input_layouts=[x.layout for x in input_facts]
             theorem="TrainVerify.Denote.bw_linear_dx_sequence_allGather_rank3"
-        elif (layout=="sharded" and len(piece_out)==3 and piece_out[:2]==(1,8)
-                and len(pm_g[0])==3 and pm_g[0][:2]==(1,8)
-                and piece_out[2]>0 and pm_g[0][2]>0
-                and full_out==(1,8,piece_out[2]*k)
+        elif (layout=="sharded" and len(piece_out)==3
+                and len(pm_g[0])==3 and pm_g[0][:2]==piece_out[:2]
+                and all(v>0 for v in (*piece_out,pm_g[0][2]))
+                and full_out==(*piece_out[:2],piece_out[2]*k)
                 and tuple(sm.input_shapes[0])==pm_g[0]
                 and tuple(sm.input_shapes[1])==full_out and pm_x[0]==piece_out
                 and tuple(sm.input_shapes[2])==(pm_g[0][2],piece_out[2]*k)
@@ -7810,7 +7818,7 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
             input_facts=[gfact,xfact,wfact]
             input_frontiers=[gfront,xfact.step_triple,wfact.step_triple]
             input_layouts=[glayout,"sharded",wfact.layout]
-            theorem="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
+            theorem="TrainVerify.Denote.bw_linear_dx_column_allGather_rank3"
         elif (layout=="reduction" and len(full_out)==3 and len(piece_out)==3
                 and len(tuple(sm.input_shapes[0]))==3 and len(pm_g[0])==3
                 and len(tuple(sm.input_shapes[1]))==3
@@ -7841,7 +7849,7 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
                  else "bw-linear-dx-row-reduction-k-rank"
                  if family=="row-reduction"
                  else "bw-linear-dx-column-sharded-k-rank"
-                 if theorem=="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
+                 if theorem=="TrainVerify.Denote.bw_linear_dx_column_allGather_rank3"
                  else f"bw-linear-dx-{family}-rank4")
         certs.append(KRankBWLinearDxCertificate(
             rule_id=rule_id,family=family,rank_count=k,
@@ -10496,9 +10504,9 @@ _register_closed_rule_specs(
     ),
     ClosedRuleSpec(
         "bw-linear-dx-column-sharded-k-rank", KRankBWLinearDxCertificate,
-        ("TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3",),
+        ("TrainVerify.Denote.bw_linear_dx_column_allGather_rank3",),
         "BW_linear", "bw_linear_dx_column_renderer:render_closed_k_rank_bw_linear_dx_column_segment",
-        ("denote.KRankBWLinearDxColumn",),
+        ("denote.KRankBWLinearDxColumnGeneral",),
     ),
     ClosedRuleSpec(
         "bw-linear-dx-row-reduction-k-rank", KRankBWLinearDxCertificate,
@@ -10517,6 +10525,12 @@ _register_closed_rule_specs(
         ("TrainVerify.Denote.tensorSum_allGather_dim_K",),
         "BW_multiref", "bw_multiref_sum_renderer:render_closed_k_rank_bw_multiref_sum_segment",
         ("denote.KRankBWMultiref",),
+    ),
+    ClosedRuleSpec(
+        "bw-sum-scalar-broadcast-dim1-k-rank", KRankBWSumCertificate,
+        ("TrainVerify.Denote.bw_sum_allGatherPrimDimN_dim1_rank3",),
+        "BW_sum", "bw_sum_renderer:render_closed_k_rank_bw_sum_segment",
+        ("denote.KRankBWSumSequence",),
     ),
     ClosedRuleSpec(
         "bw-sum-scalar-broadcast-dim2-k-rank", KRankBWSumCertificate,

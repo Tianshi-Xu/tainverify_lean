@@ -91,6 +91,7 @@ def render_closed_k_rank_bw_linear_column_dual_segment(ir, relation, segment_id:
         raise ValueError("BW_linear column dX post-state introduces an unproved fact")
     k = len(output.pm_tids)
     spec = column_dx_shape_spec(gradient, activation, weight, output, k)
+    column_dx_shape_spec(gradient, activation, weight, dw_output, k, dw=True)
     if (certificate.rank_count != k or certificate.output_layout != "sharded"
             or certificate.gather_dim != 2
             or gradient.kind != "joined" or gradient.pm_tids != ()

@@ -75,7 +75,7 @@ def witness_source(k=3,o=7,d=5,with_view=False):
     return (fixture_source(ir,rel,render_closed_segment)
         .replace("SyntheticBWLayernorm","SyntheticBWLinearDwColumn")
         .replace("SyntheticBWLinearDxColumn","SyntheticBWLinearDwColumn")
-        .replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumn\nimport denote.KRankBWLinearDwColumn"))
+        .replace("import denote.KRankBWLayernorm","import denote.KRankBWLinearDxColumnGeneral\nimport denote.KRankBWLinearDwColumn"))
 
 
 def test_dw_column_committed_witness_matches_renderer():

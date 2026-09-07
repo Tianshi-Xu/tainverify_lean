@@ -1366,7 +1366,7 @@ def test_gpt_goal107_bw_linear_dx_classifies_three_relation_families(monkeypatch
     column = [item for item in certs if item.family == "column-sharded"]
     assert {item.rule_id for item in column} == {"bw-linear-dx-column-sharded-k-rank"}
     assert {item.lean_theorem for item in column} == {
-        "TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
+        "TrainVerify.Denote.bw_linear_dx_column_allGather_rank3"
     }
     by_step = {step.step_id: step for step in proof.steps}
     from collections import Counter
