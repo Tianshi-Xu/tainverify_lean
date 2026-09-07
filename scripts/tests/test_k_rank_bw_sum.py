@@ -102,12 +102,12 @@ def test_bw_linear_dx_row_reduction_matcher_derives_dynamic_rank_count(k):
     assert cert.family == "row-reduction"
     assert cert.rank_count == k
     assert cert.lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3"
+        "TrainVerify.Denote.bw_linear_dx_row_reduction_rank3"
     )
 
 
 def _bw_linear_dx_renderer_fixture(k: int):
-    theorem = "TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3"
+    theorem = "TrainVerify.Denote.bw_linear_dx_row_reduction_rank3"
     rule = "bw-linear-dx-row-reduction-k-rank"
     gradient = RelationFactSpec(
         "sharded", ("sm:g", *(f"pm:g:{rank}" for rank in range(k))), gather_dim=2
@@ -177,7 +177,7 @@ def _bw_linear_dx_renderer_fixture(k: int):
 
 def _bw_linear_dx_witness_source(rendered: str) -> str:
     return f'''import denote.RelationCompiler
-import denote.KRankBWLinearDx
+import denote.KRankBWLinearDxRow
 
 open TrainVerify.Denote
 open TrainVerify.Denote.RelationCompiler
@@ -227,7 +227,7 @@ def test_bw_linear_dx_row_reduction_renderer_emits_exact_k3_writer_frame():
     assert "allGatherPrimDimN 2 3 0" in source
     assert "allGatherPrimDimN 0 3 0" in source
     assert "allReducePrim 3 0" in source
-    assert "bw_linear_dx_allGatherPrimDimN_dim2_rank3" in source
+    assert "bw_linear_dx_row_reduction_rank3" in source
     assert "bw_linear_dx_tp_split_dim2_4_g175" not in source
     witness = (
         Path(__file__).resolve().parents[2]
@@ -236,7 +236,7 @@ def test_bw_linear_dx_row_reduction_renderer_emits_exact_k3_writer_frame():
     assert witness.read_text(encoding="utf-8") == _bw_linear_dx_witness_source(source)
 
 
-def test_bw_linear_dx_dynamic_renderer_rejects_shape_outside_theorem_contract():
+def test_bw_linear_dx_dynamic_renderer_accepts_distinct_batch_sequence_shapes():
     ir, relation = _bw_linear_dx_renderer_fixture(3)
     records = list(relation.dependent_chain_plan.relation_facts)
     records[0] = replace(
@@ -250,8 +250,8 @@ def test_bw_linear_dx_dynamic_renderer_rejects_shape_outside_theorem_contract():
     )
     relation.dependent_chain_plan.relation_facts = tuple(records)
 
-    with pytest.raises(ValueError, match="theorem shape contract"):
-        render_closed_k_rank_bw_linear_dx_segment(ir, relation, "segment_000000")
+    source = render_closed_k_rank_bw_linear_dx_segment(ir, relation, "segment_000000")
+    assert "bw_linear_dx_row_reduction_rank3 3 2 4 32 32" in source
 
 
 @pytest.mark.parametrize("k", (2, 3, 4))

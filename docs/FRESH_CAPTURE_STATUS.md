@@ -14,7 +14,39 @@ The executed checkpoint below is historical evidence from the earlier pinned
 source plus its explicitly recorded private fix. Those artifacts are retained,
 not relabelled as captures of the new internal baseline.
 
-## Executed checkpoint (2026-09-06)
+## Current compiler checkpoint (internal dependency)
+
+The current real TP2/TP4 exports in
+`/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/` use the
+installed internal dependency above. Fresh captures exist for plan/runtime
+1/1, 2/2, 4/4 and 2/4; a separate batch-2 single-model capture supplies the
+canonical global-batch reference for the pending two-scale-unit work.
+
+The first real closure failures drove general, kernel-checked identities and
+compiler/renderer wiring for sequence/vocabulary-sharded `BW_embedding`, and
+sequence/row-reduction `BW_linear` dX. These mathematical identities depend only
+on `propext`, `Classical.choice`, and `Quot.sound`. Generated conditional
+witnesses additionally retain the existing native metadata-check trust base.
+ROW migration also binds initial weight-lineage shapes to the operator's shapes;
+a coordinated lineage-shape mismatch was reproduced and is now rejected.
+
+Acceptance remains incremental: focused Python tests, exact generated witnesses,
+and changed real graph frames, not repeated full-bundle rebuilds. The ROW
+checkpoint has 106 focused tests, five parameterized K=1/2/3/4/5 conditional
+witnesses, a joint dX/dW witness, and four exact conditional frames from the
+legacy real GPT authority checked. These do **not** establish whole-model
+public closure. The fresh TP2/TP4 shared DAG currently stops at column-sharded
+`BW_linear` dX with sequence length 16 and hidden width 64.
+
+For plan2/runtime4, the expanded capture contains both scale units and gradient
+reducers. Export still rejects this case: raw integer tensor IDs alias distinct
+DP-local inputs, collectives require group-local cardinality/rank, and the
+canonical reference must represent the global batch. Removing `num_dp` guards
+alone would be unsound. Source findings and exact receipts are in the audit
+root's `group-scope/`, `row-real-frames/`, and `row-shape-witnesses/` directories.
+B200/FlashAttention/YOCO hardware acceptance remains separate and pending.
+
+## Historical executed checkpoint (2026-09-06)
 
 The dedicated environment is `~/.venvs/trainverify-capture` (Python 3.11,
 Torch 2.6.0+cu124, nnScaler 0.9 built from the pinned source). Four Tesla

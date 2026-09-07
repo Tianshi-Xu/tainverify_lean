@@ -15,7 +15,7 @@ private theorem row_foldl_zipWith_eq_sum_range
   rw [← hzlen, Finset.sum_range]
   change zs.sum = ∑ i : Fin zs.length, f (xs.getD (↑i) dx) (ys.getD (↑i) dy)
   have hzsum : (∑ i : Fin zs.length, zs[i]) = zs.sum := by
-    simpa using Fin.sum_univ_fun_getElem zs id
+    simp
   rw [← hzsum]
   apply Finset.sum_congr rfl
   intro n _hn
@@ -39,7 +39,7 @@ private theorem row_bw_linear_fst_valAt
   rw [valAt_of_lt _ _ hidx]
   simp only [Tensor.mkShape, if_neg (Nat.mul_pos hs hi).ne', if_neg hi.ne']
 
-set_option maxHeartbeats 2000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 8192 in
 /-- Row-parallel dX reduction for arbitrary positive rank count and dimensions.
 Gradient shards `[b,s,o]` and weight shards `[o,i]` are paired in rank order;
@@ -155,7 +155,6 @@ theorem bw_linear_dx_row_reduction_rank3
     rw [valAt_of_lt _ _ (by rw [hRshape]; exact hidx)]
     unfold allReducePrim
     simp only [Tensor.mkShape]
-    change pieces.foldl (fun acc t => acc + valAt t idx) 0 = _
     dsimp only [pieces]
     rw [← List.foldl_map, List.map_zipWith]
     have hf := row_foldl_zipWith_eq_sum_range gs ws

@@ -7826,25 +7826,12 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
             xfact,xfront,xlayout=joined(xrefs[0],xrefs[1:])
             wfact=initial_fact(wsm,wpms,expected_dim=0)
             input_facts=[gfact,xfact,wfact];input_frontiers=[gfact.step_triple,xfront,wfact.step_triple];input_layouts=["sharded",xlayout,wfact.layout]
-            dynamic_key=(pm_g[0],tuple(sm.input_shapes[1]),pm_w[0])
-            if dynamic_key==((1,8,32),(1,8,32),(32,32)):
-                theorem="TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3"
-            elif k==4:
-                theorem_by_shapes = {
-                    ((1,8,8),(1,8,32),(8,32)):
-                        "TrainVerify.Denote.bw_linear_dx_tp_split_dim2_4_g134",
-                    ((1,8,8),(1,8,128),(8,128)):
-                        "TrainVerify.Denote.bw_linear_dx_tp_split_dim2_4_g178",
-                }
-                try: theorem=theorem_by_shapes[dynamic_key]
-                except KeyError as exc:
-                    raise RelationCompositionError(
-                        "BW_linear row-reduction dX is outside checked theorem shapes"
-                    ) from exc
-            else:
-                raise RelationCompositionError(
-                    "dynamic-K BW_linear row-reduction is only checked for 32-wide dX"
-                )
+            lineage = ir.init_lineages[int(wsm.split(":", 1)[1])]
+            if (tuple(lineage.tsShape) != tuple(sm.input_shapes[2])
+                    or tuple(map(tuple, lineage.tpShapes)) != pm_w
+                    or tuple(r for r, _ in lineage.tps) != tuple(range(k))):
+                raise RelationCompositionError("row BW_linear dX weight lineage shape/rank mismatch")
+            theorem="TrainVerify.Denote.bw_linear_dx_row_reduction_rank3"
         else:
             raise RelationCompositionError(
                 f"unsupported BW_linear dX relation topology: layout={layout}, output={full_out}/{piece_out}, g={tuple(sm.input_shapes[0])}/{pm_g[0]}, w={tuple(sm.input_shapes[2])}/{pm_w[0]}"
@@ -7852,7 +7839,7 @@ def advance_k_rank_bw_linear_dx_frontiers(plan, ir, frontiers, layouts):
         output=RelationFactSpec(layout,tuple(frontier),gather_dim=dim)
         rule_id=("bw-linear-dx-sequence-sharded-k-rank" if family=="sequence-sharded"
                  else "bw-linear-dx-row-reduction-k-rank"
-                 if theorem=="TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3"
+                 if family=="row-reduction"
                  else "bw-linear-dx-column-sharded-k-rank"
                  if theorem=="TrainVerify.Denote.bw_linear_dx_weight_allGatherPrimDimN_dim1_rank3"
                  else f"bw-linear-dx-{family}-rank4")
@@ -10515,18 +10502,9 @@ _register_closed_rule_specs(
     ),
     ClosedRuleSpec(
         "bw-linear-dx-row-reduction-k-rank", KRankBWLinearDxCertificate,
-        ("TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3",),
+        ("TrainVerify.Denote.bw_linear_dx_row_reduction_rank3",),
         "BW_linear", "bw_linear_dx_renderer:render_closed_k_rank_bw_linear_dx_segment",
-        ("denote.KRankBWLinearDx",),
-    ),
-    ClosedRuleSpec(
-        "bw-linear-dx-row-reduction-rank4", KRankBWLinearDxCertificate,
-        (
-            "TrainVerify.Denote.bw_linear_dx_tp_split_dim2_4_g134",
-            "TrainVerify.Denote.bw_linear_dx_tp_split_dim2_4_g178",
-        ),
-        "BW_linear", "bw_linear_dx_renderer:render_closed_k_rank_bw_linear_dx_segment",
-        (),
+        ("denote.KRankBWLinearDxRow",),
     ),
     ClosedRuleSpec(
         "bw-linear-dx-sequence-sharded-k-rank", KRankBWLinearDxCertificate,

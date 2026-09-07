@@ -2,6 +2,28 @@
 from __future__ import annotations
 
 
+def _render_row_dx_commutation(*, name, theorem, k, gradient, weight,
+                                activation, gradient_shapes, weight_shapes, activation_shape):
+    """One checked value identity, shared by singleton and mixed row frames."""
+    b, s, o = gradient.shard_shape
+    i = weight.shard_shape[1]
+    values = lambda tids: "[" + ", ".join(f"pmFinal {tid}" for tid in tids) + "]"
+    gs, ws = values(gradient.pm_tids), values(weight.pm_tids)
+    contributions = "[" + ", ".join(
+        f"(bw_linear (pmFinal {g}) ({activation}) (pmFinal {w})).1"
+        for g, w in zip(gradient.pm_tids, weight.pm_tids)) + "]"
+    return [
+        f"    have {name}_raw := {theorem} {k} {b} {s} {o} {i}",
+        f"      {gs} {ws} ({activation})",
+        "      (by decide) (by decide) (by decide) (by decide) (by decide) rfl rfl",
+        f"      {gradient_shapes} {weight_shapes} {activation_shape}",
+        f"    have {name} : (bw_linear (allGatherPrimDimN 2 {k} 0 {gs})",
+        f"      ({activation}) (allGatherPrimDimN 0 {k} 0 {ws})).1 =",
+        f"      allReducePrim {k} 0 {contributions} := by",
+        f"      simpa only [List.zipWith, tensorSum, allReducePrim, List.head?_cons, Option.map_some, Option.getD_some] using {name}_raw",
+    ]
+
+
 def render_closed_k_rank_bw_linear_dx_sequence_segment(ir, relation, segment_id: str) -> str:
     """One ordered SM/PM frame, arbitrary positive sequence-sharded dX."""
     try:
@@ -171,7 +193,6 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
 
     row_rules = {
         "bw-linear-dx-row-reduction-k-rank",
-        "bw-linear-dx-row-reduction-rank4",
     }
     view_rule_spec = get_closed_rule_spec("bw-view-joined")
     chain = relation.dependent_chain_plan
@@ -248,14 +269,6 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
             or len(weight.pm_tids) != k
             or any(x <= 0 for x in (*activation.full_shape, gradient.shard_shape[2]))):
         raise ValueError("BW_linear dX row-reduction metadata is not exact")
-    if (rule == "bw-linear-dx-row-reduction-k-rank"
-            and (gradient.full_shape != (1, 8, 32 * k)
-                 or gradient.shard_shape != (1, 8, 32)
-                 or activation.full_shape != (1, 8, 32)
-                 or weight.full_shape != (32 * k, 32)
-                 or weight.shard_shape != (32, 32)
-                 or output.full_shape != (1, 8, 32))):
-        raise ValueError("BW_linear dX dynamic theorem shape contract mismatch")
 
     if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
         raise ValueError("BW_linear dX footprint is not exact 1+K")
@@ -423,33 +436,13 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
             f"      exact bw_linear_3d_fst_shape {gradient.shard_shape[0]} {gradient.shard_shape[1]} {gradient.shard_shape[2]} {activation.full_shape[2]} _ _ _",
             f"        hgShape{rank} hx.2.2 hwShape{rank}",
         ])
-    if rule == "bw-linear-dx-row-reduction-k-rank":
-        hcomm_lines = [
-            f"    have hcomm := {transition.lean_theorem}",
-            f"      {glist} {wlist} (pmFinal {activation.joined_pm_tid})",
-            "      (by simp)",
-            "      (by simp)",
-            "      (by simp [" + ", ".join(f"hgShape{rank}" for rank in range(k)) + "])",
-            "      (by simp [" + ", ".join(f"hwShape{rank}" for rank in range(k)) + "])",
-            "      hx.2.2",
-            f"    have hcommExplicit :",
-            f"        (bw_linear (allGatherPrimDimN 2 {k} 0 {glist})",
-            f"          (pmFinal {activation.joined_pm_tid}) (allGatherPrimDimN 0 {k} 0 {wlist})).1 =",
-            f"        allReducePrim {k} 0 {contribution_list} := by",
-            "      simpa only [List.length_cons, List.length_nil, List.zipWith] using hcomm",
-        ]
-        commute_name = "hcommExplicit"
-    else:
-        hcomm_lines = [
-            f"    have hcomm := {transition.lean_theorem}",
-            *(f"      (pmFinal {tid})" for tid in gradient.pm_tids),
-            f"      (pmFinal {activation.joined_pm_tid})",
-            *(f"      (pmFinal {tid})" for tid in weight.pm_tids),
-            *(f"      hgShape{rank}" for rank in range(k)),
-            "      hx.2.2",
-            *(f"      hwShape{rank}" for rank in range(k)),
-        ]
-        commute_name = "hcomm"
+    hcomm_lines = _render_row_dx_commutation(
+        name="hcomm", theorem=transition.lean_theorem, k=k,
+        gradient=gradient, weight=weight,
+        activation=f"pmFinal {activation.joined_pm_tid}",
+        gradient_shapes="hg.shard_shapes", weight_shapes="hw.shard_shapes",
+        activation_shape="hx.2.2")
+    commute_name = "hcomm"
     lines.extend([
         *hcomm_lines,
         f"    have hOutValue : smFinal {output.sm_tid} = allReducePrim {k} 0 {olist} := by",

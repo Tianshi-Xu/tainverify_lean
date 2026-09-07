@@ -1527,7 +1527,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     assert bw_linear_dx.pm_range == (779, 784)
     bw_linear_dx_source = render_closed_segment(ir, relation, bw_linear_dx.segment_id)
     assert "private def segment_000189" in bw_linear_dx_source
-    assert "bw_linear_dx_allGatherPrimDimN_dim2_rank3" in bw_linear_dx_source
+    assert "bw_linear_dx_row_reduction_rank3" in bw_linear_dx_source
     assert "bw_linear_dx_tp_split_dim2_4_g134" not in bw_linear_dx_source
 
     bw_layernorm_dx = next(s for s in relation.dependent_chain_plan.segments
@@ -1806,7 +1806,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     row_linear_view = next(s for s in relation.dependent_chain_plan.segments
                            if s.segment_id == "segment_000270")
     assert tuple(transitions[item].rule_id for item in row_linear_view.transition_ids) == (
-        "bw-linear-dx-row-reduction-rank4",
+        "bw-linear-dx-row-reduction-k-rank",
         "bw-view-joined",
     )
     row_linear_view_source = render_closed_segment(
@@ -1817,10 +1817,10 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     wide_row_linear = next(s for s in relation.dependent_chain_plan.segments
                            if s.segment_id == "segment_000282")
     assert tuple(transitions[item].rule_id for item in wide_row_linear.transition_ids) == (
-        "bw-linear-dx-row-reduction-rank4",
+        "bw-linear-dx-row-reduction-k-rank",
     )
     assert transitions[wide_row_linear.transition_ids[0]].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dx_tp_split_dim2_4_g178"
+        "TrainVerify.Denote.bw_linear_dx_row_reduction_rank3"
     )
     wide_row_linear_source = render_closed_segment(
         ir, relation, wide_row_linear.segment_id
@@ -1937,7 +1937,7 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     linear_matmul_reconstruction = next(s for s in relation.dependent_chain_plan.segments
                                         if s.segment_id == "segment_000350")
     assert tuple(transitions[item].rule_id for item in linear_matmul_reconstruction.transition_ids) == (
-        "bw-linear-dx-row-reduction-rank4",
+        "bw-linear-dx-row-reduction-k-rank",
         "allgather-reconstruction-k-rank",
         "bw-matmul-fst-y-sharded-rank4",
         "bw-matmul-snd-x-sharded-rank4",
