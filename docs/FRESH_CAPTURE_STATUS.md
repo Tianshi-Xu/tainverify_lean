@@ -47,11 +47,12 @@ Python tests. These are bounded conditional proofs, not fresh public closure.
 Independent source review found and closed a mixed-column shape-helper migration
 omission using a batch-2 exact Lean regression.
 
-The fresh TP2/TP4 shared DAG now reaches the missing `BW_matmul` second-output
-contraction-reduction producer upstream of ReduceScatter (TP2 SM 104 / PM
-355–356). The inputs are query-axis shards; legacy backward matmul rules still
-assume four ranks and fixed dimensions. This is the next active proof/compiler
-capability gap, not a newly established upstream numerical bug.
+The fresh TP2 shared DAG now reaches the missing `BW_matmul` second-output
+contraction-reduction producer upstream of ReduceScatter (SM 104 / PM 355–356).
+The inputs are query-axis shards; legacy backward matmul rules still assume
+four ranks and fixed dimensions. TP4 reaches the independent `BW_softmax` fixed
+rank-4 shape gate first. These are the next active proof/compiler capability
+gaps, not newly established upstream numerical bugs.
 
 For plan2/runtime4, the expanded capture contains both scale units and gradient
 reducers. Export still rejects this case: raw integer tensor IDs alias distinct
