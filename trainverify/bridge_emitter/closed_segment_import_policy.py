@@ -67,6 +67,10 @@ def plan_closed_segment_imports(
         elif theorem in {"TrainVerify.Denote.bw_matmul_fst_head_gather_rank4",
                          "TrainVerify.Denote.bw_matmul_snd_head_gather_rank4"}:
             module = "denote.KRankBWMatmulHead"
+        elif theorem == "TrainVerify.Denote.fw_embedding_hidden_shards_k_rank":
+            module = "denote.EmbeddingHiddenShard"
+        elif theorem == "TrainVerify.Denote.fw_embedding_allGatherPrimDimN_dim1_shared_weight":
+            module = "denote.EmbeddingSequenceShard"
         elif theorem == "TrainVerify.Denote.tensorSum_allGather_dim_K":
             module = "denote.KRankBWMultiref"
         elif theorem in ("TrainVerify.Denote.bw_layernorm_dgamma_sequence_reduction_rank3",
