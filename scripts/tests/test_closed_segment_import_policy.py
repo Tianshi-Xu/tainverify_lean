@@ -75,6 +75,18 @@ def test_compound_import_policy_preserves_theorem_and_family_planning():
     assert plan_closed_segment_imports(("unknown",), (), {}) == ()
 
 
+def test_query_backward_dual_imports_both_projection_laws():
+    from trainverify.bridge_emitter.closed_segment_import_policy import plan_closed_segment_imports
+    from trainverify.bridge_emitter.relation_compiler import CLOSED_RULE_REGISTRY
+    family = ("bw-matmul-fst-query-sharded-k-rank", "bw-matmul-snd-contraction-reduction-k-rank")
+    theorems = ("TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_query_axis_rank4",
+                "TrainVerify.Denote.bw_matmul_snd_query_reduction_rank4")
+    assert plan_closed_segment_imports(family, theorems, CLOSED_RULE_REGISTRY) == (
+        "denote.KRankMatmulQueryAxis", "denote.KRankBWMatmulQuery")
+    assert plan_closed_segment_imports(tuple(reversed(family)), tuple(reversed(theorems)), CLOSED_RULE_REGISTRY) == (
+        "denote.KRankBWMatmulQuery", "denote.KRankMatmulQueryAxis")
+
+
 def test_composer_delegates_import_policy_without_retaining_old_dispatch():
     from trainverify.bridge_emitter import composer
 

@@ -49,6 +49,8 @@ def plan_closed_segment_imports(
             module = "denote.KRankTranspose23Extra"
         elif ".fw_matmul_query_axis_rank4" in theorem:
             module = "denote.KRankMatmulQueryAxis"
+        elif theorem == "TrainVerify.Denote.bw_matmul_snd_query_reduction_rank4":
+            module = "denote.KRankBWMatmulQuery"
         elif theorem == "TrainVerify.Denote.bw_linear_dx_column_allGather_rank3":
             module = "denote.KRankBWLinearDxColumnGeneral"
         elif theorem == "TrainVerify.Denote.bw_linear_dw_column_allGather_rank3":
