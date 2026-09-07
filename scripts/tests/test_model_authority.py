@@ -1691,8 +1691,14 @@ def test_gpt_goal119_bw_linear_dw_shards_output_rows(monkeypatch):
              if type(item).__name__ == "KRankBWLinearDwShardedCertificate"]
     assert len(certs) == 1
     assert certs[0].output_fact.gather_dim == 0
-    assert certs[0].lean_theorem == "TrainVerify.Denote.bw_linear_dw_split_dim2_4_g119"
+    assert certs[0].lean_theorem == "TrainVerify.Denote.bw_linear_dw_row_allGather_rank3"
     assert not relation.unresolved_frontiers
+    from trainverify.bridge_emitter.composer import render_closed_segment
+    transitions={t.transition_id:t for t in relation.transition_specs}
+    owned=[s for s in relation.dependent_chain_plan.segments
+           if any(transitions[t].rule_id==certs[0].rule_id for t in s.transition_ids)]
+    assert len(owned)==1
+    assert certs[0].lean_theorem in render_closed_segment(ir,relation,owned[0].segment_id)
 
 
 def test_gpt_goal179_bw_linear_dw_shards_wide_output_rows(monkeypatch):
@@ -1706,7 +1712,7 @@ def test_gpt_goal179_bw_linear_dw_shards_wide_output_rows(monkeypatch):
              if type(item).__name__ == "KRankBWLinearDwShardedCertificate"]
     assert len(certs) == 1
     assert certs[0].lean_theorem == (
-        "TrainVerify.Denote.bw_linear_dw_osplit_dim2_4_1_8_8_g179"
+        "TrainVerify.Denote.bw_linear_dw_row_allGather_rank3"
     )
     assert not relation.unresolved_frontiers
 

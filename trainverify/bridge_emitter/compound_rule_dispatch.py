@@ -71,7 +71,7 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
         ("bw-softmax-sharded-dim2-k-rank", "transpose-sharded-k-rank"),
     }:
         return "transpose_bw_softmax_renderer:render_closed_transpose_bw_softmax_segment"
-    if (family.count("bw-linear-dw-output-row-sharded-rank4") == 1
+    if (family.count("bw-linear-dw-output-row-sharded-k-rank") == 1
             and family.count("bw-linear-dx-row-reduction-k-rank") == 1
             and family.count("allgather-reconstruction-k-rank") == 1
             and family.count("bw-matmul-snd-x-sharded-rank4") == 1
@@ -152,12 +152,12 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
         }):
         return "bw_layernorm_triple_renderer:render_closed_k_rank_bw_layernorm_triple_segment"
     if (
-        len(family) in (2, 3)
-        and {"bw-linear-dx-row-reduction-k-rank", "bw-linear-dw-output-row-sharded-rank4"}
-            <= set(family)
+        len(family) in (2, 3) and len(set(family)) == len(family)
+        and family.count("bw-linear-dw-output-row-sharded-k-rank") == 1
+        and not {"allreduce-reconstruction-k-rank", "bw-view-joined"} <= set(family)
         and set(family) <= {
             "bw-linear-dx-row-reduction-k-rank",
-            "bw-linear-dw-output-row-sharded-rank4",
+            "bw-linear-dw-output-row-sharded-k-rank",
             "allreduce-reconstruction-k-rank",
             "bw-view-joined",
         }

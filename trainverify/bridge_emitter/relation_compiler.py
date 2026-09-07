@@ -7847,7 +7847,7 @@ def advance_k_rank_bw_linear_dw_sharded_frontiers(plan, ir, frontiers, layouts):
         raise RelationCompositionError("BW_linear dW sharded frontier/layout arity mismatch")
     by_id={s.step_id:s for s in plan.steps};certs=[];rewritten=[];rewritten_layouts=[]
     for frontier,layout in zip(frontiers,layouts):
-        if layout!="sharded" or len(frontier)!=5:
+        if layout!="sharded" or len(frontier)<2:
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
         try: sm=by_id[frontier[0]];pms=tuple(by_id[x] for x in frontier[1:])
         except KeyError:
@@ -7856,19 +7856,24 @@ def advance_k_rank_bw_linear_dw_sharded_frontiers(plan, ir, frontiers, layouts):
             x.op!="BW_linear" or x.output_projection!=".2" or x.side!="pm" for x in pms
         ):
             rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if tuple(int(x.rank) for x in pms)!=(0,1,2,3) or len(sm.input_bindings)!=3 or any(len(x.input_bindings)!=3 for x in pms):
-            raise RelationCompositionError("rank-4 BW_linear dW sharded authority mismatch")
+        k=len(pms)
+        if (k!=ir.pm_num_ranks or sm.rank!=0 or sm.parameters or any(x.parameters for x in pms)
+                or tuple(x.rank for x in pms)!=tuple(range(k))
+                or any(len(x.input_bindings)!=3 or len(x.input_shapes)!=3 for x in (sm,*pms))):
+            raise RelationCompositionError("BW_linear dW sharded authority mismatch")
         gfull,xfull,wfull=map(tuple,sm.input_shapes);outfull=tuple(sm.output_shape)
         gshards=tuple(tuple(x.input_shapes[0]) for x in pms)
         xshards=tuple(tuple(x.input_shapes[1]) for x in pms)
         wshards=tuple(tuple(x.input_shapes[2]) for x in pms)
         outshards=tuple(tuple(x.output_shape) for x in pms)
-        if (gfull[:2]!=(1,8) or xfull[:2]!=(1,8) or wfull!=outfull
-                or len(gfull)!=3 or len(xfull)!=3 or len(wfull)!=2):
+        if (len(gfull)!=3 or len(xfull)!=3 or len(wfull)!=2
+                or gfull[:2]!=xfull[:2] or wfull!=outfull
+                or wfull!=(gfull[2],xfull[2]) or min(*gfull,*xfull)<=0):
             raise RelationCompositionError("BW_linear dW full shapes are malformed")
-        output_rows,input_cols=outfull
-        expected_g=(1,8,output_rows//4);expected_w=(output_rows//4,input_cols)
-        if (output_rows%4 or any(x!=expected_g for x in gshards)
+        b,s,output_rows=gfull
+        input_cols=xfull[2]
+        expected_g=(b,s,output_rows//k);expected_w=(output_rows//k,input_cols)
+        if (output_rows%k or any(x!=expected_g for x in gshards)
                 or any(x!=xfull for x in xshards)
                 or any(x!=expected_w for x in wshards)
                 or any(x!=expected_w for x in outshards)):
@@ -7884,23 +7889,21 @@ def advance_k_rank_bw_linear_dw_sharded_frontiers(plan, ir, frontiers, layouts):
         if not weight_ref.startswith("init:") or any(not x.startswith("init:") for x in weight_refs):
             raise RelationCompositionError("BW_linear dW sharded weight is not initial authority")
         weight_tid=int(weight_ref.split(":",1)[1])
-        try: weight_fact=init_lineage_relation_fact(ir.init_lineages[weight_tid])
+        try:
+            weight_lineage=ir.init_lineages[weight_tid]
+            weight_fact=init_lineage_relation_fact(weight_lineage)
         except KeyError as exc: raise RelationCompositionError("BW_linear dW sharded weight InitGoal is missing") from exc
-        if weight_fact.step_triple!=(weight_ref,*weight_refs) or weight_fact.gather_dim!=0:
+        if (weight_fact.step_triple!=(weight_ref,*weight_refs) or weight_fact.gather_dim!=0
+                or weight_fact.layout!="sharded" or tuple(weight_lineage.tsShape)!=wfull
+                or tuple(map(tuple,weight_lineage.tpShapes))!=wshards):
             raise RelationCompositionError("BW_linear dW weight is not exact ordered dim-0 authority")
-        theorem_by_shape={
-            (32,32): "TrainVerify.Denote.bw_linear_dw_split_dim2_4_g119",
-            (128,32): "TrainVerify.Denote.bw_linear_dw_col_split_dim2_4_1_8_32_g141",
-            (32,128): "TrainVerify.Denote.bw_linear_dw_osplit_dim2_4_1_8_8_g179",
-        }
-        try: theorem=theorem_by_shape[outfull]
-        except KeyError as exc: raise RelationCompositionError("BW_linear dW row sharding lacks checked theorem shape") from exc
         output=RelationFactSpec("sharded",tuple(frontier),gather_dim=0)
         certs.append(KRankBWLinearDwShardedCertificate(
-            rule_id="bw-linear-dw-output-row-sharded-rank4",rank_count=4,
+            rule_id="bw-linear-dw-output-row-sharded-k-rank",rank_count=k,
             gradient_fact=gradient_fact,activation_fact=activation_fact,
             weight_fact=weight_fact,output_fact=output,sm_step_id=sm.step_id,
-            pm_step_ids=tuple(x.step_id for x in pms),lean_theorem=theorem))
+            pm_step_ids=tuple(x.step_id for x in pms),
+            lean_theorem="TrainVerify.Denote.bw_linear_dw_row_allGather_rank3"))
         rewritten.extend((grefs,activation_frontier,weight_fact.step_triple))
         rewritten_layouts.extend(("sharded","joined",weight_fact.layout))
     return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
@@ -10793,6 +10796,12 @@ _register_closed_rule_specs(
         ("TrainVerify.Denote.bw_gelu_allGatherPrimDimN_eq",),
         "BW_gelu", "bw_gelu_renderer:render_closed_k_rank_bw_gelu_segment",
         (),
+    ),
+    ClosedRuleSpec(
+        "bw-linear-dw-output-row-sharded-k-rank", KRankBWLinearDwShardedCertificate,
+        ("TrainVerify.Denote.bw_linear_dw_row_allGather_rank3",),
+        "BW_linear", "bw_linear_dual_renderer:render_closed_k_rank_bw_linear_dual_segment",
+        ("denote.KRankBWLinearDwRowGeneral",),
     ),
     ClosedRuleSpec(
         "bw-layernorm-dgamma-sequence-reduction-k-rank", KRankBWLayernormParamReductionCertificate,

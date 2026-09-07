@@ -45,25 +45,8 @@ def test_row_renderer_accepts_general_dimensions():
 
 
 def dual_renderer_fixture():
-    from dataclasses import replace
-    from trainverify.bridge_emitter.composer import _typed_certificate_digest
-    ir,rel=renderer_fixture(4,1,8,8,32)
-    c=rel.certificates[0];t=rel.transition_specs[0]
-    source=rc.RelationFactSpec('sharded',('sm:0:1',*(f'pm:{r}:1' for r in range(4))),gather_dim=0)
-    dw=rc.KRankBWLinearDwShardedCertificate(
-        'bw-linear-dw-output-row-sharded-rank4',4,*c.input_facts,source,
-        'sm:0:1',tuple(f'pm:{r}:1' for r in range(4)),
-        'TrainVerify.Denote.bw_linear_dw_split_dim2_4_g119')
-    dt=replace(t,transition_id='transition_dw',rule_id=dw.rule_id,lean_theorem=dw.lean_theorem,
-               post_facts=(source,),certificate_digest=_typed_certificate_digest(dw))
-    record=rc.ClosedRelationFactRecord('fact_dw',source,'sharded',ir.sm_nodes[0].outs[1],metadata_tid=None,metadata_region_id=None,
-        pm_tids=tuple(n.outs[1] for n in ir.pm_nodes),gather_dim=0,full_shape=(32,32),shard_shape=(8,32))
-    rel.certificates=(c,dw);rel.transition_specs=(t,dt)
-    chain=rel.dependent_chain_plan
-    chain.relation_facts=(*chain.relation_facts,record)
-    chain.states=(chain.states[0],replace(chain.states[1],fact_ids=(*chain.states[1].fact_ids,record.fact_id)))
-    chain.segments=(replace(chain.segments[0],transition_ids=(t.transition_id,dt.transition_id)),)
-    return ir,rel
+    from scripts.tests.bw_linear_dw_row_witness import renderer_fixture
+    return renderer_fixture(4,1,8,8,32,with_dx=True)
 
 
 def test_row_dual_renderer_consumes_generic_dx_identity():
@@ -73,13 +56,8 @@ def test_row_dual_renderer_consumes_generic_dx_identity():
 
 
 def dual_witness_source():
-    from scripts.tests.test_k_rank_bw_layernorm import fixture_source
-    from trainverify.bridge_emitter.bw_linear_dual_renderer import render_closed_k_rank_bw_linear_dual_segment
-    ir,rel=dual_renderer_fixture()
-    return fixture_source(ir,rel,render_closed_k_rank_bw_linear_dual_segment).replace(
-        'SyntheticBWLayernorm','SyntheticBWLinearRowDual').replace(
-        'SyntheticBWLinearDx','SyntheticBWLinearRowDual').replace(
-        'import denote.KRankBWLayernorm','import denote.KRankBWLinearDxRow')
+    from scripts.tests.bw_linear_dw_row_witness import witness_source
+    return witness_source(4,1,8,8,32,with_dx=True)
 
 
 def witness_source(*args):
