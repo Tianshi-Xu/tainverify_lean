@@ -16,7 +16,7 @@ def render_closed_k_rank_bw_embedding_sequence_segment(ir, relation, segment_id:
         )
         from relation_compiler import get_closed_rule_spec
 
-    spec = get_closed_rule_spec("bw-embedding-sequence-reduction-rank4")
+    spec = get_closed_rule_spec("bw-embedding-sequence-reduction-k-rank")
     vocab_spec = get_closed_rule_spec("bw-embedding-vocab-sharded-k-rank")
     rule = spec.rule_id
     theorem = spec.lean_theorems[0]
@@ -80,17 +80,18 @@ def render_closed_k_rank_bw_embedding_sequence_segment(ir, relation, segment_id:
         raise ValueError("sequence BW_embedding post-state mismatch")
 
     k = cert.rank_count
-    if (k != 4 or cert.shard_dim != 1
+    b, s, hidden, vocab = cert.batch_size, cert.shard_sequence, cert.hidden_size, cert.vocab_size
+    if (min(k, b, s, hidden, vocab) <= 0 or k != ir.pm_num_ranks or cert.shard_dim != 1
             or gradient.kind != "sharded" or gradient.gather_dim != 1
-            or gradient.full_shape != (1, 8, 32)
-            or gradient.shard_shape != (1, 2, 32) or len(gradient.pm_tids) != k
+            or gradient.full_shape != (b, s * k, hidden)
+            or gradient.shard_shape != (b, s, hidden) or len(gradient.pm_tids) != k
             or ids.kind != "chunked" or ids.gather_dim != 1
-            or ids.full_shape != (1, 8) or ids.shard_shape != (1, 2)
+            or ids.full_shape != (b, s * k) or ids.shard_shape != (b, s)
             or len(ids.pm_tids) != k
-            or weight.kind != "sharded" or len(weight.pm_tids) != 1
-            or weight.full_shape != (8, 32) or weight.shard_shape != (8, 32)
+            or weight.kind != "sharded" or weight.gather_dim != 0 or len(weight.pm_tids) != 1
+            or weight.full_shape != (vocab, hidden) or weight.shard_shape != (vocab, hidden)
             or output.kind != "reduction" or len(output.pm_tids) != k
-            or output.full_shape != (8, 32)):
+            or output.full_shape != (vocab, hidden) or output.shard_shape != (vocab, hidden)):
         raise ValueError("sequence BW_embedding relation metadata mismatch")
     if vocab_cert and (vocab_cert.rank_count != k or vocab_cert.gather_dim != 0
             or vocab_cert.shard_rows <= 0 or vocab_cert.hidden <= 0
@@ -282,15 +283,15 @@ def render_closed_k_rank_bw_embedding_sequence_segment(ir, relation, segment_id:
         f"    unfold smFinal pmFinal {sm_final_name} {pm_final_name}",
         f"    apply RelationState.Holds.fold_frame {sm_nodes_name} {pm_nodes_name} smStore pmStore hstate <;> native_decide",
         f"  have hg : {gradient.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
-        f"  change ShardedRel (smFinal {gradient.sm_tid}) {gradients} 1 [1, 8, 32] [1, 2, 32] at hg",
+        f"  change ShardedRel (smFinal {gradient.sm_tid}) {gradients} 1 [{b}, {s * k}, {hidden}] [{b}, {s}, {hidden}] at hg",
         f"  have hi : {ids.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
-        f"  change ChunkedRel (smFinal {ids.sm_tid}) {ids_values} 1 [1, 8] [1, 2] at hi",
+        f"  change ChunkedRel (smFinal {ids.sm_tid}) {ids_values} 1 [{b}, {s * k}] [{b}, {s}] at hi",
         f"  have hw : {weight.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
-        f"  change ShardedRel (smFinal {weight.sm_tid}) [pmFinal {weight_tid}] 0 [8, 32] [8, 32] at hw",
+        f"  change ShardedRel (smFinal {weight.sm_tid}) [pmFinal {weight_tid}] 0 [{vocab}, {hidden}] [{vocab}, {hidden}] at hw",
         f"  have hwEq : smFinal {weight.sm_tid} = pmFinal {weight_tid} := by",
         "    rw [hw.full_value]",
         f"    exact allGatherPrimDimN_singleton_eq 0 _ (by rw [hw.shard_shapes (pmFinal {weight_tid}) (by simp)]; native_decide)",
-        f"  have hgValue : smFinal {gradient.sm_tid} = allGatherPrimDimN 1 4 0 {gradients} := by",
+        f"  have hgValue : smFinal {gradient.sm_tid} = allGatherPrimDimN 1 {k} 0 {gradients} := by",
         "    simpa only [List.length_cons, List.length_nil] using hg.full_value",
         f"  have hSm := {sm_helper} smStore",
         f"  change smFinal {output.sm_tid} = bw_embedding (smFinal {gradient.sm_tid})",
@@ -304,14 +305,14 @@ def render_closed_k_rank_bw_embedding_sequence_segment(ir, relation, segment_id:
             f"      (pmFinal {ids.pm_tids[rank]}) (pmFinal {weight_tid}) at hPm{rank}",
         ])
     lines.extend([
-        f"  have hComm := {cert.lean_theorem}",
-        "    (pmFinal " + str(gradient.pm_tids[0]) + ")",
-        "    (pmFinal " + str(gradient.pm_tids[1]) + ")",
-        "    (pmFinal " + str(gradient.pm_tids[2]) + ")",
-        "    (pmFinal " + str(gradient.pm_tids[3]) + ")",
-        f"    (smFinal {ids.sm_tid}) (pmFinal {weight_tid})",
-        "    hi.full_shape (hw.shard_shapes (pmFinal " + str(weight_tid) + ") (by simp))",
-        f"    (hg.shard_shapes (pmFinal {gradient.pm_tids[0]}) (by simp))",
+        f"  have hComm := {cert.lean_theorem} {k} {b} {s} {hidden} {vocab}",
+        f"    {gradients} (smFinal {ids.sm_tid}) (pmFinal {weight_tid})",
+        "    (by decide) (by decide) (by decide) (by decide) (by decide)",
+        "    (by rfl) hg.shard_shapes hi.full_shape",
+        f"    (hw.shard_shapes (pmFinal {weight_tid}) (by simp))",
+        "  simp only [List.range_succ, List.range_zero, List.map_append, List.map_cons, List.map_nil,",
+        "    List.cons_append, List.nil_append, List.getD, List.getElem?_cons_zero,",
+        "    List.getElem?_cons_succ, Option.getD_some] at hComm",
     ])
     for rank in range(k):
         lines.extend([
@@ -376,7 +377,7 @@ def render_closed_k_rank_bw_embedding_sequence_segment(ir, relation, segment_id:
             f"    exact allGatherPrimDimN_singleton_eq 0 _ (by rw [hvi.shard_shapes (pmFinal {vi.pm_tids[0]}) (by simp)]; native_decide)",
             f"  have hvw : {vw.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
             f"  change ShardedRel (smFinal {vw.sm_tid}) {vocab_weights} 0 {vocab_full} {vocab_shard} at hvw",
-            f"  have hvwValue : smFinal {vw.sm_tid} = allGatherPrimDimN 0 4 0 {vocab_weights} := by",
+            f"  have hvwValue : smFinal {vw.sm_tid} = allGatherPrimDimN 0 {k} 0 {vocab_weights} := by",
             "    simpa only [List.length_cons, List.length_nil] using hvw.full_value",
             f"  have hVSm := {vocab_sm_helper} smStore",
             f"  change smFinal {vo.sm_tid} = bw_embedding (smFinal {vg.sm_tid})",
@@ -393,13 +394,15 @@ def render_closed_k_rank_bw_embedding_sequence_segment(ir, relation, segment_id:
                 f"    rw [hVPm{rank}, bw_embedding_offset_shape]",
                 f"    exact hvwShape{rank}",
             ])
-        theorem_args = " ".join(f"(pmFinal {tid})" for tid in vw.pm_tids)
-        shape_args = " ".join(f"hvwShape{rank}" for rank in range(k))
         lines.extend([
-            f"  have hVComm := {vocab_cert.lean_theorem} {vocab_cert.shard_rows} {vocab_cert.hidden}",
-            f"    (by omega) (by omega) (pmFinal {vg.joined_pm_tid})",
-            f"    (pmFinal {vi.pm_tids[0]}) {theorem_args} {shape_args}",
-            f"  have hVValue : smFinal {vo.sm_tid} = allGatherPrimDimN 0 4 0 {vocab_outputs} := by",
+            f"  have hVComm := {vocab_cert.lean_theorem} {k} {vocab_cert.shard_rows} {vocab_cert.hidden}",
+            "    (by decide) (by decide) (by decide)",
+            f"    (pmFinal {vg.joined_pm_tid}) (pmFinal {vi.pm_tids[0]}) {vocab_weights}",
+            "    (by rfl) hvw.shard_shapes",
+            "  simp only [List.range_succ, List.range_zero, List.map_append, List.map_cons, List.map_nil,",
+            "    List.cons_append, List.nil_append, List.getD, List.getElem?_cons_zero,",
+            "    List.getElem?_cons_succ, Option.getD_some] at hVComm",
+            f"  have hVValue : smFinal {vo.sm_tid} = allGatherPrimDimN 0 {k} 0 {vocab_outputs} := by",
             "    rw [hVSm, hvg.1, hviEq, hvwValue, hVComm]",
             "    rw [" + ", ".join(f"← hVPm{rank}" for rank in range(k)) + "]",
             f"  have hVValueLength : smFinal {vo.sm_tid} =",

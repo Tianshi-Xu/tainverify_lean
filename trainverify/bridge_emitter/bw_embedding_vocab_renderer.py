@@ -42,7 +42,7 @@ def render_closed_k_rank_bw_embedding_vocab_segment(ir, relation, segment_id: st
 
     k = cert.rank_count
     full_shape = tuple(cert.full_shape); shard_shape = tuple(cert.shard_shape)
-    if (k != 4 or cert.gather_dim != 0 or cert.shard_rows <= 0 or cert.hidden <= 0
+    if (k <= 0 or k != ir.pm_num_ranks or cert.gather_dim != 0 or cert.shard_rows <= 0 or cert.hidden <= 0
             or full_shape != (cert.shard_rows * k, cert.hidden)
             or shard_shape != (cert.shard_rows, cert.hidden)
             or gradient.kind != "joined" or gradient.joined_pm_tid is None
@@ -178,7 +178,7 @@ def render_closed_k_rank_bw_embedding_vocab_segment(ir, relation, segment_id: st
         f"    rw [hi.full_value]", f"    exact allGatherPrimDimN_singleton_eq 0 _ (by rw [hi.shard_shapes (pmFinal {ids.pm_tids[0]}) (by simp)]; native_decide)",
         f"  have hw : {weight.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
         f"  change ShardedRel (smFinal {weight.sm_tid}) {weights} 0 {full} {shard} at hw",
-        f"  have hwV : smFinal {weight.sm_tid} = allGatherPrimDimN 0 4 0 {weights} := by",
+        f"  have hwV : smFinal {weight.sm_tid} = allGatherPrimDimN 0 {k} 0 {weights} := by",
         f"    simpa only [List.length_cons, List.length_nil] using hw.full_value",
         f"  have hSm := {sm_helper} smStore",
         f"  change smFinal {output.sm_tid} = bw_embedding (smFinal {gradient.sm_tid}) (smFinal {ids.sm_tid}) (smFinal {weight.sm_tid}) at hSm",
@@ -193,12 +193,15 @@ def render_closed_k_rank_bw_embedding_vocab_segment(ir, relation, segment_id: st
             f"  have houtShape{rank} : (pmFinal {output.pm_tids[rank]}).shape = {shard} := by",
             f"    rw [hPm{rank}, bw_embedding_offset_shape]", f"    exact hwShape{rank}",
         ])
-    theorem_args = " ".join(f"(pmFinal {x})" for x in weight.pm_tids)
-    shape_args = " ".join(f"hwShape{rank}" for rank in range(k))
     lines.extend([
-        f"  have hComm := {cert.lean_theorem} {cert.shard_rows} {cert.hidden} (by omega) (by omega) "
-        f"(pmFinal {gradient.joined_pm_tid}) (pmFinal {ids.pm_tids[0]}) {theorem_args} {shape_args}",
-        f"  have hValue : smFinal {output.sm_tid} = allGatherPrimDimN 0 4 0 {outputs} := by",
+        f"  have hComm := {cert.lean_theorem} {k} {cert.shard_rows} {cert.hidden}",
+        "    (by decide) (by decide) (by decide)",
+        f"    (pmFinal {gradient.joined_pm_tid}) (pmFinal {ids.pm_tids[0]}) {weights}",
+        "    (by rfl) hw.shard_shapes",
+        "  simp only [List.range_succ, List.range_zero, List.map_append, List.map_cons, List.map_nil,",
+        "    List.cons_append, List.nil_append, List.getD, List.getElem?_cons_zero,",
+        "    List.getElem?_cons_succ, Option.getD_some] at hComm",
+        f"  have hValue : smFinal {output.sm_tid} = allGatherPrimDimN 0 {k} 0 {outputs} := by",
         "    rw [hSm, hg.1, hiEq, hwV, hComm]",
         "    rw [" + ", ".join(f"← hPm{rank}" for rank in range(k)) + "]",
         f"  have hValueL : smFinal {output.sm_tid} = allGatherPrimDimN 0 {outputs}.length 0 {outputs} := by",

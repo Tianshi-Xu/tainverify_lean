@@ -4162,6 +4162,10 @@ class KRankBWEmbeddingSequenceReductionCertificate:
     rule_id: str
     rank_count: int
     shard_dim: int
+    batch_size: int
+    shard_sequence: int
+    hidden_size: int
+    vocab_size: int
     gradient_fact: RelationFactSpec
     ids_fact: RelationFactSpec
     ids_chunks_fact: RelationFactSpec
@@ -4174,58 +4178,85 @@ class KRankBWEmbeddingSequenceReductionCertificate:
 
 
 def advance_k_rank_bw_embedding_sequence_reduction_frontiers(plan, ir, frontiers, layouts):
-    if len(frontiers)!=len(layouts):
+    if len(frontiers) != len(layouts):
         raise RelationCompositionError("BW_embedding sequence reduction frontier/layout arity mismatch")
-    by_id={s.step_id:s for s in plan.steps};certs=[];rewritten=[];rewritten_layouts=[]
-    for frontier,layout in zip(frontiers,layouts):
-        if layout!="reduction" or len(frontier)!=5:
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        try: sm=by_id[frontier[0]];pms=tuple(by_id[x] for x in frontier[1:])
+    by_id = {step.step_id: step for step in plan.steps}
+    certs, rewritten, rewritten_layouts = [], [], []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "reduction" or len(frontier) < 2:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm = by_id[frontier[0]]
+            pms = tuple(by_id[ref] for ref in frontier[1:])
         except KeyError:
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if sm.op!="BW_embedding" or sm.side!="sm" or any(x.op!="BW_embedding" or x.side!="pm" for x in pms):
-            rewritten.append(frontier);rewritten_layouts.append(layout);continue
-        if tuple(int(x.rank) for x in pms)!=(0,1,2,3) or len(sm.input_bindings)!=3 or any(len(x.input_bindings)!=3 for x in pms):
-            raise RelationCompositionError("rank-4 BW_embedding sequence writer/input authority mismatch")
-        if tuple(sm.input_shapes)!=((1,8,32),(1,8),(8,32)) or tuple(sm.output_shape)!=(8,32):
-            raise RelationCompositionError("BW_embedding sequence SM is outside checked theorem shapes")
-        if any(tuple(x.input_shapes)!=((1,2,32),(1,2),(8,32)) or tuple(x.output_shape)!=(8,32) for x in pms):
-            raise RelationCompositionError("BW_embedding sequence PM is outside checked theorem shapes")
-        grefs=(sm.input_bindings[0],*(x.input_bindings[0] for x in pms))
-        gradient_fact=RelationFactSpec("sharded",grefs,gather_dim=1)
-        ids_ref=sm.input_bindings[1];weight_ref=sm.input_bindings[2]
-        if not ids_ref.startswith("init:") or not weight_ref.startswith("init:") or any(x.input_bindings[2]!=weight_ref for x in pms):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm.op != "BW_embedding" or sm.side != "sm" or any(
+            step.op != "BW_embedding" or step.side != "pm" for step in pms
+        ):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        k = len(pms)
+        if (k != ir.pm_num_ranks or sm.rank != 0
+                or tuple(step.rank for step in pms) != tuple(range(k))
+                or len(sm.input_bindings) != 3
+                or any(len(step.input_bindings) != 3 for step in pms)):
+            raise RelationCompositionError("BW_embedding sequence writer/input rank authority mismatch")
+        if sm.parameters or any(step.parameters for step in pms):
+            raise RelationCompositionError("BW_embedding sequence requires the non-offset variant")
+        if len(sm.input_shapes) != 3 or len(sm.input_shapes[0]) != 3 or len(sm.input_shapes[2]) != 2:
+            raise RelationCompositionError("BW_embedding sequence SM input shape ranks mismatch")
+        b, sequence, hidden = sm.input_shapes[0]
+        vocab, weight_hidden = sm.input_shapes[2]
+        if min(b, sequence, hidden, vocab) <= 0 or sequence % k or weight_hidden != hidden:
+            raise RelationCompositionError("BW_embedding sequence dimensions do not form positive uniform shards")
+        local_sequence = sequence // k
+        ids_shape, local_ids_shape = (b, sequence), (b, local_sequence)
+        weight_shape = (vocab, hidden)
+        if tuple(sm.input_shapes[1]) != ids_shape or tuple(sm.output_shape) != weight_shape:
+            raise RelationCompositionError("BW_embedding sequence SM shape authority mismatch")
+        expected_pm = ((b, local_sequence, hidden), local_ids_shape, weight_shape)
+        if any(tuple(step.input_shapes) != expected_pm or tuple(step.output_shape) != weight_shape for step in pms):
+            raise RelationCompositionError("BW_embedding sequence PM shape authority mismatch")
+        grefs = (sm.input_bindings[0], *(step.input_bindings[0] for step in pms))
+        gradient_fact = RelationFactSpec("sharded", grefs, gather_dim=1)
+        ids_ref, weight_ref = sm.input_bindings[1:]
+        if (not ids_ref.startswith("init:") or not weight_ref.startswith("init:")
+                or any(step.input_bindings[2] != weight_ref for step in pms)):
             raise RelationCompositionError("BW_embedding sequence ids/weight are not shared initial authority")
-        chunks=[]
-        for rank,step in enumerate(pms):
-            chunk=by_id.get(step.input_bindings[1])
-            if (chunk is None or chunk.op!="ChunkPrim" or chunk.side!="pm" or int(chunk.rank)!=rank
-                    or tuple(chunk.parameters)!=(1,) or tuple(chunk.input_bindings)!=(ids_ref,)
-                    or tuple(chunk.output_shape)!=(1,2)):
+        chunks = []
+        for rank, step in enumerate(pms):
+            chunk = by_id.get(step.input_bindings[1])
+            if (chunk is None or chunk.op != "ChunkPrim" or chunk.side != "pm" or chunk.rank != rank
+                    or tuple(chunk.parameters) != (1,) or tuple(chunk.input_bindings) != (ids_ref,)
+                    or tuple(chunk.output_shape) != local_ids_shape):
                 raise RelationCompositionError("BW_embedding sequence lacks ordered dim-1 IDs chunks")
             chunks.append(chunk)
-        ids_tid=int(ids_ref.split(":",1)[1]);weight_tid=int(weight_ref.split(":",1)[1])
+        ids_tid, weight_tid = (int(ref.split(":", 1)[1]) for ref in (ids_ref, weight_ref))
         try:
-            ids_fact=init_lineage_relation_fact(ir.init_lineages[ids_tid])
-            weight_fact=init_lineage_relation_fact(ir.init_lineages[weight_tid])
+            ids_lineage, weight_lineage = ir.init_lineages[ids_tid], ir.init_lineages[weight_tid]
+            ids_fact = init_lineage_relation_fact(ids_lineage)
+            weight_fact = init_lineage_relation_fact(weight_lineage)
         except KeyError as exc:
             raise RelationCompositionError("BW_embedding sequence initial lineage is missing") from exc
-        if ids_fact.step_triple!=(ids_ref,ids_ref) or weight_fact.step_triple!=(weight_ref,weight_ref):
-            raise RelationCompositionError("BW_embedding sequence initial authority is not singleton")
-        ids_chunks_fact = RelationFactSpec(
-            "chunked", (ids_ref, *(x.step_id for x in chunks)), gather_dim=1
-        )
-        output=RelationFactSpec("reduction",tuple(frontier))
+        if (ids_fact.step_triple != (ids_ref, ids_ref)
+                or weight_fact.step_triple != (weight_ref, weight_ref)
+                or tuple(ids_lineage.tsShape) != ids_shape
+                or tuple(map(tuple, ids_lineage.tpShapes)) != (ids_shape,)
+                or tuple(weight_lineage.tsShape) != weight_shape
+                or tuple(map(tuple, weight_lineage.tpShapes)) != (weight_shape,)):
+            raise RelationCompositionError("BW_embedding sequence singleton initial shape authority mismatch")
+        ids_chunks_fact = RelationFactSpec("chunked", (ids_ref, *(step.step_id for step in chunks)), gather_dim=1)
+        output = RelationFactSpec("reduction", tuple(frontier))
+        spec = get_closed_rule_spec("bw-embedding-sequence-reduction-k-rank")
         certs.append(KRankBWEmbeddingSequenceReductionCertificate(
-            rule_id="bw-embedding-sequence-reduction-rank4",rank_count=4,shard_dim=1,
-            gradient_fact=gradient_fact,ids_fact=ids_fact,
-            ids_chunks_fact=ids_chunks_fact,weight_fact=weight_fact,
-            output_fact=output,sm_step_id=sm.step_id,
-            pm_chunk_steps=tuple(x.step_id for x in chunks),pm_step_ids=tuple(x.step_id for x in pms),
-            lean_theorem="TrainVerify.Denote.bw_embedding_seqchunk_4shards_1_8_32"))
-        rewritten.extend((grefs,ids_fact.step_triple,weight_fact.step_triple))
-        rewritten_layouts.extend(("sharded",ids_fact.layout,weight_fact.layout))
-    return tuple(certs),tuple(rewritten),tuple(rewritten_layouts)
+            rule_id=spec.rule_id, rank_count=k, shard_dim=1,
+            batch_size=b, shard_sequence=local_sequence, hidden_size=hidden, vocab_size=vocab,
+            gradient_fact=gradient_fact, ids_fact=ids_fact, ids_chunks_fact=ids_chunks_fact,
+            weight_fact=weight_fact, output_fact=output, sm_step_id=sm.step_id,
+            pm_chunk_steps=tuple(step.step_id for step in chunks),
+            pm_step_ids=tuple(step.step_id for step in pms), lean_theorem=spec.lean_theorems[0]))
+        rewritten.extend((grefs, ids_fact.step_triple, weight_fact.step_triple))
+        rewritten_layouts.extend(("sharded", ids_fact.layout, weight_fact.layout))
+    return tuple(certs), tuple(rewritten), tuple(rewritten_layouts)
 
 
 @dataclass(frozen=True)
@@ -4330,7 +4361,7 @@ def advance_k_rank_bw_embedding_vocab_frontiers(
             gradient_fact=gradient_fact, ids_fact=ids_fact, weight_fact=weight_fact,
             output_fact=output_fact, sm_step_id=sm.step_id,
             pm_step_ids=tuple(x.step_id for x in pms),
-            lean_theorem="TrainVerify.Denote.bw_embedding_eq_allGather_offset_4shards",
+            lean_theorem="TrainVerify.Denote.bw_embedding_eq_allGather_offset_k",
         ))
         rewritten.extend((gradient_frontier, ids_frontier, weight_fact.step_triple))
         rewritten_layouts.extend((gradient_layout, ids_layout, "sharded"))
@@ -10426,16 +10457,16 @@ _register_closed_rule_specs(
         (),
     ),
     ClosedRuleSpec(
-        "bw-embedding-sequence-reduction-rank4", KRankBWEmbeddingSequenceReductionCertificate,
-        ("TrainVerify.Denote.bw_embedding_seqchunk_4shards_1_8_32",),
+        "bw-embedding-sequence-reduction-k-rank", KRankBWEmbeddingSequenceReductionCertificate,
+        ("TrainVerify.Denote.bw_embedding_seqchunk_K",),
         "BW_embedding", "bw_embedding_sequence_renderer:render_closed_k_rank_bw_embedding_sequence_segment",
-        (),
+        ("denote.BWEmbeddingSequenceShardK",),
     ),
     ClosedRuleSpec(
         "bw-embedding-vocab-sharded-k-rank", KRankBWEmbeddingVocabCertificate,
-        ("TrainVerify.Denote.bw_embedding_eq_allGather_offset_4shards",),
+        ("TrainVerify.Denote.bw_embedding_eq_allGather_offset_k",),
         "BW_embedding", "bw_embedding_vocab_renderer:render_closed_k_rank_bw_embedding_vocab_segment",
-        (),
+        ("denote.BWEmbeddingVocabShardK",),
     ),
     ClosedRuleSpec(
         "bw-gelu-pointwise-sharded-k-rank", KRankBWGeluCertificate,

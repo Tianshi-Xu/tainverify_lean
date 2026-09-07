@@ -130,7 +130,7 @@ def select_bw_compound_renderer(family: tuple[str, ...]) -> str | None:
     }:
         return "bw_linear_dx_column_renderer:render_closed_k_rank_bw_linear_dx_column_segment"
     if (len(family) == 2 and set(family) == {
-        "bw-embedding-sequence-reduction-rank4",
+        "bw-embedding-sequence-reduction-k-rank",
         "bw-embedding-vocab-sharded-k-rank",
     }):
         return "bw_embedding_sequence_renderer:render_closed_k_rank_bw_embedding_sequence_segment"

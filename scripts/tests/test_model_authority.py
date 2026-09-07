@@ -1291,7 +1291,7 @@ def test_gpt_goal107_bw_embedding_vocab_shards_close_dim0_relation(monkeypatch):
     assert cert.full_shape == (128, 32)
     assert cert.ids_fact.layout == "sharded"
     assert cert.ids_fact.step_triple == ("init:714", "init:714")
-    assert cert.lean_theorem == "TrainVerify.Denote.bw_embedding_eq_allGather_offset_4shards"
+    assert cert.lean_theorem == "TrainVerify.Denote.bw_embedding_eq_allGather_offset_k"
     add_certs = [item for item in relation.certificates
                  if type(item).__name__ == "KRankBWAddIdentityCertificate"]
     assert {item.lean_theorem for item in add_certs} <= {
@@ -1327,9 +1327,7 @@ def test_gpt_goal107_bw_embedding_vocab_shards_close_dim0_relation(monkeypatch):
     multiref = [item for item in relation.certificates
                 if type(item).__name__ == "KRankBWMultirefSumCertificate"]
     assert {item.lean_theorem for item in multiref} == {
-        "TrainVerify.Denote.tensorSum_pair_split_dim2_4_1_8_32",
-        "TrainVerify.Denote.tensorSum_gather_dim1_4_1_2_32_g181",
-        "TrainVerify.Denote.tensorSum_triple_gather_dim1_4_1_8_32_g114",
+        "TrainVerify.Denote.tensorSum_allGather_dim_K",
     }
 
 
@@ -1607,11 +1605,11 @@ def test_gpt_goal109_cross_dp_wred_bw_embedding_sequence_reduction(monkeypatch):
     assert embedding[0].ids_chunks_fact == sharded_ids[0].ids_chunks_fact
     assert embedding[0].gradient_fact.gather_dim == 1
     assert embedding[0].lean_theorem == (
-        "TrainVerify.Denote.bw_embedding_seqchunk_4shards_1_8_32"
+        "TrainVerify.Denote.bw_embedding_seqchunk_K"
     )
     by_rule = {item.rule_id: item for item in relation.transition_specs}
     forward_transition = by_rule["embedding-sharded-ids-k-rank"]
-    backward_transition = by_rule["bw-embedding-sequence-reduction-rank4"]
+    backward_transition = by_rule["bw-embedding-sequence-reduction-k-rank"]
     assert sharded_ids[0].ids_chunks_fact in forward_transition.post_facts
     assert embedding[0].ids_chunks_fact in backward_transition.pre_facts
     by_step = {item.step_id: item for item in proof.steps}
@@ -1623,7 +1621,7 @@ def test_gpt_goal109_cross_dp_wred_bw_embedding_sequence_reduction(monkeypatch):
         if item.transition_ids == (backward_transition.transition_id,)
     )
     source = render_closed_segment(ir, relation, backward_segment.segment_id)
-    assert "bw_embedding_seqchunk_4shards_1_8_32" in source
+    assert "bw_embedding_seqchunk_K" in source
     assert "ClosedDepSegmentCertificate" in source
     cross_transition = by_rule["cross-dp-wred-reconstruction-k-rank"]
     cross_segment = next(

@@ -208,7 +208,7 @@ def test_additional_singleton_rule_identity_and_backends_are_registry_driven():
 def test_bw_and_collective_singleton_backends_are_registry_driven():
     rules = {
         "bw-add-identity-sharded-k-rank",
-        "bw-embedding-sequence-reduction-rank4",
+        "bw-embedding-sequence-reduction-k-rank",
         "bw-embedding-vocab-sharded-k-rank",
         "bw-gelu-pointwise-sharded-k-rank",
         "bw-layernorm-dx-dim1-k-rank",
