@@ -28,6 +28,34 @@ def capture_adapter_source(cells):
         calls[key] += 1
         row = dict(ref=ref, inputs=[_tensor_ref(t) for t in cell.inputs],
                    outputs=[_tensor_ref(t) for t in cell.outputs])
+        # Preserve independent prepared IR naming before fusion/discard. Backward
+        # autograd nodes are NOT Python producer calls in the generated forward.
+        from nnscaler.ir.operator import IRFwOperation
+        if isinstance(cell.ir, IRFwOperation):
+            from nnscaler.ir.tensor import IRSubTensor
+            def expression(value):
+                if isinstance(value, IRSubTensor):
+                    # Same identifier spelling as nnscaler.codegen.emit._safe_repr_value.
+                    name = value.name.lstrip("*").replace(".", "_")
+                    return ("self." if value.is_attr() else "") + f"{name}_{value.tid}"
+                if isinstance(value, (tuple, list)):
+                    parts = [expression(v) for v in value]
+                    return ("[" + ", ".join(parts) + "]" if isinstance(value, list)
+                            else "(" + ", ".join(parts) + ("," if len(parts) == 1 else "") + ")")
+                if value is None or isinstance(value, (str, bool, int, float)):
+                    return repr(value)
+                raise ValueError("unsupported producer argument")
+            try:
+                row["generated_producer"] = dict(
+                    signature=cell.ir.signature,
+                    inputs=[expression(v) for v in cell.ir.inputs()],
+                    outputs=[expression(v) for v in cell.ir.outputs()],
+                    # _set_node_kwargs attaches positional constants to this
+                    # dict as Verdict metadata; they remain in ir.inputs().
+                    kwargs={k: expression(v) for k, v in cell.ir.kwargs.items()
+                            if k != "__consts"})
+            except ValueError:
+                row["generated_producer_missing"] = "unsupported prepared producer argument"
         if ref["op"] in ADAPTER_OPS:
             from nnscaler.ir.adapter.prim import CollectivePrim
             if not isinstance(cell.ir, CollectivePrim):

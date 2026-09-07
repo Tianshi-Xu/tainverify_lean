@@ -31,7 +31,11 @@ def adapter_fixture(op='AllGatherPrim', groups=((1, 0), (3, 2)), reverse_indmap=
             if op in ('AllGatherPrim', 'ReduceScatterPrim'): kw['dim'] = 0
             if op == 'AllToAllPrim': kw.update(idim=0, odim=1)
             ir = getattr(prim, op)([x], [y], **kw)
-            producer = Cell(None, rank, WType.P)
+            from nnscaler.ir.operator import IRFwOperation
+            producer_ir = IRFwOperation('producer', 'torch.empty', [tuple(x.shape)], 1)
+            producer_ir.set_output(0, x)
+            producer = Cell(producer_ir, rank, WType.P)
+            producer._output_irs = [x]
             producer.node = Node('p', rank, 0, 10, 'producer')
             producer.opname = OpName.FW_embedding
             producer.inputs = []
@@ -47,7 +51,7 @@ def adapter_fixture(op='AllGatherPrim', groups=((1, 0), (3, 2)), reverse_indmap=
             c._collective_indmap = {c.inputs[0]: x.indmap}
             cells.extend([producer, c])
             args = ', '.join(f'{k}={v!r}' for k,v in kw.items())
-            sources[rank] = f'class GenModel:\n    rank = {rank}\n    world_size = 4\n    def __init__(self):\n        pass\n    def forward(self):\n        {y.name}_{y.tid} = {ir.signature}({x.name}_{x.tid}, {args})\n'
+            sources[rank] = f'class GenModel:\n    rank = {rank}\n    world_size = 4\n    def __init__(self):\n        pass\n    def forward(self):\n        {x.name}_{x.tid} = torch.empty({tuple(x.shape)!r})\n        {y.name}_{y.tid} = {ir.signature}({x.name}_{x.tid}, {args})\n'
     # Keep the source read point before the real mutating fusion pass.
     return world, cells, sources
 

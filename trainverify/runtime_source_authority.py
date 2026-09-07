@@ -144,7 +144,7 @@ def validate_snapshot(snapshot):
             rebound = deepcopy(snapshot)
             bind_adapters(rebound, allow_translation_mismatch=True)
             if any(snapshot.get(k) != rebound[k] for k in
-                   ("writers", "adapter_binding", "adapter_generated_binding", "completeness")):
+                   ("writers", "adapter_binding", "adapter_generated_binding", "adapter_generated_read_binding", "completeness")):
                 raise ValueError("inconsistent adapter binding")
         elif (snapshot.get("adapter_binding", "missing") != "missing"
               or snapshot.get("adapter_generated_binding", "missing") != "missing"
@@ -242,6 +242,7 @@ def bind_adapters(snapshot, allow_translation_mismatch=False):
             mismatch |= problem is not None
         snapshot["adapter_binding"] = "translation-mismatch" if mismatch else "complete"
         snapshot["adapter_generated_binding"] = "missing"
+        snapshot["adapter_generated_read_binding"] = "missing"
         if "rank_sources" in snapshot:
             generated_mismatch = _bind_generated_adapters(snapshot, adapters, writers)
             snapshot["adapter_generated_binding"] = "translation-mismatch" if generated_mismatch else "complete"
@@ -251,7 +252,11 @@ def bind_adapters(snapshot, allow_translation_mismatch=False):
         missing = ([] if snapshot.get("reducer_binding") == "complete" else ["parameter-reducers"])
         if mismatch:
             missing.append("ordered-adapters")
+        if snapshot["adapter_generated_read_binding"] != "complete":
+            missing.append("generated-adapter-reaching-definitions")
         snapshot["completeness"] = dict(status="incomplete", missing=missing + ["global-batch", "loss-normalization"])
+        if snapshot["adapter_generated_read_binding"] == "rejected" and not allow_translation_mismatch:
+            raise ValueError("generated reaching definition rejected; see generated_read_missing")
         if mismatch and not allow_translation_mismatch:
             raise ValueError("ordered adapter translation mismatch")
     except (KeyError, TypeError, AttributeError, IndexError, SyntaxError) as exc:
@@ -313,7 +318,122 @@ def _bind_generated_adapters(snapshot, adapters, writers):
                  if c["signature"] in signatures}
     if covered != inventory:
         raise ValueError("generated primitive inventory coverage mismatch")
+    _bind_generated_readpoints(snapshot, adapters, writers)
     return mismatch
+
+
+def _bind_generated_readpoints(snapshot, adapters, writers):
+    """Direct straight-line methods only; syntax coverage is NOT value authority.
+
+    Each local read is compared to its independently captured prepared writer.
+    No ordering is inferred between methods. Autograd BW needs a separate ctx
+    correspondence and is explicitly missing rather than borrowing FW values.
+    """
+    import ast
+    rows = {writer_export_id(r["ref"]): r for r in snapshot["adapter_source"]}
+    sites, name_methods = {}, {}
+    def targets(stmt):
+        ts = stmt.targets
+        if len(ts) == 1 and isinstance(ts[0], (ast.Tuple, ast.List)):
+            ts = ts[0].elts
+        return [ast.unparse(t) for t in ts]
+    for rank, text in snapshot["rank_sources"].items():
+        cls, = [n for n in ast.parse(text).body if isinstance(n, ast.ClassDef) and n.name == "GenModel"]
+        methods = [n for n in cls.body if isinstance(n, ast.FunctionDef)]
+        for method in methods:
+            current, counts = {}, {}
+            unsupported = False
+            for stmt in method.body:
+                if isinstance(stmt, ast.Assign):
+                    # Only plain local targets or one flat unpacking are in
+                    # this slice. Nested/starred targets and RHS assignment
+                    # expressions may rebind names not represented by targets().
+                    plain_targets = len(stmt.targets) == 1 and all(
+                        isinstance(t, ast.Name) or (
+                            isinstance(t, (ast.Tuple, ast.List))
+                            and all(isinstance(item, ast.Name) for item in t.elts))
+                        for t in stmt.targets)
+                    if not plain_targets or any(isinstance(n, ast.NamedExpr) for n in ast.walk(stmt)):
+                        unsupported = True
+                        continue
+                    reads = dict(current)
+                    for name in targets(stmt):
+                        name_methods.setdefault((int(rank), name), set()).add(method.lineno)
+                        counts[name] = counts.get(name, 0) + 1
+                        current[name] = dict(line=stmt.lineno, ordinal=counts[name],
+                            method=method.name, statement=stmt)
+                    sites[(int(rank), stmt.lineno)] = (method.name, reads, unsupported)
+                elif isinstance(stmt, ast.Delete):
+                    if any(not isinstance(name, ast.Name) for name in stmt.targets):
+                        unsupported = True
+                        continue
+                    for name in stmt.targets:
+                        current.pop(name.id, None)
+                elif isinstance(stmt, ast.Return):
+                    break
+                elif isinstance(stmt, ast.Pass):
+                    pass
+                elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
+                    pass
+                else:
+                    # Calls with side effects, augmented assignment and control
+                    # flow cannot silently preserve a value-authority claim.
+                    unsupported = True
+    complete, rejected = True, False
+    for row in adapters:
+        a = writers[writer_export_id(row["ref"])]["adapter"]
+        call = a["generated_call"]
+        site = sites.get((row["ref"]["runtime_rank"], call["line"]))
+        reason = None
+        points = []
+        if not row["primitive"]["forward"]:
+            reason = "unsupported: backward autograd ctx/source correspondence missing; forward syntax only"
+        elif site is None or site[2]:
+            reason = "unsupported: non-straight-line generated method/call context"
+        else:
+            method, current, _ = site
+            for name, point in zip(call["inputs"], a["local_read_points"]):
+                producer = rows.get(point["writer"])
+                evidence = producer.get("generated_producer") if producer else None
+                if evidence is None:
+                    reason = "missing: independently prepared generated producer evidence"
+                    break
+                if len(name_methods.get((row["ref"]["runtime_rank"], name), ())) != 1:
+                    reason = "unsupported: ambiguous producer across methods; call context missing"
+                    break
+                definition = current.get(name)
+                if definition is None:
+                    reason = "rejected: generated reaching definition missing before collective read"
+                    break
+                stmt = definition["statement"]
+                value = stmt.value
+                def canonical(expr):
+                    return ast.dump(ast.parse(expr, mode="eval").body, include_attributes=False)
+                if (not isinstance(value, ast.Call)
+                        or ast.unparse(value.func) != evidence["signature"]
+                        or targets(stmt) != evidence["outputs"]
+                        or [canonical(ast.unparse(v)) for v in value.args] != [canonical(v) for v in evidence["inputs"]]
+                        or {k.arg: canonical(ast.unparse(k.value)) for k in value.keywords} != {k: canonical(v) for k, v in evidence["kwargs"].items()}):
+                    reason = "rejected: generated reaching definition differs from prepared source writer"
+                    break
+                # Definition ordinal is source occurrence, not a ban on name reuse.
+                same_name = [r for r in snapshot["adapter_source"]
+                    if r["ref"]["runtime_rank"] == row["ref"]["runtime_rank"]
+                    and name in r.get("generated_producer", {}).get("outputs", [])]
+                expected_ordinal = next(i + 1 for i, r in enumerate(same_name) if r is producer)
+                if definition["ordinal"] != expected_ordinal:
+                    reason = "rejected: generated reaching definition source occurrence/version mismatch"
+                    break
+                points.append(dict(ref=point["ref"], writer=point["writer"],
+                    definition_line=definition["line"], definition_ordinal=definition["ordinal"],
+                    method=method, read_line=call["line"], name=name))
+        a["generated_read_points"] = points
+        is_rejected = bool(reason and reason.startswith("rejected:"))
+        rejected |= is_rejected
+        a["generated_read_binding"] = "rejected" if is_rejected else "missing" if reason else "complete"
+        a["generated_read_missing"] = reason
+        complete &= reason is None
+    snapshot["adapter_generated_read_binding"] = "rejected" if rejected else "complete" if complete else "missing"
 
 
 def _rank_reducers(text, rank, world_size):
