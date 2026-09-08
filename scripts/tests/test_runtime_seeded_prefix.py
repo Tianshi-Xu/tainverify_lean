@@ -5,7 +5,140 @@ from Verdict import runtime_input_feed as feed, runtime_seed_feed as seed
 from Verdict import runtime_prefix as prefix
 from scripts.tests.test_runtime_seed_feed import fixture
 
+
+def linear_world(root, k, ndim=3, fault=None):
+    """Real raw/source/feed fixture; mock only portable seed authentication."""
+    from types import SimpleNamespace as NS
+    from unittest.mock import patch
+    from scripts.tests.test_runtime_scoped_prefix import collective_world
+    from scripts.tests.test_graph_to_lean_runtime_lineage import T, N, IR
+    fields = ('world', 'runtime_rank', 'microbatch', 'source_tid', 'version')
+    def transform(sm, pm):
+        grads = []
+        def ordinary(graph, rank, cid, op, inputs, shapes, kwargs=None):
+            label = 'p' if graph is pm else 's'
+            outputs = [T(label, rank, 0, cid+p, 1) for p in range(len(shapes))]
+            node = NS(node=N(label, rank, 0, cid, op), rank=rank, opname=op,
+                kwargs={} if kwargs is None else kwargs, inputs=inputs, outputs=outputs,
+                _input_irs=[IR(t.tid, 'activation', graph.shapes[t]) for t in inputs],
+                _output_irs=[IR(t.tid, 'gradient', sh) for t, sh in zip(outputs, shapes)])
+            graph.shapes.update(dict(zip(outputs, shapes))); graph.cells.append(node)
+            return node
+        for graph in (sm, pm):
+            sources = [c for c in graph.cells if c.opname == ('FW_linear' if graph is pm else 'FW_embedding')]
+            for src in sources:
+                rank = src.rank
+                if graph is pm and ndim == 2:
+                    x = src.inputs[0]; sh = (2*k, 3)
+                    v = ordinary(graph, rank, 800, 'FW_view', [x], [sh], {'size': sh})
+                    graph.cells.remove(v); graph.cells.insert(graph.cells.index(src), v)
+                    src.inputs[0] = v.outputs[0]; src._input_irs[0] = v._output_irs[0]
+                    graph.shapes[src.outputs[0]] = (2*k, 5)
+                    src._output_irs[0] = IR(src.outputs[0].tid, 'projection', (2*k, 5))
+                y = src.outputs[0]; g = T('p' if graph is pm else 's', rank, 0, 900, 0)
+                graph.shapes[g] = (1,)
+                s = ordinary(graph, rank, 901, 'BW_sum', [g, y], [graph.shapes[y]])
+                s._input_irs[0].is_grad = lambda: True
+                if graph is sm: continue
+                dy, x, w = s.outputs[0], *src.inputs
+                if fault in ('grad-batch', 'grad-width', 'x-width', 'weight-dims'):
+                    t = dy if fault.startswith('grad') else x if fault == 'x-width' else w
+                    sh = list(graph.shapes[t])
+                    if fault == 'grad-batch': sh = [sh[0]*sh[1], 1, sh[2]] if ndim == 3 else [1, sh[0]*sh[1]]
+                    else: sh[-2], sh[-1] = sh[-1], sh[-2]
+                    v = ordinary(graph, rank, 910, 'FW_view', [t], [tuple(sh)], {'size': tuple(sh)})
+                    if fault.startswith('grad'): dy = v.outputs[0]
+                    elif fault == 'x-width': x = v.outputs[0]
+                    else: w = v.outputs[0]
+                bw = ordinary(graph, rank, 920, 'BW_linear', [dy, x, w],
+                    [graph.shapes[src.inputs[0]], graph.shapes[src.inputs[1]]], {'bias': None})
+                if fault == 'bias': bw.kwargs['bias'] = True
+                elif fault == 'params': bw.kwargs['unknown'] = 1
+                elif fault == 'arity': bw.inputs.pop(); bw._input_irs.pop()
+                elif fault == 'outputs': bw.outputs.pop(); bw._output_irs.pop()
+                elif fault in ('dx-shape', 'dw-shape'):
+                    port = int(fault == 'dw-shape'); t = bw.outputs[port]
+                    graph.shapes[t] = (7,); bw._output_irs[port] = IR(t.tid, 'gradient', (7,))
+                grads.append(bw)
+        if fault: return
+        for rank in range(k):
+            inputs = [g.outputs[0] for g in grads]
+            sh = list(pm.shapes[inputs[0]]); dim = ndim-2; sh[dim] //= k
+            t = T('p', rank, 0, 940, 1); pm.shapes[t] = tuple(sh)
+            pm.cells.append(NS(node=N('p', rank, 0, 940, 'ReduceScatterAllGatherPrim'), rank=rank,
+                opname='ReduceScatterPrim', kwargs={'ranks': list(range(k)), 'dim': dim}, inputs=inputs, outputs=[t]))
+            ordinary(pm, rank, 950, 'BW_layernorm', [t], [tuple(sh)])
+    def inventory(config, sm, pm, raw_sm, raw_pm, root):
+        result = {}
+        for label, view, cells in [('sm', sm, raw_sm), ('pm', pm, raw_pm)]:
+            reqs = [dict(seed=dict(zip(fields, c.inputs[0])), x=dict(zip(fields, c.inputs[1])),
+                bw_writer=dict(world=c.node[0], runtime_rank=c.rank, microbatch=0, source_cid=c.node.cid,
+                    call_instance=0, op='BW_sum', origin='nnscaler')) for c in cells if c.opname == 'BW_sum']
+            result[label] = seed.map_requests(view, cells, reqs)
+        return dict(inventories=result, pins={}, runs={})
+    bind = feed.bind
+    def attached(*args, **kwargs): return bind(*args, seed_bundle='fixture')
+    with patch.object(feed, 'bind', attached), patch.object(seed, 'load_bundle', side_effect=inventory):
+        return collective_world(root, k, normalize=True, project=True, seeded_transform=transform)
+
+
 class ProductionSeedTests(unittest.TestCase):
+    def test_linear_two_outputs_computed_then_scattered(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for ndim in (2, 3):
+                with self.subTest(k=k, ndim=ndim), TemporaryDirectory() as d:
+                    fed = linear_world(Path(d), k, ndim)
+                    p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                    self.assertEqual(p['frontier']['op'], 'BW_layernorm')
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+                    self.assertIn(':= (bw_linear ', text)
+                    self.assertIn(').1', text); self.assertIn(').2', text)
+                    self.assertIn('bw_linear_' + ('3d_' if ndim == 3 else '') + 'fst_shape', text)
+                    self.assertIn('bw_linear_' + ('3d_' if ndim == 3 else '') + 'snd_shape', text)
+                    self.assertIn('reduceScatterPrimDimN', text)
+
+    def test_linear_source_and_dimension_negative_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for ndim in (2, 3):
+                for fault in ('bias', 'params', 'arity', 'outputs', 'dx-shape', 'dw-shape',
+                              'grad-batch', 'grad-width', 'x-width', 'weight-dims'):
+                    with self.subTest(k=k, ndim=ndim, fault=fault), TemporaryDirectory() as d:
+                        if fault in ('bias', 'params'):
+                            with self.assertRaisesRegex(ValueError, 'unsupported source parameter|unknown ordinary parameters'):
+                                linear_world(Path(d), k, ndim, fault)
+                            continue
+                        fed = linear_world(Path(d), k, ndim, fault)
+                        p = fed.receipt['scoped_prefix']['pm']
+                        self.assertEqual(p['frontier']['op'], 'BW_linear')
+                        self.assertNotIn(':= (bw_linear ', proof_text(fed))
+                        if fault in ('grad-batch', 'grad-width', 'x-width', 'weight-dims'):
+                            self.assertEqual(p['frontier']['reason'], 'bw-linear-shape-contract')
+                        elif fault in ('dx-shape', 'dw-shape'):
+                            self.assertEqual(p['frontier']['reason'], 'computed-source-shape-mismatch')
+
+    def test_linear_nonconstant_cpu_autograd_matches_denote_indices(self):
+        import torch
+        for shape in ((2, 2), (2, 2, 2)):
+            x = torch.arange(1, 1+torch.tensor(shape).prod().item(), dtype=torch.float64).reshape(shape).requires_grad_()
+            w = torch.arange(1, 7, dtype=torch.float64).reshape(3, 2).requires_grad_()
+            y = torch.nn.functional.linear(x, w, bias=None)
+            dy = torch.arange(1, y.numel()+1, dtype=torch.float64).reshape(y.shape)
+            y.backward(dy)
+            xf, gf = x.detach().reshape(-1, 2).tolist(), dy.reshape(-1, 3).tolist()
+            # Denote: dX contracts output features; dW sums flattened batch.
+            dx = [[sum(g[j]*w[j, i].item() for j in range(3)) for i in range(2)] for g in gf]
+            dw = [[sum(gf[b][j]*xf[b][i] for b in range(len(xf))) for i in range(2)] for j in range(3)]
+            self.assertEqual(x.grad.reshape(-1, 2).tolist(), dx)
+            self.assertEqual(w.grad.tolist(), dw)
+            self.assertGreater(len(set(v for row in dx for v in row)), 1)
+            self.assertGreater(len(set(v for row in dw for v in row)), 1)
+
     def test_explicit_production_attachment(self):
         self.assertIn('seed_bundle', inspect.signature(feed.bind).parameters)
         self.assertIsNone(inspect.signature(feed.bind).parameters['seed_bundle'].default)

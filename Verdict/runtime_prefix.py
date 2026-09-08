@@ -100,6 +100,12 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                         or list(n) != seeds[seed_ids[ins[0].tid]]['consumer']
                         or dict(view.node_kwargs(n)) not in ({}, {'__consts': []})):
                     raise PrefixUnavailable('unsupported-seed-sum-contract', op=op)
+            elif op == 'BW_linear' and seeds is not None:
+                from Verdict import graph_to_lean as c
+                from Verdict.runtime_world import _ordinary
+                _, reason = _ordinary(view, n, c._get_node_params)
+                if reason or len(ins) != 3 or len(outs) != 2 or outs[0].tid == outs[1].tid:
+                    raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
             elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
@@ -208,6 +214,13 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 output_shapes = [[1]]
             elif op in ('FW_contiguous', 'FW_gelu'):
                 output_shapes = [ss[ins[0].tid]]
+            elif op == 'BW_linear':
+                grad, sh, weight = (ss[t.tid] for t in ins)
+                if (len(sh) not in (2, 3) or len(weight) != 2
+                        or sh[-1] != weight[1] or grad != sh[:-1] + [weight[0]]):
+                    raise PrefixUnavailable('bw-linear-shape-contract',
+                                            computed_shapes=[grad, sh, weight])
+                output_shapes = [sh.copy(), weight.copy()]
             elif op == 'FW_linear':
                 sh, weight = (ss[t.tid] for t in ins)
                 if len(sh) not in (2, 3) or len(weight) != 2 or sh[-1] != weight[1]:
@@ -314,6 +327,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op == 'FW_contiguous': return [xs[0]]
             if op == 'FW_gelu': return [f'fw_gelu {xs[0]}']
             if op == 'FW_softmax': return [f'fw_softmax {xs[0]}']
+            if op == 'BW_linear': return [f'(bw_linear {xs[0]} {xs[1]} {xs[2]}).{p}' for p in (1, 2)]
             if op == 'FW_linear': return [f'fw_linear {xs[0]} {xs[1]}']
             if op == 'FW_layernorm': return [f'fw_layernorm {xs[0]} {xs[1]} {xs[2]}']
             if op == 'ChunkPrim': return [f'chunkPrimDimN {scope.dim} {len(scope.ranks)} {scope.local_index} {xs[0]}']
@@ -379,6 +393,11 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             elif op == 'FW_layernorm':
                 shape_proof = ('  rw [SourceScopedPrefix.layernorm_shape]\n'
                                f'  exact {input_shapes[0]}')
+            elif op == 'BW_linear':
+                grad, xshape, weight = row['input_shapes']
+                dims = grad + [xshape[-1]] if len(grad) == 3 else [xshape[0], xshape[1], weight[0]]
+                lemma = 'bw_linear_' + ('3d_' if len(grad) == 3 else '') + ('fst' if p == 0 else 'snd') + '_shape'
+                shape_proof = f'  exact {lemma} {" ".join(map(str, dims))} {" ".join(v)} ' + ' '.join(f'({h})' for h in input_shapes)
             elif op == 'FW_linear':
                 dims = row['input_shapes'][0] + [row['input_shapes'][1][0]]
                 lemma = 'fw_linear_3d_shape' if len(dims) == 4 else 'SourceScopedPrefix.linear_shape_2d'
