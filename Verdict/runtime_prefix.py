@@ -115,11 +115,11 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 computed = {t.tid for row in rows for t in row['outs']}
                 if any(t.tid not in computed for t in ins):
                     raise PrefixUnavailable('unsupported-producer-input', op=op)
-            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_matmul') and seeds is not None:
+            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_matmul', 'BW_softmax') and seeds is not None:
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
                 _, reason = _ordinary(view, n, c._get_node_params)
-                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose') else (3, 2)
+                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_softmax') else (3, 2)
                 if reason or (len(ins), len(outs)) != arity or len({t.tid for t in outs}) != len(outs):
                     raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
             elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
@@ -223,6 +223,22 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                     if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
                         raise PrefixUnavailable('softmax-shape-contract')
                     output_shapes = [sh]
+            elif op == 'BW_softmax':
+                # Raw BW ports are [g, original FW input x], NOT [g, y].
+                # Denote recomputes softmax(x) before the weighted row reduction.
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
+                grad, sh = (ss[t.tid] for t in ins)
+                kw = dict(view.node_kwargs(n)); dim = kw.get('dim')
+                if (set(kw) - {'dim', 'dtype', '__consts'} or kw.get('dtype') is not None
+                        or kw.get('__consts', []) != [] or type(dim) is not int
+                        or not sh or not -len(sh) <= dim < len(sh)
+                        or (dim + len(sh) if dim < 0 else dim) != len(sh)-1):
+                    raise PrefixUnavailable('bw-softmax-source-params')
+                if sh[-1] <= 0 or grad != sh:
+                    raise PrefixUnavailable('bw-softmax-shape-contract', computed_shapes=[grad, sh])
+                output_shapes = [sh.copy()]
             elif op == 'BW_matmul':
                 # batchedMatmulBwd uses a shared flat batch offset, not Torch
                 # broadcasting. All three values must come from earlier steps.
@@ -445,6 +461,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op in ('FW_contiguous', 'BW_contiguous'): return [xs[0]]
             if op == 'FW_gelu': return [f'fw_gelu {xs[0]}']
             if op == 'FW_softmax': return [f'fw_softmax {xs[0]}']
+            if op == 'BW_softmax': return [f'bw_softmax {xs[0]} {xs[1]}']
             if op == 'BW_layernorm': return [f'(bw_layernorm {xs[0]} {xs[1]} {xs[2]} {xs[3]}).{p}' for p in ('1', '2.1', '2.2')]
             if op == 'BW_multiref': return [f'tensorSum [{", ".join(xs)}]']
             if op == 'BW_gelu': return [f'bw_gelu {xs[0]} {xs[1]}']
@@ -521,6 +538,9 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
                                f'  rw [{input_shapes[0]}, {input_shapes[2 if p == 0 else 1]}]\n  rfl')
             elif op in ('FW_div', 'FW_contiguous', 'BW_contiguous', 'FW_gelu'):
                 shape_proof = f'  exact {input_shapes[0]}'
+            elif op == 'BW_softmax':
+                shape_proof = ('  unfold bw_softmax softmaxBwd softmaxBwdFromOutput softmax\n'
+                               f'  rw [{input_shapes[1]}]\n  rfl')
             elif op == 'FW_softmax':
                 shape_proof = ('  unfold fw_softmax softmax\n'
                                f'  split <;> exact {input_shapes[0]}')

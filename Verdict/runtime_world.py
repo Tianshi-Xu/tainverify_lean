@@ -41,7 +41,7 @@ def _ordinary(view, n, get_params):
     if stem != 'div' and consts: raise ValueError(f'unsupported ordinary constants: {op}')
     for key, expected in [('bias', None), ('alpha', 1), ('rounding_mode', None), ('dtype', None), ('approximate', 'none'), ('padding_idx', None)]:
         if key in kw and kw[key] != expected: raise ValueError(f'unsupported source parameter {op}.{key}')
-    if stem == 'softmax' and kw.get('dim') != -1: raise ValueError('unsupported softmax axis')
+
     if stem == 'embedding' and (type(kw.get('start')) is not int or kw['start'] != 0 or type(kw.get('stop')) is not int):
         raise ValueError('missing source embedding offset authority')
     if stem == 'div' and (len(consts) != 1 or type(consts[0]) not in (int, float) or consts[0] <= 0 or int(consts[0]) != consts[0]):
@@ -59,6 +59,14 @@ def _ordinary(view, n, get_params):
         valid = (ins == 1 and outs == kw.get('times')) if op.startswith('FW_') else (ins > 0 and outs == 1)
     else:
         a = ARITIES[stem]; valid = (ins, outs) == (a[:2] if op.startswith('FW_') else a[2:])
+    if stem == 'softmax' and valid:
+        # BW takes (gradient, original x); its axis belongs to x, not gradient.
+        offset = 0 if op.startswith('FW_') else 1
+        xshape = tuple(view.tensor_shape(view.node_inputs(n)[offset]))
+        dim = kw.get('dim')
+        if (type(dim) is not int or not xshape or not -len(xshape) <= dim < len(xshape)
+                or dim % len(xshape) != len(xshape) - 1):
+            raise ValueError('unsupported softmax axis')
     if stem == 'layernorm' and valid:
         # Denote.layerNormEps is fixed and fw/bw_layernorm normalize only the last axis.
         eps, norm = kw.get('eps', 1e-5), kw.get('normalized_shape')

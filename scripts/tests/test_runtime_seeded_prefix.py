@@ -7,7 +7,7 @@ from math import prod
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None, matmul=None, matmul_batch=None):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None, matmul=None, matmul_batch=None, softmax=None, softmax_dim=-1):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -146,6 +146,29 @@ def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=No
                         graph.shapes[back.outputs[0]] = (7,)
                         back._output_irs[0] = IR(back.outputs[0].tid, 'gradient', (7,))
                     ordinary(graph, rank, 981, 'BW_multiref', [back.outputs[0]], [shape])
+                if softmax:
+                    shape = tuple(softmax)
+                    original = ordinary(graph, rank, 982, 'FW_view', [x], [shape], {'size': shape}).outputs[0]
+                    forward = ordinary(graph, rank, 983, 'FW_softmax', [original], [shape], {'dim': softmax_dim})
+                    gradient = ordinary(graph, rank, 984, 'FW_view', [bw.outputs[0]], [shape], {'size': shape}).outputs[0]
+                    operands = [gradient, original]
+                    kw = {'dim': softmax_dim, 'dtype': None}
+                    if fault in ('softmax-g-uncomputed', 'softmax-x-uncomputed'):
+                        operands[int(fault == 'softmax-x-uncomputed')] = g
+                    if fault == 'softmax-g-shape': operands[0] = dy
+                    if fault == 'softmax-axis': kw['dim'] = -2
+                    if fault == 'softmax-axis-oob': kw['dim'] = -len(shape)-1
+                    if fault == 'softmax-axis-type': kw['dim'] = -1.0
+                    if fault == 'softmax-dtype': kw['dtype'] = 'float32'
+                    if fault == 'softmax-kwargs': kw['unknown'] = 1
+                    if fault == 'softmax-consts': kw['__consts'] = [1]
+                    back = ordinary(graph, rank, 988, 'BW_softmax', operands, [shape], kw)
+                    if fault == 'softmax-arity': back.inputs.pop(); back._input_irs.pop()
+                    if fault == 'softmax-outputs': back.outputs.append(back.outputs[0]); back._output_irs.append(back._output_irs[0])
+                    if fault == 'softmax-output-shape':
+                        graph.shapes[back.outputs[0]] = (7,)
+                        back._output_irs[0] = IR(back.outputs[0].tid, 'gradient', (7,))
+                    ordinary(graph, rank, 994, 'BW_div', [back.outputs[0], original], [shape], {'__consts': [2]})
                 if matmul:
                     batch = (1,) * (matmul - 2)
                     shapes = [batch + (2*k, 5), batch + (2*k, 3), batch + (5, 3)]
@@ -237,6 +260,136 @@ def layernorm_world(root, k, ndim=3, fault=None):
 
 
 class ProductionSeedTests(unittest.TestCase):
+
+    def test_softmax_positive_last_axis_computed_chain(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for shape in ((2*k, 3), (k, 2, 3), (2, k, 1, 3)):
+                with self.subTest(k=k, shape=shape), TemporaryDirectory() as d:
+                    (Path(d)/'negative').mkdir()
+                    (Path(d)/'positive').mkdir()
+                    negative = linear_world(Path(d)/'negative', k, softmax=shape)
+                    try:
+                        positive = linear_world(Path(d)/'positive', k, softmax=shape, softmax_dim=len(shape)-1)
+                    except ValueError as e:
+                        self.fail(f'valid positive last axis rejected: {e}')
+                    p = positive.receipt['scoped_prefix']['pm']
+                    self.assertEqual(p['frontier']['op'], 'BW_div')
+                    self.assertEqual(p['output_shape'], list(shape))
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+                    text = proof_text(positive)
+                    self.assertIn(':= fw_softmax ', text)
+                    self.assertIn(':= bw_softmax ', text)
+                    self.assertEqual(text, proof_text(negative))
+                    self.assertEqual(positive.supporting_sources, negative.supporting_sources)
+                    self.assertEqual(positive.lean, negative.lean)
+
+    def test_softmax_ordinary_source_axis_contract(self):
+        from types import SimpleNamespace as NS
+        from Verdict.runtime_world import _ordinary
+        for op in ('FW_softmax', 'BW_softmax'):
+            inputs = ['x'] if op.startswith('FW_') else ['g', 'x']
+            shapes = {'g': (2, 3), 'x': (2, 2, 3)}
+            kw = {'dim': 2, 'dtype': None}
+            view = NS(node_opname=lambda n: op, node_kwargs=lambda n: kw,
+                node_inputs=lambda n: inputs, node_outputs=lambda n: ['out'],
+                tensor_shape=lambda t: shapes[t])
+            for dim in (-1, 2):
+                kw['dim'] = dim
+                self.assertEqual(_ordinary(view, None, lambda *a, **k: []), ([], None))
+            for dim in (None, True, -1.0, 2.0, -4, 3, -2, 1):
+                kw['dim'] = dim
+                with self.subTest(op=op, dim=dim), self.assertRaisesRegex(ValueError, 'softmax axis'):
+                    _ordinary(view, None, lambda *a, **k: [])
+            kw['dim'] = -1
+            shapes['x'] = ()
+            with self.assertRaisesRegex(ValueError, 'softmax axis'):
+                _ordinary(view, None, lambda *a, **k: [])
+            shapes['x'] = (2, 2, 3)
+            kw['dtype'] = 'float32'
+            with self.assertRaisesRegex(ValueError, 'source parameter'):
+                _ordinary(view, None, lambda *a, **k: [])
+            kw['dtype'] = None
+            while inputs:
+                inputs.pop()
+                self.assertEqual(_ordinary(view, None, lambda *a, **k: []), ([], 'unsupported-source-arity'))
+
+    def test_bw_softmax_admission_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for fault in ('g-uncomputed', 'x-uncomputed', 'g-shape', 'axis', 'axis-oob',
+                      'axis-type', 'dtype', 'kwargs', 'consts', 'arity', 'outputs', 'output-shape'):
+            with self.subTest(fault=fault), TemporaryDirectory() as d:
+                if fault in ('axis', 'axis-oob', 'axis-type', 'dtype', 'kwargs', 'consts', 'outputs'):
+                    with self.assertRaises(ValueError):
+                        linear_world(Path(d), 2, softmax=(2, 2, 3), fault='softmax-'+fault)
+                else:
+                    fed = linear_world(Path(d), 2, softmax=(2, 2, 3), fault='softmax-'+fault)
+                    self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_softmax')
+                    self.assertNotIn(':= bw_softmax ', proof_text(fed))
+
+    def test_bw_softmax_axis_and_kwargs_guards_independent(self):
+        # Deliberately relax only the earlier ordinary-schema gate: the prefix
+        # must still reject these source requests, not rely on that gate alone.
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        from Verdict import runtime_world
+        ordinary = runtime_world._ordinary
+        def relaxed(view, node, get_params):
+            if str(view.node_opname(node)).split('.')[-1] == 'BW_softmax':
+                return [], None
+            return ordinary(view, node, get_params)
+        for fault in ('axis', 'axis-oob', 'axis-type', 'dtype', 'kwargs', 'consts'):
+            with self.subTest(fault=fault), TemporaryDirectory() as d:
+                with patch.object(runtime_world, '_ordinary', relaxed):
+                    fed = linear_world(Path(d), 2, softmax=(2, 2, 3), fault='softmax-'+fault)
+                frontier = fed.receipt['scoped_prefix']['pm']['frontier']
+                self.assertEqual(frontier['op'], 'BW_softmax')
+                self.assertEqual(frontier['reason'], 'bw-softmax-source-params')
+
+    def test_bw_softmax_nonconstant_cpu_formula(self):
+        import torch
+        torch.set_num_threads(1)
+        for shape in ((4, 3), (3, 2, 3), (2, 3, 2, 3)):
+            x = (torch.arange(prod(shape), dtype=torch.float64).reshape(shape) % 7 / 3 - 1).requires_grad_()
+            g = torch.arange(prod(shape), dtype=torch.float64).reshape(shape) % 5 - 2
+            y = torch.softmax(x, dim=-1)
+            actual, = torch.autograd.grad(y, x, g)
+            recomputed = x.exp() / x.exp().sum(-1, keepdim=True)
+            expected = recomputed * (g - (recomputed*g).sum(-1, keepdim=True))
+            self.assertTrue(torch.isfinite(expected).all())
+            self.assertTrue(torch.allclose(actual, expected, atol=1e-12, rtol=1e-12))
+            self.assertFalse(torch.allclose(actual, g))
+            wrong = x * (g - (x*g).sum(-1, keepdim=True))
+            self.assertFalse(torch.allclose(actual, wrong))
+            wrong_y = y.softmax(-1)
+            self.assertFalse(torch.allclose(actual, wrong_y*(g-(wrong_y*g).sum(-1, keepdim=True))))
+
+    def test_bw_softmax_computed_original_chain(self):
+        import re
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for shape in ((2*k, 3), (k, 2, 3), (2, k, 1, 3)):
+                with self.subTest(k=k, shape=shape), TemporaryDirectory() as d:
+                    fed = linear_world(Path(d), k, softmax=shape)
+                    p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                    self.assertEqual(p['frontier']['op'], 'BW_div')
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+                    self.assertEqual(p['output_shape'], list(shape))
+                    m = re.search(r'def pmSeededPrefixValue_(\d+)_0 .*:= bw_softmax (\(pmSeededPrefixValue_\d+_0 init\)) (\(pmSeededPrefixValue_\d+_0 init\))', text)
+                    self.assertIsNotNone(m)
+                    forward = re.search(r'def (pmSeededPrefixValue_\d+_0) .*:= fw_softmax '+re.escape(m[3]), text)
+                    self.assertIsNotNone(forward)
+                    self.assertNotEqual(m[3], '('+forward[1]+' init)')
+                    for name in ('Read_'+m[1]+'_0', 'Read_'+m[1]+'_1', 'Step_'+m[1], 'Shape_'+m[1]+'_0'):
+                        self.assertIn('theorem pmSeededPrefix'+name+' ', text)
+
 
     def test_bw_matmul_contract_controls(self):
         from pathlib import Path
