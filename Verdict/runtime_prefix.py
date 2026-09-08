@@ -91,7 +91,7 @@ def render(label, view, raw, world, loaders, *, structured=False):
         ins = view.node_inputs(n); outs = view.node_outputs(n)
         ss = dict(shapes); ii = dict(initial)
         try:
-            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim'):
+            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
                 raise PrefixUnavailable(missing[i], op=op)
@@ -124,6 +124,13 @@ def render(label, view, raw, world, loaders, *, structured=False):
                 sh[odim] //= len(rs)
                 if op == 'AllToAllPrim': sh[dim] *= len(rs)
                 output_shapes = [sh]
+            elif op == 'AllReducePrim':
+                scope = view.collective_scopes[n]
+                if (len(outs) != 1 or not ins or len(ins) != len(scope.ranks)
+                        or scope.params or not 0 <= scope.local_index < len(scope.ranks)
+                        or any(ss[t.tid] != ss[ins[0].tid] for t in ins)):
+                    raise PrefixUnavailable('allreduce-shape-contract')
+                output_shapes = [ss[ins[0].tid].copy()]
             elif op == 'AllGatherPrim':
                 scope = view.collective_scopes[n]
                 sh = ss[ins[0].tid].copy(); dim, = scope.params
@@ -269,6 +276,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
         def expressions(xs):
             if op == 'DATALOADER': return [f'{node}_port{p["port"]}' for p in feeds[i]['ports']]
             if op == 'FW_embedding': return [f'fw_embedding {xs[0]} {xs[1]}']
+            if op == 'AllReducePrim': return [f'allReducePrim {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'ReduceScatterPrim': return [f'reduceScatterPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op in ('FW_view', 'FW_reshape'): return [f'fw_view {row["params"]} {xs[0]}']
@@ -303,7 +311,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
             update = f'AllToAllSourceFaithful.localStep {rs} {prev} {node} {dim} {odim}'
             proof = (f'by\n  change (AllToAllSourceFaithful.step {label}Graph (some {rs}) ({label}Peers {node}) {prev} {node}).toOption = _\n'
                      f'  rw [AllToAllSourceFaithful.step_valid _ _ _ _ _ {dim} {odim} {out.tid} (by decide) ({guard} init hInitShapes)]\n  rfl')
-        elif op in ('ChunkPrim', 'AllGatherPrim', 'ReduceScatterPrim'):
+        elif op in ('ChunkPrim', 'AllGatherPrim', 'ReduceScatterPrim', 'AllReducePrim'):
             rs = list(scope.ranks)
             proof = (f'by\n  change GroupScopedEval.step {label}Graph (.group (some {rs})) {prev} {node} = _\n'
                      f'  rw [GroupScopedEval.step_scoped _ _ _ {rs} (by decide) (by rfl)]\n  rfl')
@@ -347,6 +355,9 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
                 dims = row['input_shapes'][0] + [row['input_shapes'][1][0]]
                 lemma = 'fw_linear_3d_shape' if len(dims) == 4 else 'SourceScopedPrefix.linear_shape_2d'
                 shape_proof = f'  exact {lemma} {" ".join(map(str, dims))} {" ".join(v)} ' + ' '.join(f'({h})' for h in input_shapes)
+            elif op == 'AllReducePrim':
+                shape_proof = (f'  rw [allReducePrim_shape _ _ _ {v[0]} rfl]\n'
+                               f'  exact {input_shapes[0]}')
             elif op == 'AllGatherPrim':
                 dim, = scope.params
                 shape_proof = (f'  exact allGatherPrimDimN_shape {dim} {len(scope.ranks)} '

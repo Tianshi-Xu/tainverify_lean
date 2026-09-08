@@ -10,7 +10,7 @@ def proof_text(fed):
     return '\n'.join([*fed.supporting_sources.values(), fed.lean])
 
 
-def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None, tail=None, tail_fault=None, scatter=None):
+def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None, tail=None, tail_fault=None, scatter=None, allreduce=None):
     """Independent raw IR + source-adapter snapshot, with actual CPU loader feeds."""
     import copy
     from types import SimpleNamespace as NS
@@ -237,6 +237,39 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
         if scatter.get('fault') == 'axis': scattered[0].kwargs['dim'] = 9
         if scatter.get('fault') == 'mean': scattered[0].kwargs['op'] = 'mean'
         if scatter.get('fault') == 'peer-order': scattered[0].inputs = list(reversed(scattered[0].inputs))
+    if allreduce:
+        first = [c for c in cells if c.opname == 'AllToAllPrim']
+        ranks = allreduce.get('ranks', list(range(k)))
+        contributions = {}
+        for rank in ranks:
+            src = first[rank]; sh = pm.shapes[src.outputs[0]]
+            t = T('p',rank,0,290,1); pm.shapes[t] = sh
+            cells.append(NS(node=N('p',rank,0,290,'FW_div'),rank=rank,
+                opname='FW_div',kwargs=dict(__consts=[rank+1],rounding_mode=None),
+                inputs=src.outputs,outputs=[t],_input_irs=[IR(src.outputs[0].tid,'activation',sh)],
+                _output_irs=[IR(t.tid,'activation',sh)]))
+            if allreduce.get('fault') == 'peer-shape' and rank == ranks[0]:
+                sh = (1, 3, 2*k); pm.shapes[t] = sh
+                cells[-1].opname = 'FW_view'
+                cells[-1].node = cells[-1].node._replace(irname='FW_view')
+                cells[-1].kwargs = dict(size=sh)
+                cells[-1]._output_irs = [IR(t.tid,'activation',sh)]
+            contributions[rank] = t
+        reduced = []
+        for rank in ranks:
+            inputs = [contributions[r] for r in ranks]
+            sh = pm.shapes[inputs[0]]; t=T('p',rank,0,291,1); pm.shapes[t]=sh
+            ar=NS(node=N('p',rank,0,291,'AllReduceIdentityPrim'),rank=rank,
+                opname='AllReducePrim',kwargs=dict(ranks=ranks),inputs=inputs,outputs=[t])
+            cells.append(ar); reduced.append(ar)
+        mode = allreduce.get('fault')
+        if mode == 'shape': pm.shapes[reduced[0].outputs[0]] = (9,)
+        if mode == 'rank': reduced[0].kwargs['ranks'] = ranks[1:]
+        if mode == 'arity': reduced[0].inputs = reduced[0].inputs[:-1]
+        if mode == 'mean': reduced[0].kwargs['op'] = 'mean'
+        if mode == 'params': reduced[0].kwargs['dim'] = 1
+        if mode == 'peer-order': reduced[0].inputs = list(reversed(reduced[0].inputs))
+        if mode == 'peer-duplicate': reduced[0].inputs = [reduced[0].inputs[0]]*len(ranks)
     if tail_fault:
         op, mode, payload = tail_fault
         cell = next(c for c in cells if c.opname == op)
@@ -262,10 +295,10 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
                  call_instance=0,op=cell.opname,origin='nnscaler'),source_irname=cell.node.irname,
                  inputs=[dict(zip(fields,t)) for t in cell.inputs],outputs=[dict(zip(fields,t)) for t in cell.outputs])
         pr=copy.deepcopy(row)
-        if cell.opname in ('AllToAllPrim','AllGatherPrim','ReduceScatterPrim'):
+        if cell.opname in ('AllToAllPrim','AllGatherPrim','ReduceScatterPrim','AllReducePrim'):
             row['adapter_kwargs']=copy.deepcopy(cell.kwargs)
             pr['inputs']=[dict(zip(fields,cell.inputs[cell.kwargs['ranks'].index(cell.rank)]))]
-            pr['primitive']=dict(kind='AllToAllAllToAllPrim' if cell.opname=='AllToAllPrim' else 'ReduceScatterAllGatherPrim' if cell.opname=='ReduceScatterPrim' else 'AllGatherReduceScatterPrim',forward=True,kwargs=copy.deepcopy(cell.kwargs))
+            pr['primitive']=dict(kind='AllToAllAllToAllPrim' if cell.opname=='AllToAllPrim' else 'ReduceScatterAllGatherPrim' if cell.opname=='ReduceScatterPrim' else 'AllReduceIdentityPrim' if cell.opname=='AllReducePrim' else 'AllGatherReduceScatterPrim',forward=True,kwargs=copy.deepcopy(cell.kwargs))
         writers.append(row);prepared.append(pr)
     snapshot=build_snapshot(writers);snapshot['runtime_ndevs']=k;snapshot['adapter_source']=prepared
     bind_adapters(snapshot)
@@ -274,6 +307,28 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
     return bind(legacy,sv,pv,sm.cells,pm.cells,*source,root)
 
 class PrefixTests(unittest.TestCase):
+    def test_allreduce_computed_noncontiguous_chain(self):
+        for k in (2, 3):
+            with self.subTest(k=k), tempfile.TemporaryDirectory() as d:
+                ranks = list(range(0, 2*k-1, 2))
+                fed = collective_world(Path(d), 2*k-1, allreduce={'ranks': ranks})
+                p = fed.receipt['scoped_prefix']['pm']
+                self.assertIsNone(p['frontier'])
+                self.assertEqual(p['prefix_nodes'], fed.receipt['execution_order']['pm']['execution_to_source'])
+                self.assertEqual(p['output_shape'], [1, 2*(2*k-1), 3])
+                self.assertEqual(len(p['initial_premises']), 2*k-1)
+                text = proof_text(fed)
+                self.assertIn(f':= allReducePrim {k} {k-1} [', text)
+                self.assertIn('rw [allReducePrim_shape', text)
+                self.assertIn('pmPrefixContinuation', text)
+
+    def test_allreduce_source_controls(self):
+        for k in (2, 3):
+            for fault in ('rank', 'arity', 'mean', 'params', 'peer-order', 'peer-duplicate', 'shape', 'peer-shape'):
+                with self.subTest(k=k, fault=fault), tempfile.TemporaryDirectory() as d:
+                    with self.assertRaises(ValueError):
+                        collective_world(Path(d), 2*k-1, allreduce={'ranks': list(range(0,2*k-1,2)), 'fault': fault})
+
     def test_bounded_run_composition(self):
         import re
         from unittest.mock import patch
