@@ -145,9 +145,12 @@ def render(sm, pm, raw_sm, raw_pm):
     lines = ['import denote.SourceScopedEval', 'namespace TrainVerify.Denote.RuntimeWorld',
              'set_option maxHeartbeats 500000', 'noncomputable section',
              '-- Source-only definitions; no Torch refinement or public value closure.']
-    missing = []; counts = {}; refs = {}; identity = {}
+    from Verdict.runtime_schedule import build
+    missing = []; counts = {}; refs = {}; identity = {}; execution_order = {}
     for label, view, raw in [('sm', sm, raw_sm), ('pm', pm, raw_pm)]:
         written = _authenticate(view, raw, c)
+        execution_order[label] = build(view)
+        order = execution_order[label]["execution_to_source"]
         for t in view.tensors():
             ref = tuple(view.source_tensor(t))
             if t.tid in identity and identity[t.tid] != ref: raise ValueError('cross-world lowered ID collision')
@@ -183,7 +186,7 @@ def render(sm, pm, raw_sm, raw_pm):
                     f'    SourceScopedEval.step g (.group none) peer s {name} = none := rfl',
                     f'#print axioms {name}_blocked'])
         counts[label + '_nodes'] = len(view.nodes())
-        lines.extend([f'def {label}Graph : GraphDecl := {{numRanks := {view.W.runtime_ndevs}, nodes := [{", ".join(f"{label}Node_{i}" for i in range(len(view.nodes())))}]}}',
+        lines.extend([f'def {label}Graph : GraphDecl := {{numRanks := {view.W.runtime_ndevs}, nodes := [{", ".join(f"{label}Node_{i}" for i in order)}]}}',
             f'def {label}Requests : List (NodeDecl × GroupScopedEval.Request × List (Nat × Tid)) := [', ',\n'.join(table), ']',
             f'def {label}Scope (n : NodeDecl) : GroupScopedEval.Request :=',
             f'  match {label}Requests.find? (fun row => row.1 == n) with', '  | some row => row.2.1', '  | none => .group none',
@@ -193,6 +196,7 @@ def render(sm, pm, raw_sm, raw_pm):
             f'def {label}Denote (s : Store) : Option Store := SourceScopedEval.denote {label}Graph {label}Scope {label}Peers s'])
     lines.extend(['end', 'end TrainVerify.Denote.RuntimeWorld', ''])
     return WorldDefinitions('\n'.join(lines), dict(**counts, fullrefs=refs, missing=missing,
+        execution_order=execution_order, execution_order_policy="source-rank-control/fullref-producer/stable-kahn",
         execution_complete=False, public_complete=False, proof_admissible=False,
         source_only=True, source_defined_operations_are_torch_refinement=False,
         later_blockers=['input-adapter-unproved', 'scoped-dependent-chain/public-adapter-unproved', 'DP-value-decomposition-unproved']))

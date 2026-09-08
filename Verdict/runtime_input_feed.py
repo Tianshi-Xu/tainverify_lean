@@ -59,7 +59,9 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
             raise ValueError('exact raw loader rank inventory required')
         loader_map = {cell.node:cell for cell in loaders}
         requests = []
-        for i,n in enumerate(view.nodes()):
+        # Canonical re-render above authenticates this exact permutation.
+        for i in world.receipt["execution_order"][label]["execution_to_source"]:
+            n = view.nodes()[i]
             node = f'{label}Node_{i}'
             if n not in loader_map:
                 requests.append(f'({node}, none)'); continue
