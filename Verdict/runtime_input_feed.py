@@ -103,6 +103,20 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
         slots[label] = len(requests)
         lines.extend([f'def {label}InputRequests : List InputRequest := [', ',\n'.join(requests), ']',
             f'def {label}DenoteWithInputs (s : Store) : Option Store := SourceScopedEval.denoteWithInputs {label}Graph {label}Scope {label}Peers (some {label}InputRequests) s'])
+        # Exact request-map equality avoids comparing the full NodeDecl records.
+        # Sorting is proof-only: a permutation transports strict-chain uniqueness
+        # back to ALL actual graph outputs, without changing execution order.
+        theorem(label+'InputSchedule_valid',
+            f': SourceScopedEval.InputSchedule {label}Graph.nodes {label}InputRequests',
+            'by\n  constructor\n  · rfl\n  · apply (List.perm_insertionSort (fun a b : Nat => a ≤ b) _).nodup_iff.mp\n'
+            '    apply List.Pairwise.nodup (r := fun a b : Nat => a < b)\n'
+            '    apply List.isChain_iff_pairwise.mp\n    decide +kernel')
+        theorem(label+'DenoteWithInputs_entry',
+            f'(s : Store) : {label}DenoteWithInputs s = SourceScopedEval.runUsing '
+            f'(fun row s => SourceScopedEval.stepWithInputs {label}Graph ({label}Scope row.1) '
+            f'({label}Peers row.1) s row.1 row.2) {label}InputRequests (some s)',
+            f'by\n  unfold {label}DenoteWithInputs SourceScopedEval.denoteWithInputs SourceScopedEval.runWithInputs\n'
+            f'  exact if_pos {label}InputSchedule_valid')
     lines.extend(['end','end TrainVerify.Denote.RuntimeWorld',''])
     result = dict(world.receipt)
     result['input_feed'] = dict(run_id=run,loaders=inventory,slots=slots,source_validated=True,
