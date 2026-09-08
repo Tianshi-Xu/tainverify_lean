@@ -91,6 +91,9 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
     seeds = None if seed_inventories is None else seed_inventories[label]
     seed_ids = {} if seeds is None else {row['tid']: q for q, row in enumerate(seeds)}
     shapes = {tid: [1] for tid in seed_ids}; initial = {}; rows = []; frontier = None
+    # Only authenticated integer feeds and value-preserving descendants qualify
+    # as IDs. No real-valued activation or initial parameter receives this fact.
+    integer_ids = set()
     # Commit each node's inferred shapes/premises only after all checks succeed.
     for j, i in enumerate(order):
         n = view.nodes()[i]; op = str(view.node_opname(n)).split('.')[-1]
@@ -115,11 +118,11 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 computed = {t.tid for row in rows for t in row['outs']}
                 if any(t.tid not in computed for t in ins):
                     raise PrefixUnavailable('unsupported-producer-input', op=op)
-            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_matmul', 'BW_softmax', 'BW_div') and seeds is not None:
+            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_matmul', 'BW_softmax', 'BW_div', 'BW_embedding') and seeds is not None:
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
                 _, reason = _ordinary(view, n, c._get_node_params)
-                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_softmax', 'BW_div') else (3, 2)
+                arity = (3, 1) if op == 'BW_embedding' else (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_softmax', 'BW_div') else (3, 2)
                 if reason or (len(ins), len(outs)) != arity or len({t.tid for t in outs}) != len(outs):
                     raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
             elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
@@ -223,6 +226,27 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                     if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
                         raise PrefixUnavailable('softmax-shape-contract')
                     output_shapes = [sh]
+            elif op == 'BW_embedding':
+                from Verdict import graph_to_lean as c
+                from Verdict.runtime_world import _ordinary
+                params, _ = _ordinary(view, n, c._get_node_params)
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins[:2]):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
+                grad, ids, weight = (ss[t.tid] for t in ins)
+                kw = dict(view.node_kwargs(n))
+                if (set(kw) - {'start', 'stop', 'padding_idx', '__consts'}
+                        or type(kw.get('start')) is not int or kw['start'] != 0
+                        or type(kw.get('stop')) is not int
+                        or kw.get('padding_idx') is not None
+                        or kw.get('__consts', []) != [] or params):
+                    raise PrefixUnavailable('bw-embedding-source-params')
+                if (len(weight) != 2 or min(weight) <= 0 or kw['stop'] != weight[0]
+                        or grad != ids + [weight[1]]):
+                    raise PrefixUnavailable('bw-embedding-shape-contract', computed_shapes=[grad, ids, weight])
+                if ins[1].tid not in integer_ids:
+                    raise PrefixUnavailable('bw-embedding-index-domain')
+                output_shapes = [weight.copy()]
             elif op == 'BW_div':
                 # Source ports remain [g, original x], although bw_div uses g.
                 # Neither operand may be replaced by an initial shape premise.
@@ -394,6 +418,14 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 if sh != list(view.tensor_shape(t)):
                     raise PrefixUnavailable('computed-source-shape-mismatch', tid=t.tid, computed_shape=sh, source_shape=list(view.tensor_shape(t)))
                 ss[t.tid] = sh
+            ids_preserved = (op in ('ChunkPrim', 'FW_contiguous', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_multiref')
+                             and ins[0].tid in integer_ids)
+            integer_ids.difference_update(t.tid for t in outs)
+            if op == 'DATALOADER':
+                integer_ids.update(p['tid'] for p in feeds[i]['ports']
+                                   if all(type(v) is int and v >= 0 for v in p['values']))
+            elif ids_preserved:
+                integer_ids.update(t.tid for t in outs)
             rows.append(dict(index=i, op=op, ins=ins, outs=outs, scope=scope,
                              input_shapes=[ss[t.tid] for t in ins], output_shapes=output_shapes, params=params))
             shapes, initial = ss, ii
@@ -514,6 +546,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
         def expressions(xs):
             if op == 'DATALOADER': return [f'{node}_port{p["port"]}' for p in feeds[i]['ports']]
             if op == 'FW_embedding': return [f'fw_embedding {xs[0]} {xs[1]}']
+            if op == 'BW_embedding': return [f'bw_embedding {xs[0]} {xs[1]} {xs[2]}']
             if op == 'AllReducePrim': return [f'allReducePrim {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'ReduceScatterPrim': return [f'reduceScatterPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
@@ -605,6 +638,8 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
                 shape_proof = (f'  change (batchedMatmul {operands}).shape = _\n'
                                '  unfold batchedMatmul transpose2d\n'
                                f'  rw [{input_shapes[0]}, {input_shapes[2 if p == 0 else 1]}]\n  rfl')
+            elif op == 'BW_embedding':
+                shape_proof = f'  exact {input_shapes[2]}'
             elif op in ('FW_div', 'BW_div', 'FW_contiguous', 'BW_contiguous', 'FW_gelu'):
                 shape_proof = f'  exact {input_shapes[0]}'
             elif op == 'BW_softmax':

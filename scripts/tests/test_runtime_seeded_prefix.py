@@ -7,7 +7,7 @@ from math import prod
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None, matmul=None, matmul_batch=None, softmax=None, softmax_dim=-1, divisor=2):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None, matmul=None, matmul_batch=None, softmax=None, softmax_dim=-1, divisor=2, embedding=False):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -233,6 +233,31 @@ def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=No
                     ordinary(graph, rank, 991, 'BW_contiguous', [back.outputs[0], operands[1]], [shapes[1]])
                     ordinary(graph, rank, 992, 'BW_contiguous', [back.outputs[1], operands[2]], [bshape])
                     ordinary(graph, rank, 994, 'BW_multiref', [back.outputs[0]], [shapes[1]])
+                if embedding:
+                    fw = next(c for c in graph.cells if c.rank == rank and c.opname == 'FW_embedding')
+                    ids, weight = fw.inputs
+                    sh = graph.shapes[fw.outputs[0]]
+                    eg = ordinary(graph, rank, 982, 'FW_view', [bw.outputs[0]], [sh], {'size': sh}).outputs[0]
+                    ei = ordinary(graph, rank, 983, 'FW_contiguous', [ids], [graph.shapes[ids]]).outputs[0]
+                    operands = [eg, ei, weight]; kw = dict(fw.kwargs)
+                    if fault == 'embedding-g-uncomputed': operands[0] = g
+                    if fault == 'embedding-ids-uncomputed': operands[1] = g
+                    if fault == 'embedding-ids-domain':
+                        operands[1] = ordinary(graph, rank, 985, 'FW_div', [ei], [graph.shapes[ei]], {'__consts': [2]}).outputs[0]
+                    if fault == 'embedding-g-shape': operands[0] = dy
+                    if fault == 'embedding-weight-unread': operands[2] = g
+                    if fault == 'embedding-start': kw['start'] = 1
+                    if fault == 'embedding-stop': kw['stop'] -= 1
+                    if fault == 'embedding-padding': kw['padding_idx'] = 0
+                    if fault == 'embedding-kwargs': kw['unknown'] = 1
+                    if fault == 'embedding-consts': kw['__consts'] = [1]
+                    back = ordinary(graph, rank, 988, 'BW_embedding', operands, [graph.shapes[weight]], kw)
+                    if fault == 'embedding-arity': back.inputs.pop(); back._input_irs.pop()
+                    if fault == 'embedding-outputs': back.outputs.append(back.outputs[0]); back._output_irs.append(back._output_irs[0])
+                    if fault == 'embedding-output-shape':
+                        graph.shapes[back.outputs[0]] = (7,)
+                        back._output_irs[0] = IR(back.outputs[0].tid, 'gradient', (7,))
+                    ordinary(graph, rank, 991, 'BW_flatten', [back.outputs[0], weight], [graph.shapes[weight]])
                 grads.append(bw)
         if elementwise:
             t = grads[0].outputs[0]; sh = pm.shapes[t]
@@ -276,6 +301,64 @@ def layernorm_world(root, k, ndim=3, fault=None):
 
 
 class ProductionSeedTests(unittest.TestCase):
+
+    def test_bw_embedding_computed_chain(self):
+        import re
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            with self.subTest(k=k), TemporaryDirectory() as d:
+                fed = linear_world(Path(d), k, embedding=True)
+                p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                self.assertEqual(p['frontier']['op'], 'BW_flatten')
+                self.assertEqual(len(p['initial_premises']), 4*k)
+                m = re.search(r'def pmSeededPrefixValue_(\d+)_0 .*:= bw_embedding \(pmSeededPrefixValue_\d+_0 init\) \(pmSeededPrefixValue_\d+_0 init\) \(init \d+\)', text)
+                self.assertIsNotNone(m)
+                for n in ('Read_'+m[1]+'_0', 'Read_'+m[1]+'_1', 'Read_'+m[1]+'_2', 'Step_'+m[1], 'Written_'+m[1]+'_0', 'Shape_'+m[1]+'_0'):
+                    self.assertIn('theorem pmSeededPrefix'+n+' ', text)
+
+    def test_bw_embedding_source_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        from Verdict import runtime_world
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        ordinary = runtime_world._ordinary
+        faults = ('g-uncomputed', 'ids-uncomputed', 'ids-domain', 'g-shape',
+                  'weight-unread', 'start', 'stop', 'padding', 'kwargs', 'consts',
+                  'arity', 'outputs', 'output-shape')
+        for independent in (False, True):
+            def checked(view, node, get_params):
+                if independent and str(view.node_opname(node)).split('.')[-1] == 'BW_embedding':
+                    return [], None
+                return ordinary(view, node, get_params)
+            for fault in faults:
+                with self.subTest(independent=independent, fault=fault), TemporaryDirectory() as d, patch.object(runtime_world, '_ordinary', checked):
+                    if fault == 'outputs' or (not independent and fault in ('start', 'padding', 'kwargs', 'consts')):
+                        with self.assertRaises(ValueError):
+                            linear_world(Path(d), 2, embedding=True, fault='embedding-'+fault)
+                    else:
+                        fed = linear_world(Path(d), 2, embedding=True, fault='embedding-'+fault)
+                        f = fed.receipt['scoped_prefix']['pm']['frontier']
+                        self.assertEqual(f['op'], 'BW_embedding')
+                        if fault == 'ids-domain': self.assertEqual(f['reason'], 'bw-embedding-index-domain')
+                        self.assertNotIn(':= bw_embedding ', proof_text(fed))
+
+    def test_bw_embedding_nonconstant_repeated_cpu_scatter(self):
+        import torch
+        from nnscaler.runtime.function import embedding
+        torch.set_num_threads(1)
+        for k in (2, 3):
+            ids = torch.tensor([[2, 0, 2, 3, 2, 5]]*k, dtype=torch.int64)
+            g = torch.arange(ids.numel()*3, dtype=torch.float64).reshape(k, 6, 3)-7
+            w = torch.arange(15, dtype=torch.float64).reshape(5, 3).requires_grad_()
+            actual, = torch.autograd.grad(embedding(ids, w, None, 0, 5), w, g)
+            expected = torch.tensor([[sum(int(g.flatten()[q*3+h]) for q, v in enumerate(ids.flatten()) if int(v) == row)
+                                      for h in range(3)] for row in range(5)], dtype=torch.float64)
+            self.assertTrue(torch.equal(actual, expected))
+            self.assertGreater(actual.unique().numel(), 1)
+            self.assertFalse(torch.equal(actual[2], g[0, 0]))
 
     def test_bw_div_source_controls(self):
         from pathlib import Path
