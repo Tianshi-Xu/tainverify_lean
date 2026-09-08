@@ -122,4 +122,11 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
     result['input_feed'] = dict(run_id=run,loaders=inventory,slots=slots,source_validated=True,
         integer_encoding_emitted=True,kernel_value_proved=False,kernel_checks=theorem_names,
         whole_world_option_success=False,torch_refinement=False,historicalcapture_sample_association=False)
-    return WorldDefinitions(world.lean+'\n'+'\n'.join(lines), result)
+    from Verdict.runtime_prefix import render as render_prefix
+    prefixes = []; result['scoped_prefix'] = {}
+    for label, view, raw in [('sm', sm, raw_sm), ('pm', pm, raw_pm)]:
+        text, detail = render_prefix(label, view, raw, world, inventory)
+        result['scoped_prefix'][label] = detail
+        if text: prefixes.append(text)
+    imports = 'import denote.SourceScopedPrefix\n' if prefixes else ''
+    return WorldDefinitions(imports+world.lean+'\n'+'\n'.join(lines+prefixes), result)
