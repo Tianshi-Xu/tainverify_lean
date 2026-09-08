@@ -210,6 +210,7 @@ def parse_args() -> argparse.Namespace:
 		help="Expected non-JSON authority artifact hash (repeatable).",
 	)
 	p.add_argument("--runtime-batch-authority", help="Source-only CPU batch record/result JSON; never value proof authority.")
+	p.add_argument("--runtime-world-definitions-out", help="Opt-in source-only complete world definitions in a fresh private directory, separate from --out; public proof still blocked.")
 	return p.parse_args()
 
 
@@ -251,6 +252,8 @@ class _RuntimeGraphView:
 		self._original = {ids[t]: t for t in source.tensors()}
 		self._lowered = {t: t._replace(tid=ids[t]) for t in source.tensors()}
 		self._nodes = list(source.nodes())
+		self._runtime_original_nodes = tuple(self._nodes)
+		self._runtime_world_size = getattr(source.W, 'runtime_ndevs', None)
 		self._tensors = [self._lowered[t] for t in source.tensors()]
 		self._node2inputs = {n: [self._lowered[t] for t in source.node_inputs(n)] for n in self._nodes}
 		self._node2outputs = {n: [self._lowered[t] for t in source.node_outputs(n)] for n in self._nodes}
@@ -4666,6 +4669,14 @@ def _generate(args: argparse.Namespace) -> None:
 		emit_segment_patterns=bool(args.emit_segment_patterns),
 	)
 	out_path = Path(args.out)
+	world_out = getattr(args, 'runtime_world_definitions_out', None)
+	if world_out:
+		if args.split_goals or args.emit_spec_template or args.emit_segment_patterns or getattr(args, 'definitions_only', False):
+			raise ValueError('runtime world definitions cannot mix with public/template/legacy definitions options')
+		world_path = Path(world_out).resolve()
+		if world_path.parent == out_path.resolve().parent or world_path == out_path.resolve():
+			raise ValueError('world definitions must be separate from public destination')
+		_validate_definitions_only_destination(Path(world_out))
 	if bool(getattr(args, "definitions_only", False)):
 		_validate_definitions_only_destination(out_path)
 	spec_out_path = Path(args.spec_out)
@@ -4706,7 +4717,15 @@ def _generate(args: argparse.Namespace) -> None:
 		receipt['inventory'] = dict(sm_nodes=len(GsE.nodes()), pm_nodes=len(GpE.nodes()),
 			pm_fullrefs=len(GpE.tensors()), combined_fullrefs=len(set(GsE._original)|set(GsC._original)|set(GpE._original)),
 			wred_scopes=len(getattr(GpE, 'wred_scopes', ())), collective_scopes=len(getattr(GpE, 'collective_scopes', ())), chunk_scopes=len(getattr(GpE, 'chunk_scopes', ())))
-		raise RuntimeLineageBlocked('runtime-world-render/public-adapter unavailable; typed source closure consumed; values unproved', receipt)
+		from Verdict.runtime_world import render, publish
+		world = render(GsE, GpE, inputs[0], inputs[1])
+		receipt['world_definitions'] = world.receipt
+		if world_out:
+			publish(world, world_out)
+			receipt['world_definitions_path'] = str(world_out)
+		raise RuntimeLineageBlocked('runtime-world-render/public-adapter: world definitions rendered; scoped dependent chain/input adapter/DP mathematics unavailable; values unproved', receipt)
+	if world_out:
+		raise ValueError('runtime world definitions opt-in requires a runtime DP/mb world; legacy bytes unchanged')
 	sm_logical_ids, pm_logical_ids = aligned_logical_node_ids(GsE, GpE)
 
 	t0 = time.perf_counter()
