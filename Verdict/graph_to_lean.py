@@ -594,9 +594,196 @@ def emit_collective_scope_certificates(view: _RuntimeGraphView) -> str:
 	return '\n'.join(lines)
 
 
+@dataclass(frozen=True)
+class _WredScope:
+	"""One source-only, versioned parameter writer in the shared world store."""
+	node: Any
+	source_writer: str
+	ranks: Tuple[int, ...]
+	local_index: int
+	input_tids: Tuple[int, ...]
+	output_tid: int
+	input_shape: Tuple[int, ...]
+	parameter: Tuple[Any, ...]
+	proof_admissible: bool = False
+
+
+def attach_wred_scopes(view, snapshot, raw_writers, raw_rank_sources):
+	"""The raw pre-fusion authority is a separate input, never inferred from JSON."""
+	from copy import deepcopy
+	# A rejected new attachment must not leave older WRED authority usable.
+	for field in ('wred_scopes', '_wred_source', '_wred_raw', '_wred_rank_sources'):
+		view.__dict__.pop(field, None)
+	_attach_source_scopes(view, snapshot, collectives=True)
+	if snapshot.get('rank_sources') != raw_rank_sources:
+		raise ValueError('WRED generated source differs from independent raw source')
+	fields = ('world', 'runtime_rank', 'microbatch', 'source_tid', 'version')
+	def ref(t): return dict(zip(fields, t))
+	rows = {(*[w['ref'][f] for f in ('world', 'runtime_rank', 'microbatch', 'source_cid')], w['source_irname']): w for w in snapshot['writers']}
+	if set(raw_writers) != set(view.source.nodes()):
+		raise ValueError('WRED independent raw writer inventory mismatch')
+	bound = {}
+	for node in view.source.nodes():
+		w, raw = rows[node], raw_writers[node]
+		if w['ref'] != raw['ref']:
+			raise ValueError('WRED independent raw writer identity/occurrence mismatch')
+		if w.get('parameter_grad_tids') != raw['parameter_grad_tids']:
+			raise ValueError('WRED raw parameter gradient ownership mismatch')
+		if w['ref']['op'] != 'CROSS_DP_WRED': continue
+		b = w.get('reducer', {})
+		if snapshot.get('reducer_binding') != 'complete' or not b:
+			raise ValueError('WRED requires complete source reducer binding')
+		if w.get('reducer_ir') != raw['reducer_ir']:
+			raise ValueError('WRED raw reducer cid/parameter/group mismatch')
+		for f in ('parameter', 'grad_input', 'grad_output'):
+			if b[f] != raw[f]: raise ValueError('WRED raw ' + f + ' mismatch')
+		p = b['parameter']
+		placements = [t.get('placement') for t in snapshot['tensors'] if t['ref'] == p]
+		if placements != [raw['placement']]:
+			raise ValueError('WRED raw parameter placement mismatch')
+		if node.irname != f"IRWeightReducer-w{p['source_tid']}" or w['ref']['source_cid'] != raw['reducer_ir']['cid']:
+			raise ValueError('WRED prefused parameter/writer mismatch')
+		rs = tuple(b['ranks'])
+		if (not rs or len(set(rs)) != len(rs) or node.rank not in rs
+				or any(type(r) is not int or not 0 <= r < view.W.runtime_ndevs for r in rs)):
+			raise ValueError('WRED invalid ordered group')
+		xs, ys = view.node_inputs(node), view.node_outputs(node)
+		if (len(xs) != len(rs) or tuple(t.rank for t in xs) != rs or len(ys) != 1
+				or [ref(view.source_tensor(t)) for t in xs] != b['ordered_inputs']
+				or [ref(view.source_tensor(t)) for t in ys] != b['outputs']):
+			raise ValueError('WRED exact ordered full-reference edges mismatch')
+		if (b['reduce_op'] != 'sum' or type(b['zero']) is not int or b['zero'] != 0
+				or type(b['nreplicas']) is not int or b['nreplicas'] != 1):
+			raise ValueError('WRED requires sum/zero0/nreplicas1')
+		kw = dict(view.source.node_kwargs(node)); kw.pop('__consts', None)
+		if kw or view.source.node_kwargs(node).get('__consts', []) != []:
+			raise ValueError('WRED requires empty parameters')
+		sh = tuple(view.tensor_shape(xs[0]))
+		if sh != tuple(b-a for a,b in raw['placement']['indmap']):
+			raise ValueError('WRED gradient shape differs from independent parameter slice')
+		if (any(type(d) is not int or d <= 0 for d in sh)
+				or any(tuple(view.tensor_shape(t)) != sh for t in [*xs, *ys])):
+			raise ValueError('WRED nonempty equal-shape input domain mismatch')
+		if ys[0].tid in [t.tid for t in xs]:
+			raise ValueError('WRED versioned output must be fresh')
+		bound[node] = _WredScope(node, w['export_id'], rs, rs.index(node.rank),
+			tuple(t.tid for t in xs), ys[0].tid, sh, tuple(p[f] for f in fields))
+	view.wred_scopes = bound
+	view._wred_source = deepcopy(snapshot)
+	view._wred_raw = deepcopy(raw_writers)
+	view._wred_rank_sources = deepcopy(raw_rank_sources)
+
+
+def emit_wred_scope_certificates(view) -> str:
+	"""Conditional writer and contextual fold equations, not a gradient theorem."""
+	if not hasattr(view, '_wred_source'): raise ValueError('missing attached WRED source')
+	claimed = dict(view.wred_scopes)
+	attach_wred_scopes(view, view._wred_source, view._wred_raw, view._wred_rank_sources)
+	if claimed != view.wred_scopes or view.nodes() != list(view.source.nodes()):
+		raise ValueError('WRED attached request/node mismatch')
+	lines = ['import denote.SourceScopedEval', 'namespace TrainVerify.Denote.WredCompiler',
+		'set_option maxHeartbeats 500000', 'noncomputable section']
+	for i, node in enumerate(view.nodes()):
+		if node not in view.wred_scopes: continue
+		c = view.wred_scopes[node];rs=str(list(c.ranks));ins=str(list(c.input_tids));sh=str(list(c.input_shape))
+		n=f'{{rank := {node.rank}, op := "OpName.CROSS_DP_WRED", ins := {ins}, outs := [{c.output_tid}]}}'
+		peer=' '.join(f'| {r} => {t}' for r,t in zip(c.ranks,c.input_tids))
+		hs=[f'    (hshape{j} : (s {t}).shape = {sh})' for j,t in enumerate(c.input_tids)]
+		args=' '.join(f'hshape{j}' for j in range(len(c.input_tids)))
+		lines.extend([f'-- source writer {c.source_writer}; parameter {c.parameter!r}; proof_admissible=false',
+			f'def peer_{i} : Nat → Tid {peer} | _ => 0',
+			f'theorem wred_{i} (g : GraphDecl) (s : Store) (hworld : g.numRanks = {view.W.runtime_ndevs})',*hs,
+			f'    : ∃ s\', SourceScopedEval.step g (.group (some {rs})) peer_{i} s {n} = some s\' ∧',
+			f'      s\' {c.output_tid} = cross_dp_wred ({ins}.map s) ∧',
+			f'      (∀ tid, tid ∉ ([{c.output_tid}] : List Tid) → s\' tid = s tid) := by',
+			f'  apply SourceScopedEval.wred_output g {rs} peer_{i} s {node.rank} {ins} {c.output_tid}',
+			'  · rw [hworld]; decide',
+			'  · refine ⟨rfl, rfl, rfl, by decide, by decide, ?_⟩',
+			'    simp only [List.mem_cons, List.not_mem_nil, or_false]',
+			'    intro tid ht',
+			'    rcases ht with '+' | '.join('rfl' for _ in c.input_tids),
+			*['    · exact hshape'+str(j)+'.trans hshape0.symm' for j in range(len(c.input_tids))],
+			f'#print axioms wred_{i}',
+			f'theorem wred_{i}_fold (g : GraphDecl) (s : Store) (hworld : g.numRanks = {view.W.runtime_ndevs})',*hs,
+			'    (scope : NodeDecl → GroupScopedEval.Request) (peers : NodeDecl → Nat → Tid)',
+			f'    (hs : scope {n} = .group (some {rs})) (hp : peers {n} = peer_{i})',
+			'    (rest : List NodeDecl) : ∃ s\',',
+			f'      SourceScopedEval.run g scope peers ({n} :: rest) (some s) =',
+			'        SourceScopedEval.run g scope peers rest (some s\') ∧',
+			f'      s\' {c.output_tid} = cross_dp_wred ({ins}.map s) ∧',
+			f'      (∀ tid, tid ∉ ([{c.output_tid}] : List Tid) → s\' tid = s tid) := by',
+			f'  obtain ⟨s\', hstep, hout, hframe⟩ := wred_{i} g s hworld {args}',
+			'  refine ⟨s\', ?_, hout, hframe⟩',
+			'  rw [SourceScopedEval.run_cons, hs, hp, hstep]',f'#print axioms wred_{i}_fold', ''])
+	return '\n'.join(lines+['end','end TrainVerify.Denote.WredCompiler',''])
+
+
+class _SourceSnapshot(dict):
+	"""JSON source plus separate pre-export raw authority; plain JSON is insufficient."""
+	raw_writers: Dict[Any, Any]
+	raw_rank_sources: Dict[str, str]
+
+
 def _load_chunk_source(capture: str, rank_code_directory: str):
-	from nnscaler_backend.runtime_source_authority import load_capture
-	return load_capture(capture, rank_code_directory=rank_code_directory)
+	# Load once, retaining the raw parameter projection before JSON export/binding.
+	import json
+	import pickle
+	from verdict.graph import World, WType
+	from nnscaler.ir.adapter.adapter import IRWeightReducer
+	from nnscaler_backend.load_graph import _sanity_check_world
+	from nnscaler_backend.build_graph import _prepare_rank_cells, _fuse_collective_inputs, _flatten_exereuse_then_scale
+	from nnscaler_backend.runtime_source_authority import capture_adapter_source, export_expanded_cells
+	from trainverify.runtime_source_authority import validate_snapshot
+	path = Path(capture)
+	with path.open('rb') as stream: mg = pickle.load(stream)
+	world = World(wtype=WType('p'), plan_ndevs=len(mg.devices), runtime_ndevs=mg.runtime_ndevs,
+		**json.loads(path.with_suffix('.json').read_text()))
+	_sanity_check_world(world)
+	cells = [c for rank in range(world.runtime_ndevs) for c in _prepare_rank_cells(world, mg, rank)]
+	seqs = {r: _flatten_exereuse_then_scale(mg.execplan.seq(r % world.plan_ndevs), mg, r)
+		for r in range(world.runtime_ndevs)}
+	reducers = {}
+	for r, seq in seqs.items():
+		for ir in seq:
+			if isinstance(ir, IRWeightReducer):
+				if (r, ir.cid) in reducers: raise ValueError('ambiguous raw reducer occurrence')
+				reducers[(r, ir.cid)] = ir
+	sources = {r: (Path(rank_code_directory)/f'gencode{r}.py').read_text() for r in range(world.runtime_ndevs)}
+	def ref(t): return dict(zip(('world','runtime_rank','microbatch','source_tid','version'),t))
+	raw, calls = {}, {}
+	for cell in cells:
+		origin = 'expanded' if cell.ir is None else 'nnscaler'
+		key = (*cell.node[:4], origin)
+		row: Dict[str, Any] = dict(parameter_grad_tids=[[gid,wid] for gid,wid in cell._gid2wid.items()],
+			ref=dict(world=cell.node.wtype,runtime_rank=cell.rank,microbatch=cell.node.mb,
+				source_cid=cell.node.cid,call_instance=calls.get(key,0),op=cell.opname.name,origin=origin))
+		calls[key] = calls.get(key,0)+1
+		if str(cell.opname).split('.')[-1] == 'CROSS_DP_WRED':
+			ir = reducers[(cell.rank,cell.node.cid)]
+			weight, = [w for w in ir.inputs() if w.tid == cell._wred_wid]
+			if len(cell._input_irs) != 1 or cell._input_irs[0].tid != weight.tid:
+				raise ValueError('WRED raw prefused parameter ownership mismatch')
+			grad, = cell.inputs;out, = cell.outputs
+			parameter, = {t for owner in cells if owner.rank == cell.rank for t in owner.inputs+owner.outputs
+				if t.tid == weight.tid and t.rank == cell.rank and t.wtype == cell.node.wtype}
+			row.update(reducer_ir=dict(cid=ir.cid,ranks=sorted(ir.device),nreplicas=ir.nreplicas,parameter_tid=weight.tid),
+				parameter=ref(parameter),
+				grad_input=ref(grad),grad_output=ref(out),
+				placement=dict(parent_tid=weight.parent.tid,name=weight.parent.name,full_shape=list(weight.parent.shape),
+					indmap=[list(p) for p in weight.indmap],valmap=list(weight.valmap),is_attr=weight.is_attr(),
+					is_grad=weight.is_grad(),is_param=weight.is_param(),scale_unit=cell.rank//world.plan_ndevs,plan_rank=cell.rank%world.plan_ndevs))
+		if cell.node in raw: raise ValueError('duplicate raw writer')
+		raw[cell.node] = row
+	adapters = capture_adapter_source(cells, training_sequences=seqs)
+	cells,_ = _fuse_collective_inputs(cells)
+	snapshot = _SourceSnapshot(export_expanded_cells(world,cells,rank_sources=sources,reducer_irs=reducers,adapter_source=adapters))
+	snapshot['source'] = dict(capture=str(path),world_sidecar=str(path.with_suffix('.json')),
+		rank_code_directory=str(rank_code_directory),plan_ndevs=world.plan_ndevs,runtime_ndevs=world.runtime_ndevs,
+		dataflow_order='expanded-cell-order; fused-inputs-indmap-order',call_instance='zero-based expanded occurrence per world/rank/mb/cid/origin')
+	snapshot.raw_writers=raw
+	snapshot.raw_rank_sources={str(r): text for r,text in sources.items()}
+	validate_snapshot(snapshot)
+	return snapshot
 
 
 def emit_chunk_scope_certificates(view: _RuntimeGraphView) -> str:
@@ -4462,11 +4649,19 @@ def _generate(args: argparse.Namespace) -> None:
 	# the raw-tid quotient, even for definitions-only exports.
 	if any(G.W.num_dp != 1 or G.W.num_mb != 1 for G in (GsE, GpE)):
 		GsE, GsC, GpE = _lower_runtime_graphs(GsE, GsC, GpE)
-		if any(str(GpE.node_opname(n)).split('.')[-1] in (*_COLLECTIVE_OPS, 'ChunkPrim') for n in GpE.nodes()):
+		if any(str(GpE.node_opname(n)).split('.')[-1] in (*_COLLECTIVE_OPS, 'ChunkPrim', 'CROSS_DP_WRED') for n in GpE.nodes()):
 			code_dir = getattr(args, 'runtime_rank_code_directory', None)
 			if not code_dir:
 				raise ValueError('missing current rank source for DP Chunk scope; no global fallback')
-			attach_collective_scopes(GpE, _load_chunk_source(args.pm_pkl, code_dir))
+			source = _load_chunk_source(args.pm_pkl, code_dir)
+			if any(str(GpE.node_opname(n)).split('.')[-1] == 'CROSS_DP_WRED' for n in GpE.nodes()):
+				if not isinstance(source, _SourceSnapshot):
+					raise ValueError('missing independent raw WRED parameter authority')
+				attach_wred_scopes(GpE, source, source.raw_writers, source.raw_rank_sources)
+				GpE.wred_conditional_lean = emit_wred_scope_certificates(GpE)
+				print(f'[graph_to_lean] validated {len(GpE.wred_scopes)} conditional WRED steps; proof_admissible=false', flush=True)
+			else:
+				attach_collective_scopes(GpE, source)
 			GpE.chunk_conditional_lean = emit_chunk_scope_certificates(GpE)
 			GpE.collective_conditional_lean = emit_collective_scope_certificates(GpE)
 			print(f'[graph_to_lean] validated {len(GpE.collective_scopes)} conditional collective steps; '

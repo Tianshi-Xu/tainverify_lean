@@ -75,11 +75,11 @@ theorem mixed_value : ∃ final, SourceScopedEval.denote graph scope peers initi
     valAt (final 200) 1 = 1 := by
   have h0 : SourceScopedEval.step graph (scope ag0) (peers ag0) initial ag0 = some s1 := by
     change SourceScopedEval.step graph (.group (some [0,2])) _ _ _ = _
-    rw [SourceScopedEval.step_group _ _ _ _ _ (by decide)]
+    rw [SourceScopedEval.step_group _ _ _ _ _ (by decide) (by decide)]
     exact GroupScopedEval.step_scoped graph initial ag0 [0,2] (by decide) (by rfl)
   have h2 : SourceScopedEval.step graph (scope ag2) (peers ag2) s1 ag2 = some s2 := by
     change SourceScopedEval.step graph (.group (some [0,2])) _ _ _ = _
-    rw [SourceScopedEval.step_group _ _ _ _ _ (by decide)]
+    rw [SourceScopedEval.step_group _ _ _ _ _ (by decide) (by decide)]
     exact GroupScopedEval.step_scoped graph s1 ag2 [0,2] (by decide) (by rfl)
   obtain ⟨s3, hrun, hout⟩ := collective_1_fold graph s2 rfl (by rfl) (by rfl) scope peers rfl rfl [ident]
   refine ⟨applyNode graph s3 ident, ?_, ?_⟩
