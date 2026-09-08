@@ -143,12 +143,14 @@ def validate_snapshot(snapshot):
             from copy import deepcopy
             rebound = deepcopy(snapshot)
             bind_adapters(rebound, allow_translation_mismatch=True)
-            if any(snapshot.get(k) != rebound[k] for k in
-                   ("writers", "adapter_binding", "adapter_generated_binding", "adapter_generated_read_binding", "completeness")):
+            if any(snapshot.get(k) != rebound.get(k) for k in
+                   ("writers", "adapter_binding", "adapter_generated_binding", "adapter_generated_read_binding", "chunk_scope_binding", "chunk_scope_generated_read_binding", "completeness")):
                 raise ValueError("inconsistent adapter binding")
         elif (snapshot.get("adapter_binding", "missing") != "missing"
               or snapshot.get("adapter_generated_binding", "missing") != "missing"
-              or any("adapter" in w for w in snapshot["writers"])):
+              or snapshot.get("chunk_scope_binding", "missing") != "missing"
+              or snapshot.get("chunk_scope_generated_read_binding", "missing") != "missing"
+              or any("adapter" in w or "chunk_scope" in w for w in snapshot["writers"])):
             raise ValueError("missing prepared adapter source")
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValueError(f"missing or malformed source reference: {exc}") from exc
@@ -249,7 +251,17 @@ def bind_adapters(snapshot, allow_translation_mismatch=False):
             mismatch |= generated_mismatch
             if mismatch:
                 snapshot["adapter_binding"] = "translation-mismatch"
+        chunk_claimed = (
+            any(r["ref"]["op"] == "ChunkPrim" and "primitive" in r
+                for r in snapshot["adapter_source"])
+            or any("chunk_scope" in w for w in snapshot["writers"])
+            or "chunk_scope_binding" in snapshot
+            or "chunk_scope_generated_read_binding" in snapshot)
+        if chunk_claimed:
+            _bind_chunk_scopes(snapshot, writers, reads)
         missing = ([] if snapshot.get("reducer_binding") == "complete" else ["parameter-reducers"])
+        if chunk_claimed and snapshot["chunk_scope_binding"] != "complete":
+            missing.append("chunk-scope")
         if mismatch:
             missing.append("ordered-adapters")
         if snapshot["adapter_generated_read_binding"] != "complete":
@@ -261,6 +273,118 @@ def bind_adapters(snapshot, allow_translation_mismatch=False):
             raise ValueError("ordered adapter translation mismatch")
     except (KeyError, TypeError, AttributeError, IndexError, SyntaxError) as exc:
         raise ValueError(f"missing or malformed adapter source: {exc}") from exc
+
+
+def _bind_chunk_scopes(snapshot, writers, reads):
+    """Local singleton chunk, not a peer-input collective or kernel admission.
+
+    Recognize only the observed runtime body. Process-group rank is meaningful
+    in group order, not world rank; permuted groups are unsupported because the
+    runtime DeviceGroup cache is membership keyed and Torch orders group ranks.
+    """
+    import ast
+    from copy import deepcopy
+    rows = [r for r in snapshot["adapter_source"] if r["ref"]["op"] == "ChunkPrim"]
+    snapshot["chunk_scope_generated_read_binding"] = "missing"
+    calls = []
+    all_chunk_calls = 0
+    for rank, text in snapshot.get("rank_sources", {}).items():
+        tree = ast.parse(text)
+        all_chunk_calls += sum(isinstance(n, ast.Call) and ast.unparse(n.func) ==
+                              "nnscaler.runtime.adapter.chunk" for n in ast.walk(tree))
+        for stmt in ast.walk(tree):
+            if not isinstance(stmt, ast.Assign) or not isinstance(stmt.value, ast.Call):
+                continue
+            call = stmt.value
+            if ast.unparse(call.func) != "nnscaler.runtime.adapter.chunk":
+                continue
+            calls.append(dict(rank=int(rank), line=stmt.lineno,
+                signature=ast.unparse(call.func), inputs=[ast.unparse(a) for a in call.args],
+                outputs=[ast.unparse(t) for t in stmt.targets],
+                kwargs={k.arg: ast.literal_eval(k.value) for k in call.keywords}))
+    if all_chunk_calls != len(calls):
+        raise ValueError("unsupported chunk call inventory context")
+    covered, generated = set(), []
+    expected_body = ast.parse('''group = DeviceGroup().get_group(ranks)
+idx = torch.distributed.get_rank(group)
+with torch.no_grad():
+    otensor = itensor.chunk(len(ranks), dim)[idx]
+    otensor = otensor.detach()
+return otensor
+''').body
+    def dump(nodes):
+        return [ast.dump(n, include_attributes=False) for n in nodes]
+    for row in rows:
+        wid = writer_export_id(row["ref"]); writer = writers[wid]
+        scope = dict(status="missing", source_writer=wid, inputs=deepcopy(row["inputs"]),
+            outputs=deepcopy(row["outputs"]), local_read_points=deepcopy(reads[wid]),
+            generated_read_binding="missing", reason="missing generated chunk source")
+        writer["chunk_scope"] = scope
+        prim = row.get("primitive")
+        if prim is None:
+            scope["reason"] = "missing actual ChunkPrim source"
+            continue
+        kw = prim["kwargs"]; ranks = kw["ranks"]; rank = row["ref"]["runtime_rank"]
+        if (prim["kind"] != "ChunkPrim" or prim["signature"] != "nnscaler.runtime.adapter.chunk"
+                or prim["forward"] is not True or writer["adapter_kwargs"] != kw
+                or set(kw) != {"ranks", "dim"} or type(kw["dim"]) is not int
+                or not isinstance(ranks, list) or not ranks
+                or any(type(r) is not int or r < 0 for r in ranks)
+                or len(set(ranks)) != len(ranks) or rank not in ranks
+                or len(row["inputs"]) != 1 or len(row["outputs"]) != 1
+                or any(t["runtime_rank"] != rank for t in row["inputs"] + row["outputs"])):
+            raise ValueError("invalid chunk primitive/source scope")
+        scope.update(ranks=deepcopy(ranks), cardinality=len(ranks), local_index=ranks.index(rank), dim=kw["dim"])
+        if ranks != sorted(ranks):
+            scope["reason"] = "unsupported: permuted runtime process-group order"
+            continue
+        runtime = prim.get("runtime", {})
+        try:
+            fn, = ast.parse(runtime["source"]).body
+            body = fn.body
+            if isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
+                body = body[1:]
+            if (not isinstance(fn, ast.FunctionDef) or fn.name != "chunk"
+                    or [a.arg for a in fn.args.args] != ["itensor", "dim", "ranks", "async_op"]
+                    or fn.decorator_list or fn.args.vararg or fn.args.kwarg or fn.args.kwonlyargs
+                    or fn.args.posonlyargs or dump(fn.args.defaults) != dump([ast.Constant(False)])
+                    or runtime["module"] != "nnscaler.runtime.adapter.collectives"
+                    or runtime["name"] != "chunk" or not runtime["source_file"]
+                    or dump(body) != dump(expected_body)):
+                raise ValueError("unsupported runtime chunk implementation")
+        except (KeyError, ValueError, SyntaxError, AttributeError, IndexError) as exc:
+            scope["reason"] = "missing/rejected runtime chunk source: " + str(exc)
+            continue
+        scope["runtime"] = deepcopy(runtime)
+        if "rank_sources" not in snapshot:
+            continue
+        matches = [c for c in calls if c["rank"] == rank and c["inputs"] == prim["generated_inputs"]
+                   and c["outputs"] == prim["generated_outputs"]]
+        if len(matches) != 1 or matches[0]["kwargs"] != kw:
+            raise ValueError("missing/ambiguous/mismatched generated chunk call")
+        call, = matches
+        site = (rank, call["line"])
+        if site in covered:
+            raise ValueError("duplicate chunk source call occurrence")
+        covered.add(site)
+        scope["generated_call"] = dict(call, forward=True, status="bound")
+        scope["status"] = "bound"
+        scope["reason"] = None
+        generated.append(row)
+    # Unsupported rows remain missing; unknown generated sites cannot be claimed.
+    if len(generated) == len(rows) and covered != {(c["rank"], c["line"]) for c in calls}:
+        raise ValueError("generated chunk inventory coverage mismatch")
+    if generated:
+        _bind_generated_readpoints(snapshot, generated, writers, record_key="chunk_scope")
+    read_statuses = [writers[writer_export_id(r["ref"])]["chunk_scope"]["generated_read_binding"]
+                     for r in rows]
+    snapshot["chunk_scope_generated_read_binding"] = (
+        "rejected" if "rejected" in read_statuses else
+        "complete" if all(status == "complete" for status in read_statuses) else "missing")
+    snapshot["chunk_scope_binding"] = "complete" if all(
+        writers[writer_export_id(r["ref"])]["chunk_scope"]["status"] == "bound"
+        and writers[writer_export_id(r["ref"])]["chunk_scope"]["generated_read_binding"] == "complete"
+        for r in rows) else "missing"
 
 
 def _bind_generated_adapters(snapshot, adapters, writers):
@@ -471,7 +595,7 @@ def _bind_backward_contexts(snapshot, adapters, writers):
             a["generated_read_missing"] = "missing: backward gradient computation/value provenance not proved; ctx/source structurally bound"
 
 
-def _bind_generated_readpoints(snapshot, adapters, writers):
+def _bind_generated_readpoints(snapshot, adapters, writers, record_key="adapter"):
     """Direct straight-line methods only; syntax coverage is NOT value authority.
 
     Each local read is compared to its independently captured prepared writer.
@@ -530,7 +654,7 @@ def _bind_generated_readpoints(snapshot, adapters, writers):
                     unsupported = True
     complete, rejected = True, False
     for row in adapters:
-        a = writers[writer_export_id(row["ref"])]["adapter"]
+        a = writers[writer_export_id(row["ref"])][record_key]
         call = a["generated_call"]
         site = sites.get((row["ref"]["runtime_rank"], call["line"]))
         reason = None
@@ -582,7 +706,7 @@ def _bind_generated_readpoints(snapshot, adapters, writers):
         a["generated_read_binding"] = "rejected" if is_rejected else "missing" if reason else "complete"
         a["generated_read_missing"] = reason
         complete &= reason is None
-    snapshot["adapter_generated_read_binding"] = "rejected" if rejected else "complete" if complete else "missing"
+    snapshot[record_key + "_generated_read_binding"] = "rejected" if rejected else "complete" if complete else "missing"
 
 
 def _rank_reducers(text, rank, world_size):

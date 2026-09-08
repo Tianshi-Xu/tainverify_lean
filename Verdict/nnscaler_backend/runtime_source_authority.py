@@ -56,7 +56,7 @@ def capture_adapter_source(cells):
                             if k != "__consts"})
             except ValueError:
                 row["generated_producer_missing"] = "unsupported prepared producer argument"
-        if ref["op"] in ADAPTER_OPS:
+        if ref["op"] in ADAPTER_OPS or ref["op"] == "ChunkPrim":
             from nnscaler.ir.adapter.prim import CollectivePrim
             if not isinstance(cell.ir, CollectivePrim):
                 raise ValueError("missing ordered primitive source")
@@ -67,6 +67,16 @@ def capture_adapter_source(cells):
                 forward=cell.adapter is None or cell.adapter.isfw(),
                 generated_inputs=[f"{t.name}_{t.tid}" for t in cell.ir.inputs()],
                 generated_outputs=[f"{t.name}_{t.tid}" for t in cell.ir.outputs()])
+        if ref["op"] == "ChunkPrim":
+            import inspect
+            import textwrap
+            from nnscaler.ir.adapter.prim import ChunkPrim
+            from nnscaler.runtime.adapter import chunk
+            if type(cell.ir) is not ChunkPrim:
+                raise ValueError("missing actual ChunkPrim source")
+            row["primitive"]["runtime"] = dict(
+                source=textwrap.dedent(inspect.getsource(chunk)),
+                source_file=inspect.getsourcefile(chunk), module=chunk.__module__, name=chunk.__name__)
         if cell.adapter is not None and hasattr(cell.adapter, "mirror"):
             adapter = cell.adapter
             mirror = adapter.mirror
@@ -192,7 +202,7 @@ def export_expanded_cells(world, cells, rank_sources=None, reducer_irs=None, ada
         from trainverify.runtime_source_authority import bind_adapters, ADAPTER_OPS
         snapshot["adapter_source"] = deepcopy(adapter_source)
         for writer, cell in zip(snapshot["writers"], cells):
-            if writer["ref"]["op"] in ADAPTER_OPS:
+            if writer["ref"]["op"] in ADAPTER_OPS or writer["ref"]["op"] == "ChunkPrim":
                 writer["adapter_kwargs"] = {k: deepcopy(cell.kwargs[k])
                     for k in ("ranks", "dim", "idim", "odim") if k in cell.kwargs}
         bind_adapters(snapshot, allow_translation_mismatch=True)

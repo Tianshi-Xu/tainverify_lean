@@ -236,7 +236,88 @@ def load_verifier(sm_path: str, pm_path: str, cache_dir: str | None = None):
 	)
 
 
+class _RuntimeGraphView:
+	"""Compiler-only injective IDs; backend tensors and node identities stay intact.
+
+	Only identity-safe graph access is exposed. In particular, raw backend
+	lineage/shape registries are not delegated under their original names.
+	"""
+
+	def __init__(self, source: Any, ids: Mapping[Any, int]):
+		self.source = source
+		self.W = source.W
+		self._original = {ids[t]: t for t in source.tensors()}
+		self._lowered = {t: t._replace(tid=ids[t]) for t in source.tensors()}
+		self._nodes = list(source.nodes())
+		self._tensors = [self._lowered[t] for t in source.tensors()]
+		self._node2inputs = {n: [self._lowered[t] for t in source.node_inputs(n)] for n in self._nodes}
+		self._node2outputs = {n: [self._lowered[t] for t in source.node_outputs(n)] for n in self._nodes}
+
+	def nodes(self):
+		return self._nodes
+
+	def tensors(self):
+		return self._tensors
+
+	def node_inputs(self, node):
+		return self._node2inputs[node]
+
+	def node_outputs(self, node):
+		return self._node2outputs[node]
+
+	def source_tensor(self, tensor):
+		original = self._original[tensor.tid]
+		if self._lowered[original] != tensor:
+			raise ValueError(f"unknown lowered tensor reference: {tensor!r}")
+		return original
+
+	def tensor_shape(self, tensor):
+		return self.source.tensor_shape(self.source_tensor(tensor))
+
+	def is_initialized(self, tensor):
+		return self.source.is_initialized(self.source_tensor(tensor))
+
+	def node_opname(self, node):
+		return self.source.node_opname(node)
+
+	def node_kwargs(self, node):
+		return self.source.node_kwargs(node)
+
+	def node_dtag(self, node):
+		return self.source.node_dtag(node)
+
+
+def _lower_runtime_graphs(*graphs: Any) -> Tuple[_RuntimeGraphView, ...]:
+	"""Allocate one deterministic full (world, rank, mb, tid, version) namespace.
+
+	Writer uniqueness is graph-local: expanded and compact SM intentionally
+	share references. Negative fly ranks/microbatches are coordinates, not IDs.
+	"""
+	refs = set()
+	for graph in graphs:
+		registered = set(graph.tensors())
+		writers = set()
+		for node in graph.nodes():
+			for tensor in [*graph.node_inputs(node), *graph.node_outputs(node)]:
+				if tensor not in registered:
+					raise ValueError(f"unknown full tensor reference: {tensor!r}")
+			for tensor in graph.node_outputs(node):
+				if tensor in writers:
+					raise ValueError(f"duplicate full tensor writer: {tensor!r}")
+				writers.add(tensor)
+		refs.update(registered)
+	ids = {tensor: i for i, tensor in enumerate(sorted(refs))}
+	return tuple(_RuntimeGraphView(graph, ids) for graph in graphs)
+
+
 def infer_coarse_lineages_from_expanded(GsE: Any, GpE: Any) -> List[Any]:
+	if isinstance(GsE, _RuntimeGraphView) or isinstance(GpE, _RuntimeGraphView):
+		raise ValueError(
+			"runtime-identity lineage reconstruction is unavailable: "
+			"full references are lowered, but DP/unit/batch reconstruction and "
+			"group-local collective/reducer evaluator scope are not implemented; "
+			"refusing world-K graph/statement emission"
+		)
 	# Align original ops and emit Ts==Tps for each input/output.
 	from nnscaler_backend import build_lineage as bl  # type: ignore
 	from verdict.graph import Lineage  # type: ignore
@@ -275,6 +356,10 @@ def aligned_logical_node_ids(
 	DP group and one microbatch; reject broader layouts until their process-group
 	scope is threaded explicitly instead of silently over-grouping them.
 	"""
+	# This contract is vacuous only over BOTH complete node streams.
+	if not any(_safe_str_op(G.node_opname(n)) in REPLICA_GROUP_OPS
+	           for G in (GsE, GpE) for n in G.nodes()):
+		return {}, {}
 	from nnscaler_backend import build_lineage as bl  # type: ignore
 
 	if GpE.W.num_dp != 1 or GpE.W.num_mb != 1:
@@ -2081,6 +2166,11 @@ def emit_lean_spec(
 	with_adapter_communications: bool = False,
 	definitions_only: bool = False,
 ) -> None:
+	if isinstance(sm_graph, _RuntimeGraphView) or isinstance(pm_graph, _RuntimeGraphView):
+		raise ValueError(
+			"runtime-identity graph emission requires implemented lineage and "
+			"group-local evaluator scope; refusing world-K definitions"
+		)
 	_validate_definitions_only_options(
 		definitions_only, emit_spec_template=emit_spec_template,
 		split_goals=goal_slices is not None or goals_out_dir is not None,
@@ -4044,6 +4134,10 @@ def _generate(args: argparse.Namespace) -> None:
 	v = load_verifier(args.sm_pkl, args.pm_pkl, args.verifier_cache_dir)
 	GsE, GpE = v.get_graph()  # expanded
 	GsC, _GpC = v.get_graph_compact()  # compact (stable for leaf detection)
+	# Preserve legacy DP1 bytes. Broader runtime layouts must never enter
+	# the raw-tid quotient, even for definitions-only exports.
+	if any(G.W.num_dp != 1 or G.W.num_mb != 1 for G in (GsE, GpE)):
+		GsE, GsC, GpE = _lower_runtime_graphs(GsE, GsC, GpE)
 	sm_logical_ids, pm_logical_ids = aligned_logical_node_ids(GsE, GpE)
 
 	t0 = time.perf_counter()
