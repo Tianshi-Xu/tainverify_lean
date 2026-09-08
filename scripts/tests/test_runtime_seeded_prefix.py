@@ -6,7 +6,7 @@ from Verdict import runtime_prefix as prefix
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -59,6 +59,30 @@ def linear_world(root, k, ndim=3, fault=None):
                 elif fault in ('dx-shape', 'dw-shape'):
                     port = int(fault == 'dw-shape'); t = bw.outputs[port]
                     graph.shapes[t] = (7,); bw._output_irs[port] = IR(t.tid, 'gradient', (7,))
+                if layernorm:
+                    ln = next(c for c in graph.cells if c.rank == rank and c.opname == 'FW_layernorm')
+                    x, gamma, beta = ln.inputs
+                    if ndim == 2:
+                        x = ordinary(graph, rank, 925, 'FW_view', [x], [(2*k, 3)], {'size': (2*k, 3)}).outputs[0]
+                    inputs = [bw.outputs[0], x, gamma, beta]
+                    if fault in ('dy-shape', 'x-shape', 'gamma-shape', 'beta-shape'):
+                        port = ('dy-shape', 'x-shape', 'gamma-shape', 'beta-shape').index(fault)
+                        t = inputs[port]; sh = tuple(reversed(graph.shapes[t])) if port < 2 else (1, 3)
+                        inputs[port] = ordinary(graph, rank, 926, 'FW_view', [t], [sh], {'size': sh}).outputs[0]
+                    kw = dict(normalized_shape=(3,), eps=1e-5)
+                    if fault == 'epsilon': kw['eps'] = 1e-4
+                    if fault == 'normalized-shape': kw['normalized_shape'] = (2*k, 3)
+                    if fault == 'ln-params': kw['unknown'] = 1
+                    lnback = ordinary(graph, rank, 930, 'BW_layernorm', inputs,
+                        [graph.shapes[x], (3,), (3,)], kw)
+                    if fault == 'ln-arity': lnback.inputs.pop(); lnback._input_irs.pop()
+                    if fault == 'ln-outputs': lnback.outputs.pop(); lnback._output_irs.pop()
+                    if fault == 'duplicate-outputs': lnback.outputs[2] = lnback.outputs[1]
+                    if fault in ('ln-dx', 'ln-dgamma', 'ln-dbeta'):
+                        port = ('ln-dx', 'ln-dgamma', 'ln-dbeta').index(fault)
+                        t = lnback.outputs[port]; graph.shapes[t] = (7,)
+                        lnback._output_irs[port] = IR(t.tid, 'gradient', (7,))
+                    ordinary(graph, rank, 935, 'BW_add', [lnback.outputs[0], x, x], [graph.shapes[x]]*2)
                 grads.append(bw)
         if fault: return
         for rank in range(k):
@@ -82,7 +106,75 @@ def linear_world(root, k, ndim=3, fault=None):
         return collective_world(root, k, normalize=True, project=True, seeded_transform=transform)
 
 
+def layernorm_world(root, k, ndim=3, fault=None):
+    return linear_world(root, k, ndim, fault, layernorm=True)
+
+
 class ProductionSeedTests(unittest.TestCase):
+    def test_layernorm_three_ordered_outputs(self):
+        import re
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for ndim in (2, 3):
+                with self.subTest(k=k, ndim=ndim), TemporaryDirectory() as d:
+                    fed = layernorm_world(Path(d), k, ndim)
+                    p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                    self.assertEqual(p['frontier']['op'], 'BW_add')
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+                    defs = re.findall(r'def (pmSeededPrefixValue_\d+_\d+) .* := \(bw_layernorm .*\)\.(1|2\.1|2\.2)\n', text)
+                    self.assertEqual([v for _, v in defs], ['1', '2.1', '2.2'])
+                    for name, _ in defs:
+                        suffix = name.split('Value_')[1]
+                        self.assertIn('theorem pmSeededPrefixWritten_' + suffix, text)
+                        shape = [2*k, 3] if ndim == 2 else [1, 2*k, 3]
+                        expected = shape if suffix.endswith('_0') else [3]
+                        self.assertRegex(text, r'theorem pmSeededPrefixShape_' + suffix + r' .* = ' + re.escape(str(expected)) + r' :=')
+                    for role in ('dx', 'dw', 'db'):
+                        self.assertIn('bw_layernorm_' + role + '_shape', text)
+                    self.assertIn('pmSeededPrefixFrame', text)
+                    self.assertIn('pmSeededPrefixContinuation', text)
+
+    def test_layernorm_source_and_shapes_fail_closed(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        faults = ('epsilon', 'normalized-shape', 'ln-params', 'ln-arity', 'ln-outputs',
+                  'duplicate-outputs', 'dy-shape', 'x-shape', 'gamma-shape', 'beta-shape',
+                  'ln-dx', 'ln-dgamma', 'ln-dbeta')
+        for k in (2, 3):
+            for ndim in (2, 3):
+                for fault in faults:
+                    with self.subTest(k=k, ndim=ndim, fault=fault), TemporaryDirectory() as d:
+                        if fault in ('epsilon', 'normalized-shape', 'ln-params', 'x-shape', 'gamma-shape', 'beta-shape', 'duplicate-outputs'):
+                            with self.assertRaises(ValueError):
+                                layernorm_world(Path(d), k, ndim, fault)
+                            continue
+                        fed = layernorm_world(Path(d), k, ndim, fault)
+                        self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_layernorm')
+                        self.assertNotIn(':= (bw_layernorm ', proof_text(fed))
+
+    def test_layernorm_nonconstant_autograd_three_denote_formulas(self):
+        import torch
+        for shape in ((4, 3), (2, 2, 3)):
+            x = torch.tensor([-.7, 2., 4., 1., -3., 2., 8., .5, -2., 3., 7., -1.], dtype=torch.float64).reshape(shape).requires_grad_()
+            gamma = torch.tensor([.5, -2., 3.], dtype=torch.float64, requires_grad=True)
+            beta = torch.tensor([7., -.2, 1.], dtype=torch.float64, requires_grad=True)
+            dy = torch.tensor([2., -.4, 1., -3., 6., .5, 4., 2., -1., .7, 5., -2.], dtype=torch.float64).reshape(shape)
+            torch.nn.functional.layer_norm(x, (3,), gamma, beta, 1e-5).backward(dy)
+            xf, gf = x.detach().reshape(-1, 3), dy.reshape(-1, 3)
+            mean = xf.sum(1, keepdim=True)/3
+            var = ((xf-mean)**2).sum(1, keepdim=True)/3
+            inv = 1/torch.sqrt(var+1e-5); hat = (xf-mean)*inv
+            weighted = gf*gamma.detach()
+            dx = inv/3*(3*weighted-weighted.sum(1, keepdim=True)-hat*(weighted*hat).sum(1, keepdim=True))
+            dgamma = (gf*hat).sum(0); dbeta = gf.sum(0)
+            for actual, expected in ((x.grad.reshape(-1, 3), dx), (gamma.grad, dgamma), (beta.grad, dbeta)):
+                torch.testing.assert_close(actual, expected, rtol=1e-12, atol=1e-12)
+                self.assertGreater(actual.unique().numel(), 1)
+            self.assertFalse(torch.allclose(dgamma, dbeta))
+
     def test_linear_two_outputs_computed_then_scattered(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory
