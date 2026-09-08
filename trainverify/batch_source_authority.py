@@ -8,6 +8,94 @@ from copy import deepcopy
 from .runtime_source_authority import validate_snapshot
 
 
+def handoff_binding(snapshot, record, rank, expected_run):
+    """Rebind the first consumer from independent prepared IR and schedule source."""
+    import ast
+    import inspect
+    import textwrap
+    from .runtime_source_authority import _dataloader_training_point, writer_export_id
+    from nnscaler.runtime.executor import Executor, AsyncCommHandler
+    validate_snapshot(snapshot)
+    try:
+        if type(rank) is not int or not isinstance(expected_run, str) or not expected_run:
+            raise ValueError('missing fresh run/rank identity')
+        producers = [p for p in snapshot['adapter_source']
+                     if p['ref']['op'] == 'DATALOADER' and p['ref']['runtime_rank'] == rank]
+        if len(producers) != 1:
+            raise ValueError('missing/ambiguous source dataloader')
+        producer, = producers
+        evidence = producer['generated_dataloader']
+        call = evidence['training_calls'][0]
+        if call['ordinal'] != 1 or call['input_refs'] != producer['outputs']:
+            raise ValueError('unsupported first consumer input ports')
+        runtime = {k: textwrap.dedent(inspect.getsource(v)) for k, v in
+                   [('fexecute', Executor.fexecute), ('sync_tensors', Executor.sync_tensors),
+                    ('wait', type(AsyncCommHandler()).wait)]}
+        for key, source in runtime.items():
+            if ast.dump(ast.parse(source)) != ast.dump(ast.parse(evidence['runtime'][key])):
+                raise ValueError('installed executor source differs from snapshot')
+        points = [_dataloader_training_point(snapshot, producer, call['method'], name,
+                  dict(ref=ref, writer=writer_export_id(producer['ref'])), {}, set())
+                  for name, ref in zip(call['parameters'], producer['outputs'], strict=True)]
+        group, = [g for g in record['groups'] if rank in g['ranks']]
+        return dict(run_id=expected_run, rank=rank, train_step=1,
+            writer=deepcopy(producer['ref']), writer_export_id=writer_export_id(producer['ref']),
+            refs=deepcopy(producer['outputs']), next_ordinal=evidence['ordinal'],
+            consumer=deepcopy(call), parameter_indices=[p['parameter_index'] for p in points],
+            unit=group['unit'], positions=deepcopy(group['positions']),
+            samples=[deepcopy(s) for s in record['samples'] if s['unit'] == group['unit']],
+            runtime=runtime)
+    except (KeyError, TypeError, IndexError, AttributeError) as exc:
+        raise ValueError(f'missing source-authenticated handoff input: {exc}') from exc
+
+
+def _same_handoff_data(actual, expected):
+    """Preserve JSON field types; bool/int/float equality is not identity binding."""
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return actual.keys() == expected.keys() and all(_same_handoff_data(actual[k], v) for k, v in expected.items())
+    if isinstance(expected, (list, tuple)):
+        return len(actual) == len(expected) and all(_same_handoff_data(a, b) for a, b in zip(actual, expected))
+    return actual == expected
+
+
+def validate_input_handoff(events, payload, record, snapshot, receipt,
+                           reference_receipt, expected_run, rank):
+    """Validate measured pre/post tensors, not saved success flags or next-only data."""
+    import torch
+    result = validate_batch_record(record, snapshot, receipt, reference_receipt)
+    binding = handoff_binding(snapshot, record, rank, expected_run)
+    try:
+        if len(events) != 2 or set(payload) != {'pre', 'post'}:
+            raise ValueError('handoff pre/post cardinality')
+        group, = [g for g in record['groups'] if g['unit'] == binding['unit']]
+        for ordinal, stage in enumerate(('pre', 'post'), 1):
+            event = events[ordinal - 1]
+            metadata = {k: v for k, v in event.items() if k not in ('values', 'dtypes', 'shapes')}
+            expected = dict(binding, stage=stage, event_ordinal=ordinal)
+            if not _same_handoff_data(metadata, expected):  # independent metadata association guard
+                raise ValueError('handoff event metadata association mismatch')
+            if len(payload[stage]) != 1 or len(payload[stage][0]) != 2:
+                raise ValueError('handoff tensor cardinality')
+            tensors = payload[stage][0]
+            if (not _same_handoff_data(event['values'], [t.tolist() for t in tensors]) or
+                    not _same_handoff_data(event['dtypes'], [str(t.dtype) for t in tensors]) or
+                    not _same_handoff_data(event['shapes'], [list(t.shape) for t in tensors])):
+                raise ValueError('handoff JSON/tensor inconsistency')
+            for name, tensor in zip(('input_ids', 'position_ids'), tensors, strict=True):
+                canonical = torch.tensor(group['inputs'][name], dtype=torch.int64)
+                if tensor.dtype != canonical.dtype or tensor.shape != canonical.shape:
+                    raise ValueError(f'{stage} tensor dtype/shape mismatch')
+                if not torch.equal(tensor.cpu(), canonical):  # canonical post comparison guard
+                    raise ValueError(f'{stage} tensor value differs from canonical batch')
+    except (KeyError, TypeError, IndexError, AttributeError) as exc:
+        raise ValueError(f'malformed handoff: {exc}') from exc
+    return dict(result, new_run_segment_input_association=True,
+                historicalcapture_sample_association=False)
+
+
+
 def _rank_inputs(snapshot):
     return {w['ref']['runtime_rank']: deepcopy(w['outputs'])
             for w in snapshot['writers'] if w['ref']['op'] == 'DATALOADER'}

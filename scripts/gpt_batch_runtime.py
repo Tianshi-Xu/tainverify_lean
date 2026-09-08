@@ -67,6 +67,123 @@ class ObservedIterator:
         return values
 
 
+class InputHandoffObserver:
+    """One active generated training invocation; capture entry after real sync/detach.
+
+    Snapshots are never forwarded. The saved original receives actual args once.
+    This observer can measure floats; only the independent GPT validator admits IDs.
+    """
+    def __init__(self, model, module, snapshot, record, rank, run_id):
+        import inspect
+        import textwrap
+        from trainverify.batch_source_authority import handoff_binding
+        self.binding = handoff_binding(snapshot, record, rank, run_id)
+        self.model, self.module = model, module
+        self.train = module._train_step
+        self.method = self.binding['consumer']['method']
+        self.original = getattr(model, self.method, None)
+        if (not isinstance(self.original, types.MethodType) or self.original.__self__ is not model
+                or self.original.__func__ is not module.GenModel.__dict__.get(self.method)):
+            raise ValueError('invalid exact bound generated method')
+        tree = ast.parse(snapshot['rank_sources'][str(rank)])
+        cls, = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'GenModel']
+        fn, = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == self.method]
+        train, = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_train_step']
+        for actual, captured in ((self.original, fn), (module._train_step, train)):
+            validate_generated_source(textwrap.dedent(inspect.getsource(actual)), ast.unparse(captured))
+        self.events, self.payload = [], dict(pre=[], post=[])
+        self.active, self.runs, self.nexts, self.consumers = False, 0, 0, 0
+        self.saved = {}
+
+    def capture(self, stage, values):
+        if not isinstance(values, tuple) or len(values) != 2:
+            raise ValueError('handoff exact tuple arity')
+        copies = tuple(v.detach().cpu().clone() for v in values)
+        self.payload[stage].append(copies)
+        self.events.append(dict(deepcopy(self.binding), stage=stage,
+            event_ordinal=len(self.events)+1, values=[v.tolist() for v in copies],
+            dtypes=[str(v.dtype) for v in copies], shapes=[list(v.shape) for v in copies]))
+
+    def reject(self, reason):
+        self.events.append(dict(stage='rejected', reason=reason))
+        raise ValueError(reason)
+
+    def __enter__(self):
+        if self.saved or self.runs:
+            raise ValueError('observer cannot be reused')
+        for name in (self.method, '_train_step'):
+            self.saved[name] = (name in vars(self.model), vars(self.model).get(name))
+        def entry(*args, **kwargs):
+            if not self.active or self.nexts != 1 or self.consumers or kwargs:
+                self.reject('extra/missing/outside-active consumer')
+            self.consumers += 1
+            self.capture('post', args)
+            return self.original(*args, **kwargs)
+        def step(model, dataloader):
+            return self.run(dataloader)
+        try:
+            setattr(self.model, self.method, entry)
+            self.model._train_step = types.MethodType(step, self.model)
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+        return self
+
+    def run(self, dataloader):
+        if not self.saved or self.active or self.runs:
+            self.reject('extra/nested training invocation')
+        self.runs += 1
+        self.active = True
+        owner = self
+        class Iterator:
+            def __init__(self):
+                self.source = iter(dataloader)
+            def __iter__(self):
+                return self
+            def __next__(self):
+                if not owner.active or owner.nexts:
+                    owner.reject('extra/outside-active next')
+                owner.nexts += 1
+                values = next(self.source)
+                owner.capture('pre', values)
+                return values
+        try:
+            output = self.train(self.model, Iterator())
+            if self.nexts != 1 or self.consumers != 1 or len(self.events) != 2:
+                raise ValueError('missing next/consumer')
+            return output
+        finally:
+            self.active = False
+
+    def __exit__(self, *exc):
+        for name, (present, value) in self.saved.items():
+            if present:
+                setattr(self.model, name, value)
+            else:
+                delattr(self.model, name)
+        self.saved.clear()
+
+
+def validate_rank_handoff(row, actual, record, snapshot, receipt, reference_receipt, run_id):
+    from trainverify.batch_source_authority import validate_input_handoff, _same_handoff_data
+    try:
+        if not _same_handoff_data(row['handoff'], actual['handoff']) or not _same_handoff_data(row['rank'], actual['rank']):
+            raise ValueError('rank JSON/tensor handoff mismatch')
+        return validate_input_handoff(actual['handoff'], actual['handoff_tensors'], record,
+            snapshot, receipt, reference_receipt, run_id, row['rank'])
+    except KeyError as exc:
+        raise ValueError(f'missing postwait/run handoff artifact: {exc}') from exc
+
+
+def read_run(args, world):
+    manifest = read(args.out/'run.json')
+    if (manifest.get('format') != 'trainverify.input-handoff-run.v1' or
+            manifest.get('world') != world or not isinstance(manifest.get('run_id'), str)
+            or not manifest['run_id']):
+        raise ValueError('missing fresh run manifest identity')
+    return manifest['run_id']
+
+
 def validate_rank_domain(rows, world):
     ranks = [r['rank'] for r in rows]
     if (any(type(r) is not int for r in ranks) or len(ranks) != world or
@@ -208,6 +325,33 @@ def canonical(receipt, tensors, device):
     return model, {n:t.cpu() for n,t in state.items()}
 
 
+def execute_observed_training(args, parallel, module, snapshot, record, rank, inputs,
+                              receipt, reference_receipt):
+    """Worker's real training path, also executable on CPU; retain failures first."""
+    import torch
+    run_id = read_run(args, receipt['compute']['runtime_ngpus'])
+    observer = InputHandoffObserver(parallel, module, snapshot, record, rank, run_id)
+    actual = dict(rank=rank, handoff=observer.events, handoff_tensors=observer.payload)
+    row = dict(rank=rank, inner_exit=1, handoff=observer.events,
+        new_run_segment_input_association=False, historicalcapture_sample_association=False,
+        proof_admissible=False, kernel_value_proved=False)
+    try:
+        with observer:
+            outputs = parallel.train_step([inputs])
+        # Durable measured post is written even when preservation below fails.
+        torch.save(actual, args.out/f'rank{rank}.pt')
+        validation = validate_rank_handoff(row, actual, record, snapshot, receipt,
+                                           reference_receipt, run_id)
+        row.update(validation, inner_exit=0)
+        return outputs, actual
+    except BaseException as exc:
+        row['error'] = f'{type(exc).__name__}: {exc}'
+        raise
+    finally:
+        torch.save(actual, args.out/f'rank{rank}.pt')
+        save_json(args.out/f'rank{rank}.json', row)
+
+
 def worker(args):
     import torch
     import torch.distributed as dist
@@ -250,29 +394,21 @@ def worker(args):
                         inputs=tensors['global_inputs'], state=state), args.out/'reference.pt')
     dist.barrier()
     reference = torch.load(args.out/'reference.pt', weights_only=True)
-    observers = []
-    def observed_step(self, dataloader):
-        observed = ObservedIterator(dataloader, record, rank)
-        observers.append(observed)
-        return module._train_step(self, observed)
-    parallel._train_step = types.MethodType(observed_step, parallel)
-    outputs = parallel.train_step([inputs])
-    observations = [x for ob in observers for x in ob.observations]
-    validate_observations(observations, record, rank)
-    actual = dict(rank=rank, observations=observations, metadata=meta,
-        initialized=initialized,
+    reference_receipt = read(args.batch_witness)['reference_capture_receipt']
+    outputs, actual = execute_observed_training(args, parallel, module, snapshot, record,
+                                               rank, inputs, receipt, reference_receipt)
+    actual.update(metadata=meta, initialized=initialized,
         grads={n:p.grad.detach().cpu().clone() for n,p in parallel.named_parameters()},
-        inputs=[v for ob in observers for v in ob.tensors],
         output=outputs[0].detach().cpu(), unit_output=unit_output)
     # Preserve failed numerical evidence too, before assertions.
     torch.save(actual, args.out/f'rank{rank}.pt')
     errors = check_shards(actual, meta, state, reference['grads'])
     check_output(actual['output'], unit_output)
     save_json(args.out/f'rank{rank}.json', dict(rank=rank, inner_exit=0,
-        source_binding=observations, parameter_names=list(meta), gradient_errors=errors,
+        handoff=actual['handoff'], parameter_names=list(meta), gradient_errors=errors,
         output=actual['output'].item(), unit_reference=unit_output.item(),
         numerical_runtime_checked=False, historicalcapture_sample_association=False,
-        new_run_consumed_payload_association=True, kernel_value_proved=False,
+        new_run_consumed_payload_association=True, new_run_segment_input_association=True, kernel_value_proved=False,
         proof_admissible=False))
     dist.barrier()
     dist.destroy_process_group()
@@ -287,6 +423,12 @@ def aggregate(args):
     validate_rank_domain(rows, world)
     if {p.name for p in args.out.glob('rank*.pt')} != {f'rank{r}.pt' for r in range(world)}:
         raise ValueError('rank tensor artifact domain')
+    run_id = read_run(args, world)
+    # Handoff is checked on the actual serialized tensors before numerical replay.
+    reference_receipt = read(args.batch_witness)['reference_capture_receipt']
+    for row in rows:
+        actual = torch.load(args.out/f"rank{row['rank']}.pt", weights_only=True, map_location='cpu')
+        validate_rank_handoff(row, actual, record, snapshot, receipt, reference_receipt, run_id)
     model, state = canonical(receipt, tensors, 'cpu')
     names = set(dict(model.named_parameters()))
     reference = torch.load(args.out/'reference.pt', weights_only=True)
@@ -306,11 +448,8 @@ def aggregate(args):
         actual = torch.load(args.out/f'rank{rank}.pt', weights_only=True)
         if actual['rank'] != rank:
             raise ValueError('rank artifact identity')
-        validate_observations(actual['observations'], record, rank)
-        if row['source_binding'] != actual['observations'] or len(actual['inputs']) != 1:
-            raise ValueError('rank JSON/tensor source binding mismatch')
         expected = expected_observation(record, rank)
-        for name, value in zip(INPUT_NAMES, actual['inputs'][0], strict=True):
+        for name, value in zip(INPUT_NAMES, actual['handoff_tensors']['post'][0], strict=True):
             exact(value, torch.tensor(expected['inputs'][name], dtype=torch.int64))
             for local, pos in enumerate(expected['positions']):
                 previous = reconstructed[name][pos]
@@ -331,6 +470,7 @@ def aggregate(args):
         parameter_shards_checked=checked, global_parameter_names=sorted(names),
         max_gradient_abs_error=max_error, logical_sample_partition=record['samples'],
         reconstructed_global_inputs=reconstructed, new_run_consumed_payload_association=True,
+        new_run_segment_input_association=True, run_id=run_id,
         historicalcapture_sample_association=False, kernel_value_proved=False,
         proof_admissible=False, gradient_rtol=GRAD_RTOL, gradient_atol=GRAD_ATOL,
         output_rtol=OUTPUT_RTOL, output_atol=OUTPUT_ATOL,
@@ -354,6 +494,9 @@ def main():
         return
     receipt, _, _, _ = load_inputs(args)
     args.out.mkdir(parents=True, exist_ok=False)
+    import uuid
+    save_json(args.out/'run.json', dict(format='trainverify.input-handoff-run.v1',
+        run_id=uuid.uuid4().hex, world=receipt['compute']['runtime_ngpus']))
     world = receipt['compute']['runtime_ngpus']
     gpu = subprocess.run(['nvidia-smi'], capture_output=True, text=True, check=True)
     busy = subprocess.run(['nvidia-smi','--query-compute-apps=pid','--format=csv,noheader'],
