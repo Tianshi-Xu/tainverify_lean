@@ -167,6 +167,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
         raise ValueError('world bundle prefix module identity mismatch')
     if not lean.startswith(f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\n'):
         raise ValueError('world bundle entry must import its data and prefix helper')
+    from Verdict.graph_to_lean import GENERATED_LEAN_SOURCE_LIMIT
+    source_bytes = 0
     modules = []
     for filename, text, role in [(WORLD_DATA_FILE, supporting_sources[WORLD_DATA_FILE], 'data'),
                                   (SUPPORT_FILE, supporting_sources[SUPPORT_FILE], 'support'),
@@ -182,9 +184,15 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
             expected.append(modules[-1]['module'])
         if imports != expected:
             raise ValueError('world bundle import membership mismatch')
+        source_bytes += len(text.encode('utf-8'))
         modules.append(dict(file=filename, module=Path(filename).stem, role=role, imports=imports,
             source_sha256=hashlib.sha256(text.encode('utf-8')).hexdigest(),
             theorems=re.findall(r'^theorem (\S+)', text, re.M), kernel_checked=False))
+    # Unlike the generic per-file scanner, runtime-world bounds the whole bundle.
+    # This shared inventory is checked by both rendering and publish, before staging.
+    if source_bytes >= GENERATED_LEAN_SOURCE_LIMIT:
+        raise ValueError(f'world bundle generated Lean source exceeds {GENERATED_LEAN_SOURCE_LIMIT} byte limit: '
+                         f'{source_bytes} bytes total')
     return dict(modules=modules, dependency_order=[WORLD_DATA_FILE, SUPPORT_FILE, *chunks, entry], kernel_checked=False)
 
 
