@@ -6,7 +6,7 @@ from Verdict import runtime_prefix as prefix
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -109,6 +109,24 @@ def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=No
                         ordinary(graph, rank, 960, 'BW_gelu', [add.outputs[-1], y], [graph.shapes[y]], {'approximate': 'none'})
                     else:
                         ordinary(graph, rank, 935, 'BW_view', [lnback.outputs[0]], [graph.shapes[x]], {'size': graph.shapes[x]})
+                if inverse:
+                    op, request, shape = inverse
+                    original = ordinary(graph, rank, 965, 'FW_view', [x], [shape], {'size': shape}).outputs[0]
+                    back = ordinary(graph, rank, 970, op, [bw.outputs[0], original], [shape], request)
+                    if fault == 'inverse-initial':
+                        back.inputs = [w, w]
+                        back._input_irs = [src._input_irs[1], src._input_irs[1]]
+                        back.kwargs = {'size': graph.shapes[w]}
+                        graph.shapes[back.outputs[0]] = graph.shapes[w]
+                        back._output_irs = [IR(back.outputs[0].tid, 'gradient', graph.shapes[w])]
+                    if fault == 'inverse-arity': back.inputs.pop(); back._input_irs.pop()
+                    if fault == 'inverse-outputs': back.outputs.append(back.outputs[0]); back._output_irs.append(back._output_irs[0])
+                    if fault == 'inverse-output':
+                        graph.shapes[back.outputs[0]] = (2*k, 3)
+                        back._output_irs = [IR(back.outputs[0].tid, 'gradient', (2*k, 3))]
+                    if fault == 'inverse-product':
+                        back.inputs[0] = dy; back._input_irs[0] = s._output_irs[0]
+                    ordinary(graph, rank, 975, 'BW_contiguous', [back.outputs[0], original], [shape])
                 grads.append(bw)
         if elementwise:
             t = grads[0].outputs[0]; sh = pm.shapes[t]
@@ -379,6 +397,63 @@ class ProductionSeedTests(unittest.TestCase):
                 torch.testing.assert_close(actual, expected, rtol=1e-12, atol=1e-12)
                 self.assertGreater(actual.unique().numel(), 1)
             self.assertFalse(torch.allclose(dgamma, dbeta))
+
+    def test_inverse_reshape_computed_source_request(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for op, key in (('BW_view', 'size'), ('BW_reshape', 'shape')):
+                for shape in ((3, 2*k), (3, k, 2), (1, 3, k, 2)):
+                    with self.subTest(k=k, op=op, shape=shape), TemporaryDirectory() as d:
+                        fed = linear_world(Path(d), k, inverse=(op, {key: (1, -1, 3)}, shape))
+                        p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                        if op == 'BW_reshape':
+                            # No BW_reshape evalOp case: do not credit fallback identity.
+                            self.assertEqual(p['frontier']['op'], 'BW_reshape')
+                            continue
+                        self.assertEqual(p['frontier']['op'], 'BW_contiguous')
+                        self.assertEqual(len(p['initial_premises']), 4*k)
+                        self.assertIn(f':= fw_view {list(shape)} (pmSeededPrefixValue_', text)
+                        self.assertIn('pmSeededPrefixWritten_', text)
+                        self.assertIn('pmSeededPrefixRead_', text)
+
+    def test_inverse_view_rejects_initial_operands(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        for k in (2, 3):
+            with self.subTest(k=k), TemporaryDirectory() as d:
+                fed = linear_world(Path(d), k, fault='inverse-initial', inverse=('BW_view', {'size': (1, -1, 3)}, (3, 2*k)))
+                self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_view')
+
+    def test_inverse_view_source_shape_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        for k in (2, 3):
+            cases = [({}, None), ({'size': ()}, None), ({'size': (1, -1, -1)}, None),
+                     ({'size': (True, 2*k, 3)}, None), ({'size': (1, 3, 2*k)}, None),
+                     ({'size': (1, 2*k, 4)}, None), ({'size': (0, -1, 3)}, None)]
+            cases += [({'size': (1, -1, 3)}, f) for f in ('inverse-arity', 'inverse-outputs', 'inverse-output', 'inverse-product')]
+            for request, fault in cases:
+                with self.subTest(k=k, request=request, fault=fault), TemporaryDirectory() as d:
+                    if fault == 'inverse-outputs':
+                        with self.assertRaisesRegex(ValueError, 'duplicate'):
+                            linear_world(Path(d), k, fault=fault, inverse=('BW_view', request, (3, 2*k)))
+                        continue
+                    fed = linear_world(Path(d), k, fault=fault, inverse=('BW_view', request, (3, 2*k)))
+                    self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_view')
+
+    def test_inverse_view_nonconstant_cpu_autograd(self):
+        import torch
+        for k in (2, 3):
+            for shape in ((3, 2*k), (3, k, 2), (1, 3, k, 2)):
+                x = torch.arange(6*k, dtype=torch.float64).reshape(shape).requires_grad_()
+                y = x.view(1, -1, 3)
+                g = torch.arange(1, 6*k+1, dtype=torch.float64).reshape(y.shape)
+                y.backward(g)
+                self.assertEqual(tuple(x.grad.shape), shape)
+                self.assertEqual(x.grad.flatten().tolist(), g.flatten().tolist())
+                self.assertGreater(x.grad.unique().numel(), 1)
 
     def test_linear_two_outputs_computed_then_scattered(self):
         from pathlib import Path

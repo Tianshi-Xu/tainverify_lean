@@ -114,11 +114,11 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 computed = {t.tid for row in rows for t in row['outs']}
                 if any(t.tid not in computed for t in ins):
                     raise PrefixUnavailable('unsupported-producer-input', op=op)
-            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu') and seeds is not None:
+            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view') and seeds is not None:
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
                 _, reason = _ordinary(view, n, c._get_node_params)
-                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op == 'BW_gelu' else (3, 2)
+                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view') else (3, 2)
                 if reason or (len(ins), len(outs)) != arity or len({t.tid for t in outs}) != len(outs):
                     raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
             elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
@@ -222,6 +222,36 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                     if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
                         raise PrefixUnavailable('softmax-shape-contract')
                     output_shapes = [sh]
+            elif op == 'BW_view':
+                # Backward kwargs retain the ORIGINAL forward shape request.
+                # Lowered params instead encode the inverse output shape. Neither
+                # is authority for x: both operands must already be computed.
+                from Verdict import graph_to_lean as c
+                from Verdict.runtime_world import _ordinary
+                params, _ = _ordinary(view, n, c._get_node_params)
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
+                grad, sh = (ss[t.tid] for t in ins)
+                kw = view.node_kwargs(n)
+                requested = kw.get('size')
+                if ('shape' in kw or not isinstance(requested, (tuple, list))
+                        or not requested or any(type(d) is not int or d < -1 for d in requested)
+                        or requested.count(-1) > 1):
+                    raise PrefixUnavailable('bw-view-source-params')
+                target = list(requested)
+                if -1 in target:
+                    known = prod(d for d in target if d != -1)
+                    if known <= 0 or prod(sh) % known:
+                        raise PrefixUnavailable('bw-view-product-contract')
+                    target[target.index(-1)] = prod(sh) // known
+                if prod(sh) != prod(grad) or prod(target) != prod(sh):
+                    raise PrefixUnavailable('bw-view-product-contract')
+                if target != grad:
+                    raise PrefixUnavailable('bw-view-source-params')
+                if params != sh:
+                    raise PrefixUnavailable('computed-source-shape-mismatch')
+                output_shapes = [sh.copy()]
             elif op == 'BW_sum':
                 output_shapes = [ss[ins[1].tid]]
             elif op == 'FW_sum':
@@ -357,6 +387,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op == 'AllReducePrim': return [f'allReducePrim {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'ReduceScatterPrim': return [f'reduceScatterPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
+            if op == 'BW_view': return [f'fw_view {row["params"]} {xs[0]}']
             if op in ('FW_view', 'FW_reshape'): return [f'fw_view {row["params"]} {xs[0]}']
             if op == 'FW_transpose': return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
             if op == 'FW_matmul': return [f'fw_matmul {xs[0]} {xs[1]}']
@@ -419,7 +450,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             # value graph: real-width normalization/linear arithmetic is costly
             # even though it is irrelevant to this theorem.
             shape_start = f'by\n  unfold {vn}\n'
-            if op in ('FW_view', 'FW_reshape', 'FW_sum'):
+            if op in ('FW_view', 'FW_reshape', 'BW_view', 'FW_sum'):
                 shape_proof = '  rfl'
             elif op == 'BW_multiref':
                 shape_proof = ('  rw [tensorSum_shape]\n'
