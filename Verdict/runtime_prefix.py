@@ -14,6 +14,14 @@ PROOF_DECLARATION_BUDGET = 80
 # Bound fold elaboration independently of graph, operator and packing budgets.
 RUN_STEP_BUDGET = 16
 PREFIX_MODULE = 'TrainVerifyRuntimePrefix'
+SUPPORT_MODULE = PREFIX_MODULE + 'Support'
+SUPPORT_FILE = SUPPORT_MODULE + '.lean'
+
+
+def support_source():
+    from pathlib import Path
+    return Path(__file__).with_name('runtime_prefix_support.lean').read_text(encoding='utf-8')
+
 _HEADER = '\n'.join(['namespace TrainVerify.Denote.RuntimeWorld',
     'noncomputable section', 'open SourceScopedEval',
     'set_option maxHeartbeats 500000', 'set_option maxRecDepth 4096']) + '\n'
@@ -36,7 +44,7 @@ def pack_proofs(prefixes):
     a declaration). A single oversized group is an error, never split by syntax.
     """
     from Verdict.runtime_world import WORLD_DATA_MODULE
-    imports = f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\n'
+    imports = f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\nimport {SUPPORT_MODULE}\n'
     groups = [g for prefix in prefixes for g in prefix]
     def fits(gs):
         return (sum(len(g.text.encode('utf-8')) for g in gs) <= PROOF_BYTE_BUDGET
@@ -44,7 +52,7 @@ def pack_proofs(prefixes):
     if any(not fits([g]) for g in groups):
         raise ValueError('prefix atomic declaration group exceeds proof budget')
     if fits(groups):
-        return imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER, {}
+        return imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER, {SUPPORT_FILE: support_source()}
     chunks = []; current = []; finals = []
     for g in groups:
         if g.final:
@@ -56,16 +64,17 @@ def pack_proofs(prefixes):
     if current: chunks.append(current)
     if not fits(finals):
         raise ValueError('prefix final assembly exceeds proof budget')
-    supporting = {}; opaque = []; previous = None
+    supporting = {SUPPORT_FILE: support_source()}; previous = None
     def source(gs):
         edge = f'import {previous}\n' if previous else ''
-        attrs = ('attribute [local irreducible] ' + ' '.join(opaque) + '\n'
-                 if opaque else '')
-        return imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + _FOOTER
+        attrs = 'restore_prefix_opacity\n' if previous else ''
+        # Metadata is not the immediate attribute stream: preserve both exactly.
+        opaque = [n for g in gs for n in g.opaque]
+        record = '\nrecord_prefix_opacity ' + ' '.join(opaque) + '\n' if opaque else ''
+        return imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + record + _FOOTER
     for index, chunk in enumerate(chunks):
         name = f'{PREFIX_MODULE}{index:04d}'
         supporting[name+'.lean'] = source(chunk)
-        opaque.extend(n for g in chunk for n in g.opaque)
         previous = name
     return source(finals), supporting
 
@@ -477,12 +486,10 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
                 width = 1
             yield end - width, end
             end -= width
-    def frame_term(start, end, hypothesis):
+    def frame_term(start, end):
         if end - start != 2:
-            return f'({no_write(start, end)} init tid {hypothesis})'
-        left = f'(not_or.mp <| mt List.mem_append.mpr {hypothesis}).1'
-        right = f'(not_or.mp <| mt List.mem_append.mpr {hypothesis}).2'
-        return f'({frame_term(start+1, end, right)}.trans {frame_term(start, start+1, left)})'
+            return f'({no_write(start, end)} init)'
+        return f'(prefixFrame_trans _ _ _ _ _ {frame_term(start, start+1)} {frame_term(start+1, end)})'
     certificates = set()
     def certify(start, end):
         if end - start <= 2 or (start, end) in certificates:
@@ -493,8 +500,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
         footprint = writes(start, end)
         theorem(no_write(start, end),
             f'(init : Store) (tid : Tid) (h : tid ∉ {footprint}) : {state(end)} tid = {state(start)} tid',
-            f'by\n  exact {frame_term(middle, end, "(not_or.mp <| mt List.mem_append.mpr h).2")}.trans '
-            f'{frame_term(start, middle, "(not_or.mp <| mt List.mem_append.mpr h).1")}')
+            f'by\n  exact prefixFrame_trans _ _ _ _ _ {frame_term(start, middle)} {frame_term(middle, end)} tid h')
         group()
         certificates.add((start, end))
     advance = f'(fun row s => stepWithInputs {label}Graph ({label}Scope row.1) ({label}Peers row.1) s row.1 row.2)'
@@ -602,10 +608,12 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
         condition = op == 'AllToAllPrim'
         theorem(f'{stem}Step_{j}', f'{args if condition else "(init : Store)"} : stepWithInputs {label}Graph ({label}Scope {node}) ({label}Peers {node}) {prev} {node} {feed} = some {nxt}', proof)
         steps.append(f'{stem}Step_{j} init'+(' hInitShapes' if condition else ''))
-        pairs = '[' + ', '.join(f'({t.tid}, {value})' for t, value in zip(outs, computed)) + ']'
+        wrappers = (f'  dsimp only [{node}_feed]\n' if op == 'DATALOADER' else
+                    f'  dsimp only [AllToAllSourceFaithful.localStep, {node}, List.zip, List.zipWith]\n'
+                    if op == 'AllToAllPrim' else '')
         theorem(f'{stem}Skip_{j}',
                 f'(init : Store) (tid : Tid) (h : tid ∉ {[t.tid for t in outs]}) : {nxt} tid = {prev} tid',
-                f'by\n  change storeSet {prev} {pairs} tid = {prev} tid\n'
+                f'by\n  unfold {stem}State_{j+1}\n' + wrappers +
                 f'  exact storeSet_eq_of_not_mem_fst _ _ _ (by simpa only [List.map] using h)')
         input_shapes = [shape_proofs[t.tid] for t in ins]
         for p, (t, value, sh) in enumerate(zip(outs, computed, row['output_shapes'])):

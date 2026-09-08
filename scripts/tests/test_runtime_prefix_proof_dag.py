@@ -17,7 +17,7 @@ class PrefixProofDAGTests(unittest.TestCase):
             root = Path(d)
             with patch.object(prefix, 'PROOF_DECLARATION_BUDGET', 24, create=True):
                 fed = collective_world(root, 2, chain=True)
-            chunks = sorted(n for n in fed.supporting_sources if n != WORLD_DATA_FILE)
+            chunks = sorted(n for n in fed.supporting_sources if n not in (WORLD_DATA_FILE, prefix.SUPPORT_FILE))
             self.assertGreater(len(chunks), 1)
             sources = [*fed.supporting_sources.values(), fed.lean]
             text = '\n'.join(sources)
@@ -28,16 +28,16 @@ class PrefixProofDAGTests(unittest.TestCase):
                 self.assertEqual(len(re.findall(rf'^theorem pmPrefixStep_{j} ', text, re.M)), 1)
             self.assertIn('theorem pmPrefixSuccess', fed.lean)
             imported_opaque = [name for names in re.findall(
-                r'^attribute \[local irreducible\] (.+)$', fed.lean, re.M)
+                r'^record_prefix_opacity (.+)$', text, re.M)
                 for name in names.split()]
             self.assertIn('pmPrefixState_1', imported_opaque)
             bundle = fed.receipt['proof_bundle']
-            self.assertEqual(bundle['dependency_order'], [WORLD_DATA_FILE, *chunks, '$entry'])
+            self.assertEqual(bundle['dependency_order'], [WORLD_DATA_FILE, prefix.SUPPORT_FILE, *chunks, '$entry'])
             checks = [t for m in bundle['modules'] for t in m['theorems'] if t.startswith('pmPrefix')]
             self.assertCountEqual(checks, fed.receipt['scoped_prefix']['pm']['kernel_checks'])
             out = root/'bundle'/'World.lean'
             publish(fed, out)
-            self.assertEqual(set(p.name for p in out.parent.iterdir()), {WORLD_DATA_FILE, *chunks, 'World.lean', 'world-receipt.json'})
+            self.assertEqual(set(p.name for p in out.parent.iterdir()), {WORLD_DATA_FILE, prefix.SUPPORT_FILE, *chunks, 'World.lean', 'world-receipt.json'})
             original = {p.name:p.read_bytes() for p in out.parent.iterdir()}
             for kind in ('missing', 'tamper', 'orphan', 'cycle'):
                 support = dict(fed.supporting_sources)
@@ -61,21 +61,22 @@ class PrefixProofDAGTests(unittest.TestCase):
         with patch.object(prefix, 'PROOF_DECLARATION_BUDGET', 4):
             entry, support = prefix.pack_proofs([groups + [final]])
         opaque = []
-        for index, source in enumerate([*support.values(), entry]):
+        for index, source in enumerate([*(v for k, v in support.items() if k != prefix.SUPPORT_FILE), entry]):
             chunk = groups[index * 2:index * 2 + 2] if index < 4 else [final]
             edge = f'import TrainVerifyRuntimePrefix{index-1:04d}\n' if index else ''
-            attrs = ('attribute [local irreducible] ' + ' '.join(opaque) + '\n'
-                     if opaque else '')
-            expected = ('import TrainVerifyRuntimeWorldData\nimport denote.SourceScopedPrefix\n'
+            attrs = 'restore_prefix_opacity\n' if index else ''
+            names = [n for g in chunk for n in g.opaque]
+            record = '\nrecord_prefix_opacity ' + ' '.join(names) + '\n' if names else ''
+            expected = ('import TrainVerifyRuntimeWorldData\nimport denote.SourceScopedPrefix\nimport TrainVerifyRuntimePrefixSupport\n'
                         + edge + prefix._HEADER + attrs
-                        + '\n'.join(g.text for g in chunk) + prefix._FOOTER)
+                        + '\n'.join(g.text for g in chunk) + record + prefix._FOOTER)
             self.assertEqual(source, expected)
             opaque.extend(n for g in chunk for n in g.opaque)
-        self.assertEqual(list(support), [f'TrainVerifyRuntimePrefix{i:04d}.lean' for i in range(4)])
+        self.assertEqual(list(support), [prefix.SUPPORT_FILE] + [f'TrainVerifyRuntimePrefix{i:04d}.lean' for i in range(4)])
         with patch.object(prefix, 'PROOF_DECLARATION_BUDGET', 80):
             single, support = prefix.pack_proofs([groups + [final]])
-        self.assertFalse(support)
-        self.assertEqual(single, 'import TrainVerifyRuntimeWorldData\nimport denote.SourceScopedPrefix\n'
+        self.assertEqual(support, {prefix.SUPPORT_FILE: prefix.support_source()})
+        self.assertEqual(single, 'import TrainVerifyRuntimeWorldData\nimport denote.SourceScopedPrefix\nimport TrainVerifyRuntimePrefixSupport\n'
                          + prefix._HEADER + '\n'.join(g.text for g in groups + [final]) + prefix._FOOTER)
 
     def test_read_certificates_reuse_latest_full_tid_version(self):
@@ -134,7 +135,7 @@ class PrefixProofDAGTests(unittest.TestCase):
         final = prefix.ProofGroup('theorem done : True := trivial\n', 1, (), True)
         with patch.object(prefix, 'PROOF_DECLARATION_BUDGET', 3):
             entry, support = prefix.pack_proofs([gs + [final]])
-            self.assertEqual(len(support), 3)
+            self.assertEqual(len(support), 4)
             self.assertIn('def x2', support['TrainVerifyRuntimePrefix0000.lean'])
             self.assertNotIn('def x3', support['TrainVerifyRuntimePrefix0000.lean'])
             _, extended = prefix.pack_proofs([gs + [prefix.ProofGroup('def x7 := 7\n', 1, ()), final]])
@@ -147,7 +148,7 @@ class PrefixProofDAGTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             with patch.object(prefix, 'PROOF_DECLARATION_BUDGET', 24):
                 fed = collective_world(Path(d), 2, chain=True)
-            chunks = sorted(set(fed.supporting_sources) - {WORLD_DATA_FILE})
+            chunks = sorted(set(fed.supporting_sources) - {WORLD_DATA_FILE, prefix.SUPPORT_FILE})
             last = Path(chunks[-1]).stem
             with self.assertRaisesRegex(ValueError, 'import'):
                 _proof_bundle(fed.lean.replace(f'import {last}\n', ''), fed.supporting_sources)
@@ -161,7 +162,7 @@ class PrefixProofDAGTests(unittest.TestCase):
             root = Path(d)
             with patch.object(prefix, 'PROOF_DECLARATION_BUDGET', 24):
                 fed = collective_world(root, 2, chain=True)
-            chunk = sorted(set(fed.supporting_sources) - {WORLD_DATA_FILE})[0]
+            chunk = sorted(set(fed.supporting_sources) - {WORLD_DATA_FILE, prefix.SUPPORT_FILE})[0]
             public = root/'Public.lean'; public.write_text('sentinel')
             original = Path.write_text
             for fault in ('exception', 'omit', 'tamper', 'extra'):

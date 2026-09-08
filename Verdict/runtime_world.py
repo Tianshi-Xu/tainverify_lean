@@ -159,28 +159,33 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
     """Source consistency inventory, not a kernel or execution certificate."""
     if type(supporting_sources) is not dict or WORLD_DATA_FILE not in supporting_sources:
         raise ValueError('world bundle requires exactly one data module')
-    from Verdict.runtime_prefix import PREFIX_MODULE
-    chunks = sorted(set(supporting_sources) - {WORLD_DATA_FILE})
+    from Verdict.runtime_prefix import PREFIX_MODULE, SUPPORT_MODULE, SUPPORT_FILE, support_source
+    if supporting_sources.get(SUPPORT_FILE) != support_source():
+        raise ValueError('world bundle prefix support source mismatch')
+    chunks = sorted(set(supporting_sources) - {WORLD_DATA_FILE, SUPPORT_FILE})
     if chunks != [f'{PREFIX_MODULE}{i:04d}.lean' for i in range(len(chunks))]:
         raise ValueError('world bundle prefix module identity mismatch')
     if not lean.startswith(f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\n'):
         raise ValueError('world bundle entry must import its data and prefix helper')
     modules = []
     for filename, text, role in [(WORLD_DATA_FILE, supporting_sources[WORLD_DATA_FILE], 'data'),
+                                  (SUPPORT_FILE, supporting_sources[SUPPORT_FILE], 'support'),
                                   *((name, supporting_sources[name], 'prefix') for name in chunks),
                                   (entry, lean, 'entry')]:
         if type(text) is not str:
             raise ValueError('world bundle source must be text')
         imports = [name for line in re.findall(r'^\s*import\s+([^\n]+)', text, re.M) for name in line.split()]
-        expected = ['denote.SourceScopedEval'] if role == 'data' else [WORLD_DATA_MODULE, 'denote.SourceScopedPrefix']
-        if role != 'data' and modules[-1]['role'] == 'prefix':
+        expected = (['denote.SourceScopedEval'] if role == 'data' else
+                    ['Lean', 'denote.Denote'] if role == 'support' else
+                    [WORLD_DATA_MODULE, 'denote.SourceScopedPrefix', SUPPORT_MODULE])
+        if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
         if imports != expected:
             raise ValueError('world bundle import membership mismatch')
         modules.append(dict(file=filename, module=Path(filename).stem, role=role, imports=imports,
             source_sha256=hashlib.sha256(text.encode('utf-8')).hexdigest(),
             theorems=re.findall(r'^theorem (\S+)', text, re.M), kernel_checked=False))
-    return dict(modules=modules, dependency_order=[WORLD_DATA_FILE, *chunks, entry], kernel_checked=False)
+    return dict(modules=modules, dependency_order=[WORLD_DATA_FILE, SUPPORT_FILE, *chunks, entry], kernel_checked=False)
 
 
 def render(sm, pm, raw_sm, raw_pm):
