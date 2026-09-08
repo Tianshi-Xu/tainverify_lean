@@ -211,6 +211,7 @@ def parse_args() -> argparse.Namespace:
 	)
 	p.add_argument("--runtime-batch-authority", help="Source-only CPU batch record/result JSON; never value proof authority.")
 	p.add_argument("--runtime-world-definitions-out", help="Opt-in source-only complete world definitions in a fresh private directory, separate from --out; public proof still blocked.")
+	p.add_argument("--runtime-input-handoff", help="Fresh observed postwait run directory; requires private runtime world output; no public closure.")
 	return p.parse_args()
 
 
@@ -4670,6 +4671,9 @@ def _generate(args: argparse.Namespace) -> None:
 	)
 	out_path = Path(args.out)
 	world_out = getattr(args, 'runtime_world_definitions_out', None)
+	handoff = getattr(args, 'runtime_input_handoff', None)
+	if handoff and not world_out:
+		raise ValueError('runtime input handoff requires runtime world definitions output')
 	if world_out:
 		if args.split_goals or args.emit_spec_template or args.emit_segment_patterns or getattr(args, 'definitions_only', False):
 			raise ValueError('runtime world definitions cannot mix with public/template/legacy definitions options')
@@ -4719,6 +4723,9 @@ def _generate(args: argparse.Namespace) -> None:
 			wred_scopes=len(getattr(GpE, 'wred_scopes', ())), collective_scopes=len(getattr(GpE, 'collective_scopes', ())), chunk_scopes=len(getattr(GpE, 'chunk_scopes', ())))
 		from Verdict.runtime_world import render, publish
 		world = render(GsE, GpE, inputs[0], inputs[1])
+		if handoff:
+			from Verdict.runtime_input_feed import bind
+			world = bind(world, GsE, GpE, *inputs, handoff)
 		receipt['world_definitions'] = world.receipt
 		if world_out:
 			publish(world, world_out)
