@@ -78,6 +78,57 @@ class PrefixProofDAGTests(unittest.TestCase):
         self.assertEqual(single, 'import TrainVerifyRuntimeWorldData\nimport denote.SourceScopedPrefix\n'
                          + prefix._HEADER + '\n'.join(g.text for g in groups + [final]) + prefix._FOOTER)
 
+    def test_read_certificates_reuse_latest_full_tid_version(self):
+        from types import SimpleNamespace as NS
+        # Equal source identities with distinct full tids must never alias.
+        a, b = NS(tid=17, source_tid=9), NS(tid=18, source_tid=9)
+        rows = []
+        for j in range(32):
+            outs = [a, b] if j in (15, 23) else [NS(tid=100+j)]
+            rows.append(dict(index=j, op='FW_multiref', ins=[a, b], outs=outs,
+                             scope=None, input_shapes=[[1], [1]],
+                             output_shapes=[[1]] * len(outs), params=[]))
+        rows[0].update(op='AllToAllPrim', scope=NS(ranks=(0, 1), local_index=0,
+                                                params=(0, 0)))
+        rows[27]['ins'] = [a, a]
+        for seeds in (None, [{'tid': 18}]):
+            initial = {17: dict(tid=17, shape=[1])}
+            if seeds is None: initial[18] = dict(tid=18, shape=[1])
+            groups, _ = prefix._render('p', rows, {}, initial, None,
+                                       structured=True, seeds=seeds)
+            text = '\n'.join(g.text for g in groups)
+            stem = 'pPrefix' if seeds is None else 'pSeededPrefix'
+            def body(j, port):
+                return text.split(f'theorem {stem}Read_{j}_{port} ', 1)[1].split('#print', 1)[0]
+            for port in (0, 1):
+                self.assertIn(f'exact {stem}Read_14_{port} init', body(15, port))
+                self.assertIn(f'exact {stem}Written_15_{port} init', body(16, port))
+                self.assertNotIn(f'Read_15_{port}', body(16, port))
+                self.assertIn(f'exact {stem}Written_23_{port} init', body(24, port))
+                self.assertNotIn(f'Read_23_{port}', body(24, port))
+                self.assertIn(f'exact {stem}Read_30_{port} init', body(31, port))
+                self.assertEqual(body(31, port).count('Skip_'), 1)
+            self.assertIn(f'exact {stem}Read_27_0 init', body(27, 1))
+            self.assertNotIn('Skip_', body(27, 1))
+
+    def test_sparse_reads_use_shared_aligned_no_write_certificates(self):
+        from types import SimpleNamespace as NS
+        rows = [dict(index=j, op='FW_multiref', ins=[NS(tid=7)],
+                     outs=[NS(tid=100+j)], scope=None, input_shapes=[[1]],
+                     output_shapes=[[1]], params=[]) for j in range(64)]
+        rows[0].update(op='AllToAllPrim', scope=NS(ranks=(0,), local_index=0, params=(0, 0)))
+        rows[-1]['ins'] = [NS(tid=8)]
+        groups, receipt = prefix._render('p', rows, {},
+            {t: dict(tid=t, shape=[1]) for t in (7, 8)}, None, structured=True)
+        text = '\n'.join(g.text for g in groups)
+        body = text.split('theorem pPrefixRead_63_0 ', 1)[1].split('#print', 1)[0]
+        self.assertLessEqual(body.count('  rw ['), 7)
+        self.assertIn('pPrefixNoWrite_0_32', body)
+        for g in groups:
+            self.assertLessEqual(len(g.text.encode()), prefix.PROOF_BYTE_BUDGET)
+            self.assertLessEqual(g.declarations, prefix.PROOF_DECLARATION_BUDGET)
+        self.assertEqual(receipt['prefix_length'], 64)
+
     def test_packing_is_generic_greedy_and_bounded(self):
         gs = [prefix.ProofGroup(f'def x{i} := {i}\n', 1, ()) for i in range(7)]
         final = prefix.ProofGroup('theorem done : True := trivial\n', 1, (), True)

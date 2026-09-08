@@ -7,7 +7,7 @@ from math import prod
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None, matmul=None, matmul_batch=None, softmax=None, softmax_dim=-1):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None, matmul=None, matmul_batch=None, softmax=None, softmax_dim=-1, divisor=2):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -168,7 +168,23 @@ def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=No
                     if fault == 'softmax-output-shape':
                         graph.shapes[back.outputs[0]] = (7,)
                         back._output_irs[0] = IR(back.outputs[0].tid, 'gradient', (7,))
-                    ordinary(graph, rank, 994, 'BW_div', [back.outputs[0], original], [shape], {'__consts': [2]})
+                    divins = [back.outputs[0], original]
+                    divkw = {'__consts': [divisor]}
+                    if fault in ('div-g-uncomputed', 'div-x-uncomputed'):
+                        divins[int(fault == 'div-x-uncomputed')] = g
+                    if fault == 'div-g-shape': divins[0] = dy
+                    if fault == 'div-x-shape': divins[1] = dy
+                    if fault == 'div-rounding': divkw['rounding_mode'] = 'floor'
+                    if fault == 'div-kwargs': divkw['unknown'] = 1
+                    if fault == 'div-missing': divkw['__consts'] = []
+                    if fault == 'div-extra': divkw['__consts'].append(3)
+                    divback = ordinary(graph, rank, 994, 'BW_div', divins, [shape], divkw)
+                    if fault == 'div-arity': divback.inputs.pop(); divback._input_irs.pop()
+                    if fault == 'div-outputs': divback.outputs.append(divback.outputs[0]); divback._output_irs.append(divback._output_irs[0])
+                    if fault == 'div-output-shape':
+                        graph.shapes[divback.outputs[0]] = (7,)
+                        divback._output_irs[0] = IR(divback.outputs[0].tid, 'gradient', (7,))
+                    ordinary(graph, rank, 996, 'BW_flatten', [divback.outputs[0], original], [shape])
                 if matmul:
                     batch = (1,) * (matmul - 2)
                     shapes = [batch + (2*k, 5), batch + (2*k, 3), batch + (5, 3)]
@@ -261,6 +277,65 @@ def layernorm_world(root, k, ndim=3, fault=None):
 
 class ProductionSeedTests(unittest.TestCase):
 
+    def test_bw_div_source_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        from Verdict import runtime_world
+        ordinary = runtime_world._ordinary
+        for independent in (False, True):
+            def checked(view, node, get_params):
+                if independent and str(view.node_opname(node)).split('.')[-1] == 'BW_div':
+                    return [2], None
+                return ordinary(view, node, get_params)
+            cases = [(f, 2) for f in ('g-uncomputed', 'x-uncomputed', 'g-shape', 'x-shape', 'arity', 'outputs', 'output-shape', 'rounding', 'kwargs', 'missing', 'extra')]
+            cases += [(None, c) for c in (0, -2, 0.5, 2.5, True, float('nan'), float('inf'))]
+            if independent: cases.append((None, 3))
+            for fault, scalar in cases:
+                with self.subTest(independent=independent, fault=fault, scalar=scalar), TemporaryDirectory() as d, patch.object(runtime_world, '_ordinary', checked):
+                    raises = fault == 'outputs' or (not independent and (fault in ('rounding', 'kwargs', 'missing', 'extra') or scalar != 2 or type(scalar) is bool))
+                    if raises:
+                        with self.assertRaises((ValueError, OverflowError)):
+                            linear_world(Path(d), 2, softmax=(2, 2, 3), fault='div-'+fault if fault else None, divisor=scalar)
+                    else:
+                        fed = linear_world(Path(d), 2, softmax=(2, 2, 3), fault='div-'+fault if fault else None, divisor=scalar)
+                        self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_div')
+
+    def test_bw_div_nonconstant_cpu_autograd(self):
+        from fractions import Fraction
+        import torch
+        torch.set_num_threads(1)
+        for k in (2, 3):
+            for shape in ((2*k, 3), (k, 2, 3), (2, k, 1, 3)):
+                for c in (2, 4):
+                    g = torch.arange(prod(shape), dtype=torch.float64).reshape(shape) * 3 - 7
+                    expected = torch.tensor([float(Fraction(int(v), c)) for v in g.flatten()], dtype=torch.float64).reshape(shape)
+                    for offset in (-13, 29):
+                        x = (torch.arange(prod(shape), dtype=torch.float64).reshape(shape)+offset).requires_grad_()
+                        actual, = torch.autograd.grad(torch.div(x, c), x, g)
+                        self.assertTrue(torch.equal(actual, expected))
+                        self.assertFalse(torch.equal(actual, g))
+                        self.assertFalse(torch.equal(actual, x.detach()/c))
+                        self.assertFalse(torch.equal(actual, g*c))
+                        self.assertGreater(actual.unique().numel(), 1)
+
+    def test_bw_div_computed_chain(self):
+        import re
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for shape in ((2*k, 3), (k, 2, 3), (2, k, 1, 3)):
+                with self.subTest(k=k, shape=shape), TemporaryDirectory() as d:
+                    fed = linear_world(Path(d), k, softmax=shape)
+                    p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                    self.assertNotEqual(p['frontier']['op'], 'BW_div')
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+                    m = re.search(r'def pmSeededPrefixValue_(\d+)_0 .*:= bw_div \(\(2 : Nat\) : Scalar\) \(pmSeededPrefixValue_', text)
+                    self.assertIsNotNone(m)
+                    for n in ('Read_'+m[1]+'_0', 'Read_'+m[1]+'_1', 'Step_'+m[1], 'Written_'+m[1]+'_0', 'Shape_'+m[1]+'_0'):
+                        self.assertIn('theorem pmSeededPrefix'+n+' ', text)
+
     def test_softmax_positive_last_axis_computed_chain(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory
@@ -276,7 +351,7 @@ class ProductionSeedTests(unittest.TestCase):
                     except ValueError as e:
                         self.fail(f'valid positive last axis rejected: {e}')
                     p = positive.receipt['scoped_prefix']['pm']
-                    self.assertEqual(p['frontier']['op'], 'BW_div')
+                    self.assertEqual(p['frontier']['op'], 'BW_flatten')
                     self.assertEqual(p['output_shape'], list(shape))
                     self.assertEqual(len(p['initial_premises']), 4*k)
                     text = proof_text(positive)
@@ -379,7 +454,7 @@ class ProductionSeedTests(unittest.TestCase):
                 with self.subTest(k=k, shape=shape), TemporaryDirectory() as d:
                     fed = linear_world(Path(d), k, softmax=shape)
                     p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
-                    self.assertEqual(p['frontier']['op'], 'BW_div')
+                    self.assertEqual(p['frontier']['op'], 'BW_flatten')
                     self.assertEqual(len(p['initial_premises']), 4*k)
                     self.assertEqual(p['output_shape'], list(shape))
                     m = re.search(r'def pmSeededPrefixValue_(\d+)_0 .*:= bw_softmax (\(pmSeededPrefixValue_\d+_0 init\)) (\(pmSeededPrefixValue_\d+_0 init\))', text)

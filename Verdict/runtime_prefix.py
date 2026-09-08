@@ -115,11 +115,11 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 computed = {t.tid for row in rows for t in row['outs']}
                 if any(t.tid not in computed for t in ins):
                     raise PrefixUnavailable('unsupported-producer-input', op=op)
-            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_matmul', 'BW_softmax') and seeds is not None:
+            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_matmul', 'BW_softmax', 'BW_div') and seeds is not None:
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
                 _, reason = _ordinary(view, n, c._get_node_params)
-                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_softmax') else (3, 2)
+                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_softmax', 'BW_div') else (3, 2)
                 if reason or (len(ins), len(outs)) != arity or len({t.tid for t in outs}) != len(outs):
                     raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
             elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
@@ -223,6 +223,25 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                     if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
                         raise PrefixUnavailable('softmax-shape-contract')
                     output_shapes = [sh]
+            elif op == 'BW_div':
+                # Source ports remain [g, original x], although bw_div uses g.
+                # Neither operand may be replaced by an initial shape premise.
+                from Verdict import graph_to_lean as c
+                from Verdict.runtime_world import _ordinary
+                params, _ = _ordinary(view, n, c._get_node_params)
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
+                grad, sh = (ss[t.tid] for t in ins)
+                kw = dict(view.node_kwargs(n)); consts = kw.get('__consts', [])
+                if (set(kw) - {'rounding_mode', '__consts'} or kw.get('rounding_mode') is not None
+                        or not isinstance(consts, (list, tuple)) or len(consts) != 1
+                        or type(consts[0]) not in (int, float) or not consts[0] > 0
+                        or params != [consts[0]] or any(type(p) is not int for p in params)):
+                    raise PrefixUnavailable('bw-div-source-params')
+                if grad != sh:
+                    raise PrefixUnavailable('bw-div-shape-contract', computed_shapes=[grad, sh])
+                output_shapes = [sh.copy()]
             elif op == 'BW_softmax':
                 # Raw BW ports are [g, original FW input x], NOT [g, y].
                 # Denote recomputes softmax(x) before the weighted row reduction.
@@ -405,10 +424,47 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
     shape_proofs.update({tid: 'unitSeed_shape' for tid in seed_ids})
     initial_store = 'init' if seeds is None else f'({label}InitialWithSeeds init)'
     initial_reads = {}
+    read_certificates = {}
     def state(j): return f'({stem}State_{j} init)'
     def theorem(name, args, proof):
         names.append(name)
         lines.extend([f'theorem {name} {args} := {proof}', f'#print axioms {name}'])
+    def writes(a, b):
+        if b == a + 1:
+            return str([t.tid for t in rows[a]['outs']])
+        middle = (a + b) // 2
+        return f'({writes(a, middle)} ++ {writes(middle, b)})'
+    def no_write(a, b):
+        return f'{stem}Skip_{a}' if b == a + 1 else f'{stem}NoWrite_{a}_{b}'
+    def read_intervals(start, end):
+        while end > start:
+            width = end & -end
+            while width > end - start:
+                width //= 2
+            if width == 2:
+                width = 1
+            yield end - width, end
+            end -= width
+    def frame_term(start, end, hypothesis):
+        if end - start != 2:
+            return f'({no_write(start, end)} init tid {hypothesis})'
+        left = f'(not_or.mp <| mt List.mem_append.mpr {hypothesis}).1'
+        right = f'(not_or.mp <| mt List.mem_append.mpr {hypothesis}).2'
+        return f'({frame_term(start+1, end, right)}.trans {frame_term(start, start+1, left)})'
+    certificates = set()
+    def certify(start, end):
+        if end - start <= 2 or (start, end) in certificates:
+            return
+        middle = (start + end) // 2
+        certify(start, middle); certify(middle, end)
+        # Preserve the ordered footprint, including every output and overwrite.
+        footprint = writes(start, end)
+        theorem(no_write(start, end),
+            f'(init : Store) (tid : Tid) (h : tid ∉ {footprint}) : {state(end)} tid = {state(start)} tid',
+            f'by\n  exact {frame_term(middle, end, "(not_or.mp <| mt List.mem_append.mpr h).2")}.trans '
+            f'{frame_term(start, middle, "(not_or.mp <| mt List.mem_append.mpr h).1")}')
+        group()
+        certificates.add((start, end))
     advance = f'(fun row s => stepWithInputs {label}Graph ({label}Scope row.1) ({label}Peers row.1) s row.1 row.2)'
     args = f'(init : Store) (hInitShapes : {stem}InitShapes init)'
     goal = ' ∧ '.join(f'(init {p["tid"]}).shape = {p["shape"]}' for p in initial.values()) or 'True'
@@ -432,16 +488,28 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
     for j, row in enumerate(rows):
         i, op, ins, outs, scope = (row[k] for k in ('index','op','ins','outs','scope'))
         node = f'{label}Node_{i}'; prev = state(j); nxt = state(j+1)
+        # Emit only demanded intervals, before the unchanged atomic step group.
+        for t in ins:
+            stop = (read_certificates[t.tid][0] if t.tid in read_certificates else
+                    writers[t.tid][0] + 1 if t.tid in writers else 0)
+            for start, end in read_intervals(stop, j):
+                certify(start, end)
         reads = []
         for p, t in enumerate(ins):
             name = f'{stem}Read_{j}_{p}'; reads.append(f'{name} init')
             stop = writers[t.tid][0] + 1 if t.tid in writers else 0
-            proof = 'by\n' + ''.join(
-                f'  rw [{stem}Skip_{q} init {t.tid} (by decide)]\n'
-                for q in range(j - 1, stop - 1, -1))
-            proof += (f'  exact {writers[t.tid][1]} init' if t.tid in writers else
-                      f'  exact {initial_reads[t.tid]}' if seeds is not None else '  rfl')
+            anchor = (f'{writers[t.tid][1]} init' if t.tid in writers else
+                      initial_reads[t.tid] if seeds is not None else None)
+            # Full emitted Tid, and only the current ordered writer version.
+            # An overwrite below invalidates this entry, including every port.
+            if t.tid in read_certificates:
+                stop, anchor = read_certificates[t.tid]
+            proof = 'by\n'
+            for start, end in read_intervals(stop, j):
+                proof += f'  rw [{no_write(start, end)} init {t.tid} (by decide)]\n'
+            proof += f'  exact {anchor}' if anchor is not None else '  rfl'
             theorem(name, f'(init : Store) : {prev} {t.tid} = {values[t.tid]}', proof)
+            read_certificates[t.tid] = (j, f'{name} init')
         v = [values[t.tid] for t in ins]; actual = [f'({prev} {t.tid})' for t in ins]
         def expressions(xs):
             if op == 'DATALOADER': return [f'{node}_port{p["port"]}' for p in feeds[i]['ports']]
@@ -455,6 +523,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op == 'FW_matmul': return [f'fw_matmul {xs[0]} {xs[1]}']
             if op == 'BW_matmul': return [f'(batchedMatmulBwd {xs[0]} {xs[1]} {xs[2]}).{p}' for p in (1, 2)]
             if op == 'FW_div': return [f'fw_div (({row["params"][0]} : Nat) : Scalar) {xs[0]}']
+            if op == 'BW_div': return [f'bw_div (({row["params"][0]} : Nat) : Scalar) {xs[0]}']
             if op == 'BW_sum': return [f'bw_sum {xs[0]} {xs[1]}']
             if op == 'FW_sum': return [f'fw_sum {xs[0]}']
             # Tensor has no storage/stride fields: contiguous is value identity.
@@ -536,7 +605,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
                 shape_proof = (f'  change (batchedMatmul {operands}).shape = _\n'
                                '  unfold batchedMatmul transpose2d\n'
                                f'  rw [{input_shapes[0]}, {input_shapes[2 if p == 0 else 1]}]\n  rfl')
-            elif op in ('FW_div', 'FW_contiguous', 'BW_contiguous', 'FW_gelu'):
+            elif op in ('FW_div', 'BW_div', 'FW_contiguous', 'BW_contiguous', 'FW_gelu'):
                 shape_proof = f'  exact {input_shapes[0]}'
             elif op == 'BW_softmax':
                 shape_proof = ('  unfold bw_softmax softmaxBwd softmaxBwdFromOutput softmax\n'
@@ -601,9 +670,11 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             lines.append(f'attribute [local irreducible] {vn}')
             opaque.append(vn)
             values[t.tid] = f'({vn} init)'; writers[t.tid] = (j, on); shape_proofs[t.tid] = f'{sn} init hInitShapes'
+            read_certificates.pop(t.tid, None)
         lines.append(f'attribute [local irreducible] {stem}State_{j+1}')
         opaque.append(f'{stem}State_{j+1}')
         group()
+
     selected = [r['index'] for r in rows]; length = len(rows); final = state(length)
     # Certificates share the exact existing computed Store endpoints.  Their
     # request lists are proof-only; the canonical graph and schedule stay intact.
