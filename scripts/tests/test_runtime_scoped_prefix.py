@@ -10,7 +10,7 @@ def proof_text(fed):
     return '\n'.join([*fed.supporting_sources.values(), fed.lean])
 
 
-def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None, tail=None, tail_fault=None):
+def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None, tail=None, tail_fault=None, scatter=None):
     """Independent raw IR + source-adapter snapshot, with actual CPU loader feeds."""
     import copy
     from types import SimpleNamespace as NS
@@ -204,6 +204,39 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
                     if tail == 'sum':
                         prev = layout_node(rank,71,'FW_sum',prev.outputs,[1],{})
                     layout_node(rank,72,'BW_sum',prev.outputs+m.outputs,out,{})
+    if scatter:
+        first = [c for c in cells if c.opname == 'AllToAllPrim']
+        ranks = list(reversed(range(k))) if scatter.get('reverse') else list(range(k))
+        dim = scatter.get('dim', 1)
+        if scatter.get('fault') == 'peer-shape' or scatter.get('fourdim'):
+            reshaped = []
+            for rank, src in enumerate(first):
+                sh = (1, 1, 2*k, 3) if scatter.get('fourdim') else ((1, 3, 2*k) if rank == 0 else (1, 2*k, 3))
+                t = T('p', rank, 0, 279, 1); pm.shapes[t] = sh
+                v = NS(node=N('p',rank,0,279,'FW_view'),rank=rank,opname='FW_view',
+                    kwargs=dict(size=sh),inputs=src.outputs,outputs=[t],
+                    _input_irs=[IR(src.outputs[0].tid,'activation',pm.shapes[src.outputs[0]])],
+                    _output_irs=[IR(t.tid,'activation',sh)])
+                cells.append(v); reshaped.append(v)
+            first = reshaped
+        scattered = []
+        for rank in range(k):
+            inputs = [first[r].outputs[0] for r in ranks]
+            sh = list(pm.shapes[inputs[0]]); sh[dim] //= k
+            t = T('p', rank, 0, 280, 1); pm.shapes[t] = tuple(sh)
+            rs = NS(node=N('p',rank,0,280,'ReduceScatterAllGatherPrim'), rank=rank,
+                opname='ReduceScatterPrim', kwargs=dict(ranks=ranks,dim=dim), inputs=inputs, outputs=[t])
+            cells.append(rs); scattered.append(rs)
+            y = T('p',rank,0,281,1); pm.shapes[y]=tuple(sh)
+            cells.append(NS(node=N('p',rank,0,281,'FW_contiguous'),rank=rank,
+                opname='FW_contiguous',kwargs={},inputs=[t],outputs=[y],
+                _input_irs=[IR(t.tid,'activation',tuple(sh))],_output_irs=[IR(y.tid,'activation',tuple(sh))]))
+        if scatter.get('fault') == 'shape': pm.shapes[scattered[0].outputs[0]] = (9,)
+        if scatter.get('fault') == 'rank': scattered[0].kwargs['ranks'] = [0]*k
+        if scatter.get('fault') == 'arity': scattered[0].inputs = scattered[0].inputs[:-1]
+        if scatter.get('fault') == 'axis': scattered[0].kwargs['dim'] = 9
+        if scatter.get('fault') == 'mean': scattered[0].kwargs['op'] = 'mean'
+        if scatter.get('fault') == 'peer-order': scattered[0].inputs = list(reversed(scattered[0].inputs))
     if tail_fault:
         op, mode, payload = tail_fault
         cell = next(c for c in cells if c.opname == op)
@@ -229,10 +262,10 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
                  call_instance=0,op=cell.opname,origin='nnscaler'),source_irname=cell.node.irname,
                  inputs=[dict(zip(fields,t)) for t in cell.inputs],outputs=[dict(zip(fields,t)) for t in cell.outputs])
         pr=copy.deepcopy(row)
-        if cell.opname in ('AllToAllPrim','AllGatherPrim'):
+        if cell.opname in ('AllToAllPrim','AllGatherPrim','ReduceScatterPrim'):
             row['adapter_kwargs']=copy.deepcopy(cell.kwargs)
-            pr['inputs']=[dict(zip(fields,cell.inputs[cell.rank]))]
-            pr['primitive']=dict(kind='AllToAllAllToAllPrim' if cell.opname=='AllToAllPrim' else 'AllGatherReduceScatterPrim',forward=True,kwargs=copy.deepcopy(cell.kwargs))
+            pr['inputs']=[dict(zip(fields,cell.inputs[cell.kwargs['ranks'].index(cell.rank)]))]
+            pr['primitive']=dict(kind='AllToAllAllToAllPrim' if cell.opname=='AllToAllPrim' else 'ReduceScatterAllGatherPrim' if cell.opname=='ReduceScatterPrim' else 'AllGatherReduceScatterPrim',forward=True,kwargs=copy.deepcopy(cell.kwargs))
         writers.append(row);prepared.append(pr)
     snapshot=build_snapshot(writers);snapshot['runtime_ndevs']=k;snapshot['adapter_source']=prepared
     bind_adapters(snapshot)
@@ -241,6 +274,103 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
     return bind(legacy,sv,pv,sm.cells,pm.cells,*source,root)
 
 class PrefixTests(unittest.TestCase):
+    def test_bounded_run_composition(self):
+        import re
+        from unittest.mock import patch
+        from Verdict import runtime_prefix
+        from itertools import product
+        for k, budget in product((2, 3), (1, 2, 3, 4, 7, 16)):
+            with self.subTest(k=k, budget=budget), tempfile.TemporaryDirectory() as d:
+                with patch.object(runtime_prefix, 'RUN_STEP_BUDGET', budget):
+                    fed = collective_world(Path(d), k, scatter={'dim': 1})
+                text = proof_text(fed)
+                p = fed.receipt['scoped_prefix']['pm']
+                if p['prefix_length'] > budget:
+                    self.assertIn('SourceScopedPrefix.runUsing_append', text)
+                leaves = re.findall(r'def pmPrefixRequests_(\d+)_(\d+) : List InputRequest := (\[[^\n]*\])', text)
+                covered = []
+                for a, b, body in leaves:
+                    a, b = int(a), int(b)
+                    self.assertLessEqual(b-a, budget)
+                    self.assertGreater(b, a)
+                    nodes = [int(n) for n in re.findall(r'\(pmNode_(\d+),', body)]
+                    self.assertEqual(nodes, p['prefix_nodes'][a:b])
+                    covered.extend(nodes)
+                    self.assertIn(f'(some (pmPrefixState_{a} init)) = some (pmPrefixState_{b} init)', text)
+                self.assertEqual(covered, p['prefix_nodes'])
+                self.assertIn(f'pmInputRequests.take {p["prefix_length"]} = pmPrefixRequests_0_{p["prefix_length"]}', text)
+
+    def test_interval_coverage_arbitrary_counts_and_labels(self):
+        import re
+        from types import SimpleNamespace as NS
+        from Verdict.runtime_prefix import _render, RUN_STEP_BUDGET
+        for label in ('sm', 'pm'):
+            for count in (2, 3, 4, 15, 16, 17, 31, 32, 33, 67):
+                with self.subTest(label=label, count=count):
+                    rows = []
+                    for j in range(count):
+                        rows.append(dict(index=2*j+1,
+                            op='DATALOADER' if j == 0 else 'AllToAllPrim' if j == 1 else 'FW_contiguous',
+                            ins=[] if j == 0 else [NS(tid=j-1)], outs=[NS(tid=j)],
+                            scope=NS(ranks=[0], local_index=0, params=(0, 0)),
+                            input_shapes=[] if j == 0 else [[1]], output_shapes=[[1]]))
+                    text, receipt = _render(label, rows,
+                        {1: dict(ports=[dict(port=0, shape=[1])])}, {}, None)
+                    stem = label+'Prefix'
+                    leaves = re.findall(r'def '+stem+r'Requests_(\d+)_(\d+) : List InputRequest := (\[[^\n]*\])', text)
+                    cursor = 0
+                    nodes = []
+                    for a, b, body in leaves:
+                        a, b = int(a), int(b)
+                        self.assertEqual(a, cursor)
+                        self.assertLessEqual(b-a, RUN_STEP_BUDGET)
+                        self.assertGreater(b, a)
+                        nodes.extend(int(n) for n in re.findall(r'\('+label+r'Node_(\d+),', body))
+                        cursor = b
+                    self.assertEqual(cursor, count)
+                    self.assertEqual(nodes, receipt['prefix_nodes'])
+                    self.assertEqual(len(nodes), len(set(nodes)))
+                    self.assertIn(f'{label}InputRequests.take {count} = {stem}Requests_0_{count}', text)
+
+    def test_reduce_scatter_computed_chain(self):
+        for k in (2, 3):
+            for reverse in (False, True):
+                with self.subTest(k=k, reverse=reverse), tempfile.TemporaryDirectory() as d:
+                    if reverse:
+                        with self.assertRaisesRegex(ValueError, 'ordered ranks'):
+                            collective_world(Path(d), k, scatter={'reverse': reverse})
+                        continue
+                    fed = collective_world(Path(d), k, scatter={'reverse': reverse})
+                    p = fed.receipt['scoped_prefix']['pm']
+                    self.assertIsNone(p['frontier'])
+                    self.assertEqual(p['prefix_nodes'], fed.receipt['execution_order']['pm']['execution_to_source'])
+                    self.assertEqual(p['output_shape'], [1, 2, 3])
+                    self.assertEqual(len(p['initial_premises']), k)
+                    self.assertIn(':= reduceScatterPrimDimN 1 ', proof_text(fed))
+                    self.assertIn('pmPrefixContinuation', proof_text(fed))
+
+
+    def test_reduce_scatter_source_controls(self):
+        for k in (2, 3):
+            for fault in ('rank', 'arity', 'axis', 'mean', 'peer-order'):
+                with self.subTest(k=k, fault=fault), tempfile.TemporaryDirectory() as d:
+                    with self.assertRaises(ValueError):
+                        collective_world(Path(d), k, scatter={'fault': fault})
+            for fault in ('shape', 'peer-shape'):
+                with self.subTest(k=k, fault=fault), tempfile.TemporaryDirectory() as d:
+                    with self.assertRaises(ValueError):
+                        collective_world(Path(d), k, scatter={'fault': fault})
+            for fourdim, dim in ((False, 2), (True, 2)):
+                with self.subTest(k=k, fourdim=fourdim, dim=dim), tempfile.TemporaryDirectory() as d:
+                    if k == 2 and not fourdim:
+                        with self.assertRaisesRegex(ValueError, 'not divisible'):
+                            collective_world(Path(d), k, scatter={'fourdim': fourdim, 'dim': dim})
+                        continue
+                    fed = collective_world(Path(d), k, scatter={'fourdim': fourdim, 'dim': dim})
+                    p = fed.receipt['scoped_prefix']['pm']
+                    self.assertIsNone(p['frontier'])
+                    self.assertEqual(p['output_shape'], [1,1,2,3] if fourdim else [1,6,1])
+
     def test_attention_matmul_computed_consumer_chain(self):
         for k in (2,3):
             for rank in (2,3,4):

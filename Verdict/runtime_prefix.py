@@ -11,6 +11,8 @@ from Verdict.runtime_lineage import _Index
 
 PROOF_BYTE_BUDGET = 40000
 PROOF_DECLARATION_BUDGET = 80
+# Bound fold elaboration independently of graph, operator and packing budgets.
+RUN_STEP_BUDGET = 16
 PREFIX_MODULE = 'TrainVerifyRuntimePrefix'
 _HEADER = '\n'.join(['namespace TrainVerify.Denote.RuntimeWorld',
     'noncomputable section', 'open SourceScopedEval',
@@ -89,7 +91,7 @@ def render(label, view, raw, world, loaders, *, structured=False):
         ins = view.node_inputs(n); outs = view.node_outputs(n)
         ss = dict(shapes); ii = dict(initial)
         try:
-            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum'):
+            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
                 raise PrefixUnavailable(missing[i], op=op)
@@ -111,14 +113,14 @@ def render(label, view, raw, world, loaders, *, structured=False):
                 output_shapes = [p['shape'] for p in feeds[i]['ports']]
             elif op == 'FW_embedding':
                 output_shapes = [ss[ins[0].tid] + [ss[ins[1].tid][-1]]]
-            elif op in ('ChunkPrim', 'AllToAllPrim'):
+            elif op in ('ChunkPrim', 'AllToAllPrim', 'ReduceScatterPrim'):
                 scope = (view.chunk_scopes if op == 'ChunkPrim' else view.collective_scopes)[n]
                 rs = list(scope.ranks); sh = ss[ins[0].tid].copy()
-                dim, odim = (scope.dim, scope.dim) if op == 'ChunkPrim' else scope.params
+                dim, odim = (scope.dim, scope.dim) if op == 'ChunkPrim' else ((scope.params[0], scope.params[0]) if op == 'ReduceScatterPrim' else scope.params)
                 if (len(outs) != 1 or len(ins) != (1 if op == 'ChunkPrim' else len(rs)) or
                         any(ss[t.tid] != sh for t in ins) or max(dim, odim) >= len(sh) or
                         sh[odim] <= 0 or sh[odim] % len(rs)):
-                    raise PrefixUnavailable('chunk-shape-contract' if op == 'ChunkPrim' else 'alltoall-shape-contract', computed_shapes=[ss[t.tid] for t in ins])
+                    raise PrefixUnavailable('chunk-shape-contract' if op == 'ChunkPrim' else 'reducescatter-shape-contract' if op == 'ReduceScatterPrim' else 'alltoall-shape-contract', computed_shapes=[ss[t.tid] for t in ins])
                 sh[odim] //= len(rs)
                 if op == 'AllToAllPrim': sh[dim] *= len(rs)
                 output_shapes = [sh]
@@ -267,6 +269,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
         def expressions(xs):
             if op == 'DATALOADER': return [f'{node}_port{p["port"]}' for p in feeds[i]['ports']]
             if op == 'FW_embedding': return [f'fw_embedding {xs[0]} {xs[1]}']
+            if op == 'ReduceScatterPrim': return [f'reduceScatterPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op in ('FW_view', 'FW_reshape'): return [f'fw_view {row["params"]} {xs[0]}']
             if op == 'FW_transpose': return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
@@ -300,7 +303,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
             update = f'AllToAllSourceFaithful.localStep {rs} {prev} {node} {dim} {odim}'
             proof = (f'by\n  change (AllToAllSourceFaithful.step {label}Graph (some {rs}) ({label}Peers {node}) {prev} {node}).toOption = _\n'
                      f'  rw [AllToAllSourceFaithful.step_valid _ _ _ _ _ {dim} {odim} {out.tid} (by decide) ({guard} init hInitShapes)]\n  rfl')
-        elif op in ('ChunkPrim', 'AllGatherPrim'):
+        elif op in ('ChunkPrim', 'AllGatherPrim', 'ReduceScatterPrim'):
             rs = list(scope.ranks)
             proof = (f'by\n  change GroupScopedEval.step {label}Graph (.group (some {rs})) {prev} {node} = _\n'
                      f'  rw [GroupScopedEval.step_scoped _ _ _ {rs} (by decide) (by rfl)]\n  rfl')
@@ -348,6 +351,13 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
                 dim, = scope.params
                 shape_proof = (f'  exact allGatherPrimDimN_shape {dim} {len(scope.ranks)} '
                                f'[{", ".join(v)}] {row["input_shapes"][0]} ({input_shapes[0]})')
+            elif op == 'ReduceScatterPrim':
+                shape_proof = (f'  unfold reduceScatterPrimDimN\n'
+                               f'  apply chunkPrimDimN_shape {scope.params[0]} {len(scope.ranks)} '
+                               f'{scope.local_index} _ {row["input_shapes"][0]}\n'
+                               f'  · rw [allReducePrim_shape _ _ _ {v[0]} rfl]\n'
+                               f'    exact {input_shapes[0]}\n'
+                               f'  · decide')
             elif op == 'ChunkPrim':
                 shape_proof = (f'  exact chunkPrimDimN_shape {scope.dim} {len(scope.ranks)} '
                                f'{scope.local_index} {v[0]} {row["input_shapes"][0]} '
@@ -377,10 +387,41 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
         opaque.append(f'{stem}State_{j+1}')
         group()
     selected = [r['index'] for r in rows]; length = len(rows); final = state(length)
+    # Certificates share the exact existing computed Store endpoints.  Their
+    # request lists are proof-only; the canonical graph and schedule stay intact.
+    # A balanced append tree bounds assembly without re-expanding earlier runs.
+    def requests(a, b): return f'{stem}Requests_{a}_{b}'
+    def run_name(a, b): return f'{stem}Run_{a}_{b}'
+    def interval(a, b):
+        req = requests(a, b)
+        if b - a <= RUN_STEP_BUDGET:
+            items = ', '.join(f'({label}Node_{i}, ' +
+                (f'some {label}Node_{i}_feed' if i in feeds else 'none') + ')'
+                for i in selected[a:b])
+            definition(f'def {req} : List InputRequest := [{items}]')
+            proof = f'by\n  simp only [{req}, runUsing, List.foldl_cons, List.foldl_nil, Option.bind_some]\n'
+            proof += '\n'.join(f'  rw [{steps[q]}]' +
+                ('\n  simp only [Option.bind_some]' if q < b-1 else '') for q in range(a, b))
+            if a == b:
+                proof = f'by\n  rfl'
+        else:
+            middle = a + (b - a) // 2
+            interval(a, middle); interval(middle, b)
+            definition(f'def {req} : List InputRequest := {requests(a, middle)} ++ {requests(middle, b)}')
+            proof = (f'by\n  unfold {req}\n'
+                     f'  rw [SourceScopedPrefix.runUsing_append, {run_name(a, middle)} init hInitShapes]\n'
+                     f'  exact {run_name(middle, b)} init hInitShapes')
+        theorem(run_name(a, b), f'{args} : runUsing {advance} {req} (some {state(a)}) = some {state(b)}', proof)
+        group()
+    if RUN_STEP_BUDGET < 1:
+        raise ValueError('run step budget must be positive')
+    interval(0, length)
+    theorem(stem+'RequestsCoverage',
+            f': {label}InputRequests.take {length} = {requests(0, length)}', 'by\n  rfl')
+    group()
     run = f'runUsing {advance} ({label}InputRequests.take {length}) (some init)'
     theorem(stem+'Success', f'{args} : {run} = some {final}',
-            'by\n  '+f'change runUsing {advance} [{", ".join(f"({label}Node_{i}, "+(f"some {label}Node_{i}_feed" if i in feeds else "none")+")" for i in selected)}] (some ({stem}State_0 init)) = _\n'+
-            '  simp only [runUsing, List.foldl_cons, List.foldl_nil, Option.bind_some]\n  '+ '\n  '.join(f'rw [{step}]'+('\n  simp only [Option.bind_some]' if q < len(steps)-1 else '') for q, step in enumerate(steps)))
+            f'by\n  rw [{stem}RequestsCoverage]\n  exact {run_name(0, length)} init hInitShapes')
     out = rows[-1]['outs'][-1]; sh = shapes_out = rows[-1]['output_shapes'][-1]
     theorem(stem+'Output', f'(init : Store) : {final} {out.tid} = {values[out.tid]}', f'{writers[out.tid][1]} init')
     theorem(stem+'OutputShape', f'{args} : ({final} {out.tid}).shape = {sh}', f'by\n  rw [{stem}Output]\n  exact {shape_proofs[out.tid]}')
