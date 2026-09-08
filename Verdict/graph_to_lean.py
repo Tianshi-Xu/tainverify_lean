@@ -61,6 +61,7 @@ def parse_args() -> argparse.Namespace:
 	p = argparse.ArgumentParser(description="Generate Lean spec (denotational) + coarse lineage goals")
 	p.add_argument("--sm-pkl", default=str(DEFAULT_SM_GRAPH), help="Path to SM graph pickle")
 	p.add_argument("--pm-pkl", default=str(DEFAULT_PM_GRAPH), help="Path to PM graph pickle")
+	p.add_argument("--runtime-rank-code-directory", help="Current gencode rank sources required for DP Chunk preflight; not value authority.")
 	p.add_argument(
 		"--out",
 		required=True,
@@ -308,6 +309,142 @@ def _lower_runtime_graphs(*graphs: Any) -> Tuple[_RuntimeGraphView, ...]:
 		refs.update(registered)
 	ids = {tensor: i for i, tensor in enumerate(sorted(refs))}
 	return tuple(_RuntimeGraphView(graph, ids) for graph in graphs)
+
+
+@dataclass(frozen=True)
+class _ChunkScope:
+	"""Internal conditional request; never runtime-value or public-proof authority."""
+	node: Any
+	source_writer: str
+	ranks: Tuple[int, ...]
+	local_index: int
+	dim: int
+	input_tid: int
+	output_tid: int
+	input_shape: Tuple[int, ...]
+	generated_read_binding: str
+	proof_admissible: bool = False
+
+
+def attach_chunk_scopes(view: _RuntimeGraphView, snapshot: Mapping[str, Any]) -> None:
+	"""Bind source evidence to independent raw DFG edges, then to compiler IDs."""
+	from copy import deepcopy
+	from trainverify.runtime_source_authority import validate_snapshot
+	view.chunk_scopes = {}
+	validate_snapshot(snapshot)
+	if snapshot['scope'] != 'source-only' or snapshot['proof_admissible'] is not False:
+		raise ValueError('Chunk requires source-only non-admissible authority')
+	if snapshot['runtime_ndevs'] != view.W.runtime_ndevs:
+		raise ValueError('Chunk source world size mismatch')
+	def ref(t):
+		return dict(zip(('world', 'runtime_rank', 'microbatch', 'source_tid', 'version'), t))
+	def key(w):
+		r = w['ref']
+		return (r['world'], r['runtime_rank'], r['microbatch'], r['source_cid'],
+			w['source_irname'], r['op'])
+	writers = {key(w): w for w in snapshot['writers']}
+	if len(writers) != len(snapshot['writers']):
+		raise ValueError('ambiguous Chunk source writer identity')
+	# Match the producer inventory independently, not merely the snapshot's own digest.
+	calls = {}
+	for node in view.source.nodes():
+		op = str(view.source.node_opname(node)).split('.')[-1]
+		w = writers.get((*node, op))
+		if w is None:
+			raise ValueError('Chunk source writer differs from raw DFG')
+		occurrence = (*node[:4], w['ref']['origin'])
+		if w['ref']['call_instance'] != calls.get(occurrence, 0):
+			raise ValueError('Chunk source writer occurrence mismatch')
+		calls[occurrence] = calls.get(occurrence, 0) + 1
+		for field, method in (('inputs', 'node_inputs'), ('outputs', 'node_outputs')):
+			if [ref(t) for t in getattr(view.source, method)(node)] != w[field]:
+				raise ValueError('Chunk source writer full-reference mismatch')
+	if len(writers) != len(view.source.nodes()):
+		raise ValueError('Chunk source writer inventory mismatch')
+	bound = {}
+	for node in view.source.nodes():
+		op = str(view.source.node_opname(node)).split('.')[-1]
+		if op != 'ChunkPrim':
+			continue
+		w = writers.get((*node, op))
+		if w is None:
+			raise ValueError('missing Chunk source writer')
+		c = w.get('chunk_scope', {})
+		if c.get('status') != 'bound' or c.get('source_writer') != w['export_id']:
+			raise ValueError('unbound Chunk source scope')
+		if c.get('generated_read_binding') not in ('complete', 'missing'):
+			raise ValueError('rejected Chunk generated read authority')
+		for field, method in (('inputs', 'node_inputs'), ('outputs', 'node_outputs')):
+			raw = getattr(view.source, method)(node)
+			lowered = getattr(view, method)(node)
+			if (len(raw) != 1 or [ref(t) for t in raw] != w[field] or c[field] != w[field]
+					or [view.source_tensor(t) for t in lowered] != raw):
+				raise ValueError('Chunk full-reference/ordered edge mismatch')
+		ranks, dim = tuple(c['ranks']), c['dim']
+		kw = view.source.node_kwargs(node)
+		if kw.get('ranks') != list(ranks) or kw.get('dim') != dim:
+			raise ValueError('Chunk raw DFG scope mismatch')
+		if (not ranks or ranks != tuple(sorted(set(ranks)))
+				or any(type(r) is not int or not 0 <= r < view.W.runtime_ndevs for r in ranks)
+				or node.rank not in ranks or c['cardinality'] != len(ranks)
+				or c['local_index'] != ranks.index(node.rank)):
+			raise ValueError('invalid Chunk ordered rank scope')
+		x, = view.node_inputs(node)
+		y, = view.node_outputs(node)
+		ish, osh = tuple(view.tensor_shape(x)), tuple(view.tensor_shape(y))
+		if (type(dim) is not int or not 0 <= dim < len(ish)
+				or any(type(d) is not int or d <= 0 for d in (*ish, *osh))
+				or ish[dim] % len(ranks) != 0):
+			raise ValueError('Chunk input/output shape must be positive and divisible')
+		expected = list(ish); expected[dim] //= len(ranks)
+		if list(osh) != expected:
+			raise ValueError('Chunk output shape differs from expected chunk size')
+		bound[node] = _ChunkScope(node, w['export_id'], ranks, c['local_index'], dim,
+			x.tid, y.tid, tuple(view.tensor_shape(x)), c['generated_read_binding'])
+	if len(bound) != sum(w['ref']['op'] == 'ChunkPrim' for w in snapshot['writers']):
+		raise ValueError('Chunk source/DFG inventory mismatch')
+	view.chunk_scopes = bound
+	view._chunk_source = deepcopy(snapshot)
+
+
+def _load_chunk_source(capture: str, rank_code_directory: str):
+	from nnscaler_backend.runtime_source_authority import load_capture
+	return load_capture(capture, rank_code_directory=rank_code_directory)
+
+
+def emit_chunk_scope_certificates(view: _RuntimeGraphView) -> str:
+	"""Emit per-original-node conditional steps, not a replacement graph or proof."""
+	if not hasattr(view, '_chunk_source'):
+		raise ValueError('missing attached Chunk scopes')
+	claimed = dict(view.chunk_scopes)
+	attach_chunk_scopes(view, view._chunk_source)
+	if claimed != view.chunk_scopes or view.nodes() != list(view.source.nodes()):
+		raise ValueError('Chunk attached scope/node mismatch')
+	lines = ['import denote.GroupScopedEval', 'namespace TrainVerify.Denote.ChunkCompiler',
+		'set_option maxHeartbeats 500000', 'noncomputable section',
+		'-- Conditional source-only certificates. Input values remain unproved.']
+	for i, node in enumerate(view.nodes()):
+		if node not in view.chunk_scopes:
+			continue
+		c = view.chunk_scopes[node]
+		rs, sh = str(list(c.ranks)), str(list(c.input_shape))
+		lines.extend([
+			f'-- original node {node!r}; source writer {c.source_writer}',
+			f'-- generated_read_binding={c.generated_read_binding}; proof_admissible=false',
+			f'theorem chunk_{i} (g : GraphDecl) (s : Store)',
+			f'    (hworld : g.numRanks = {view.W.runtime_ndevs})',
+			f'    (hshape : (s {c.input_tid}).shape = {sh}) :',
+			f'    GroupScopedEval.step g (.group (some {rs})) s',
+			f'      {{rank := {node.rank}, op := "OpName.ChunkPrim", ins := [{c.input_tid}], outs := [{c.output_tid}], params := [{c.dim}]}} =',
+			f'    some (storeSet s [({c.output_tid}, chunkPrimDimN {c.dim} {len(c.ranks)} {c.local_index} (s {c.input_tid}))]) := by',
+			f'  apply GroupScopedEval.chunk_out g s {node.rank} {rs} {c.input_tid} {c.output_tid} {c.dim}',
+			'  · rw [hworld]; decide',
+			'  · unfold GroupScopedEval.ChunkInput',
+			'    rw [hshape]',
+			'    decide',
+			f'#print axioms chunk_{i}', ''])
+	lines.extend(['end', 'end TrainVerify.Denote.ChunkCompiler', ''])
+	return '\n'.join(lines)
 
 
 def infer_coarse_lineages_from_expanded(GsE: Any, GpE: Any) -> List[Any]:
@@ -4138,6 +4275,14 @@ def _generate(args: argparse.Namespace) -> None:
 	# the raw-tid quotient, even for definitions-only exports.
 	if any(G.W.num_dp != 1 or G.W.num_mb != 1 for G in (GsE, GpE)):
 		GsE, GsC, GpE = _lower_runtime_graphs(GsE, GsC, GpE)
+		if any(str(GpE.node_opname(n)).split('.')[-1] == 'ChunkPrim' for n in GpE.nodes()):
+			code_dir = getattr(args, 'runtime_rank_code_directory', None)
+			if not code_dir:
+				raise ValueError('missing current rank source for DP Chunk scope; no global fallback')
+			attach_chunk_scopes(GpE, _load_chunk_source(args.pm_pkl, code_dir))
+			GpE.chunk_conditional_lean = emit_chunk_scope_certificates(GpE)
+			print(f'[graph_to_lean] validated {len(GpE.chunk_scopes)} conditional Chunk steps; '
+				'input values unproved; remaining DP lineage/other scoped evaluators unavailable', flush=True)
 	sm_logical_ids, pm_logical_ids = aligned_logical_node_ids(GsE, GpE)
 
 	t0 = time.perf_counter()
