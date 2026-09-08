@@ -123,16 +123,16 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
     result['input_feed'] = dict(run_id=run,loaders=inventory,slots=slots,source_validated=True,
         integer_encoding_emitted=True,kernel_value_proved=False,kernel_checks=theorem_names,
         whole_world_option_success=False,torch_refinement=False,historicalcapture_sample_association=False)
-    from Verdict.runtime_prefix import render as render_prefix
+    from Verdict.runtime_prefix import render as render_prefix, pack_proofs
     prefixes = []; result['scoped_prefix'] = {}
     for label, view, raw in [('sm', sm, raw_sm), ('pm', pm, raw_pm)]:
-        text, detail = render_prefix(label, view, raw, world, inventory)
+        text, detail = render_prefix(label, view, raw, world, inventory, structured=True)
         result['scoped_prefix'][label] = detail
         if text: prefixes.append(text)
     base = world.lean+'\n'+'\n'.join(lines)
     if not prefixes:
         return WorldDefinitions(base, result)
-    entry = f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\n' + '\n'.join(prefixes)
-    supporting = {WORLD_DATA_FILE: base}
+    entry, chunks = pack_proofs(prefixes)
+    supporting = {WORLD_DATA_FILE: base, **chunks}
     result['proof_bundle'] = _proof_bundle(entry, supporting)
     return WorldDefinitions(entry, result, supporting)

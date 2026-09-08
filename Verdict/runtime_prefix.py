@@ -5,7 +5,66 @@ actual feeds and arbitrary initial weights, in one Store chain. Unsupported node
 are frontiers, never skipped. Small read/value-shape lemmas bound elaboration.
 """
 from math import prod
+from dataclasses import dataclass
 from Verdict.runtime_lineage import _Index
+
+
+PROOF_BYTE_BUDGET = 40000
+PROOF_DECLARATION_BUDGET = 80
+PREFIX_MODULE = 'TrainVerifyRuntimePrefix'
+_HEADER = '\n'.join(['namespace TrainVerify.Denote.RuntimeWorld',
+    'noncomputable section', 'open SourceScopedEval',
+    'set_option maxHeartbeats 500000', 'set_option maxRecDepth 4096']) + '\n'
+_FOOTER = '\nend\nend TrainVerify.Denote.RuntimeWorld\n'
+
+
+@dataclass(frozen=True)
+class ProofGroup:
+    """An indivisible initializer, node proof, or final assembly declaration group."""
+    text: str
+    declarations: int
+    opaque: tuple
+    final: bool = False
+
+
+def pack_proofs(prefixes):
+    """Maximal sequential packing; every edge imports the actual prior chain.
+
+    Budgets cover declaration bodies (import/local-attribute scaffolding is not
+    a declaration). A single oversized group is an error, never split by syntax.
+    """
+    from Verdict.runtime_world import WORLD_DATA_MODULE
+    imports = f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\n'
+    groups = [g for prefix in prefixes for g in prefix]
+    def fits(gs):
+        return (sum(len(g.text.encode('utf-8')) for g in gs) <= PROOF_BYTE_BUDGET
+                and sum(g.declarations for g in gs) <= PROOF_DECLARATION_BUDGET)
+    if any(not fits([g]) for g in groups):
+        raise ValueError('prefix atomic declaration group exceeds proof budget')
+    if fits(groups):
+        return imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER, {}
+    chunks = []; current = []; finals = []
+    for g in groups:
+        if g.final:
+            finals.append(g)
+            continue
+        if current and not fits(current + [g]):
+            chunks.append(current); current = []
+        current.append(g)
+    if current: chunks.append(current)
+    if not fits(finals):
+        raise ValueError('prefix final assembly exceeds proof budget')
+    supporting = {}; opaque = []; previous = None
+    def source(gs):
+        edge = f'import {previous}\n' if previous else ''
+        attrs = ''.join(f'attribute [local irreducible] {n}\n' for n in opaque)
+        return imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + _FOOTER
+    for index, chunk in enumerate(chunks):
+        name = f'{PREFIX_MODULE}{index:04d}'
+        supporting[name+'.lean'] = source(chunk)
+        opaque.extend(n for g in chunk for n in g.opaque)
+        previous = name
+    return source(finals), supporting
 
 
 class PrefixUnavailable(ValueError):
@@ -14,7 +73,7 @@ class PrefixUnavailable(ValueError):
         self.details = dict(status='prefix-proof-unavailable', reason=reason, **details)
 
 
-def render(label, view, raw, world, loaders):
+def render(label, view, raw, world, loaders, *, structured=False):
     """Called after bind's canonical world and raw/feed authentication."""
     order = world.receipt['execution_order'][label]['execution_to_source']
     if not any(str(view.node_opname(view.nodes()[i])).split('.')[-1]
@@ -30,7 +89,7 @@ def render(label, view, raw, world, loaders):
         ins = view.node_inputs(n); outs = view.node_outputs(n)
         ss = dict(shapes); ii = dict(initial)
         try:
-            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose'):
+            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
                 raise PrefixUnavailable(missing[i], op=op)
@@ -104,6 +163,26 @@ def render(label, view, raw, world, loaders):
                     if target != params:
                         raise PrefixUnavailable('layout-source-params')
                 output_shapes = [target]
+            elif op in ('FW_matmul', 'FW_div', 'FW_softmax'):
+                from Verdict import graph_to_lean as c
+                from Verdict.runtime_world import _ordinary
+                params, reason = _ordinary(view, n, c._get_node_params)
+                if reason:
+                    raise PrefixUnavailable(reason)
+                sh = ss[ins[0].tid]
+                if op == 'FW_matmul':
+                    other = ss[ins[1].tid]
+                    # Denote indexes both operands with the same flat batch
+                    # offset. Broadcasting (even singleton batches) is not its
+                    # semantics. Infer only from computed operand shapes.
+                    if (len(sh) not in (2, 3, 4) or len(other) != len(sh)
+                            or sh[:-2] != other[:-2] or sh[-1] != other[-2]):
+                        raise PrefixUnavailable('matmul-shape-contract', computed_shapes=[sh, other])
+                    output_shapes = [sh[:-1] + [other[-1]]]
+                else:
+                    if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
+                        raise PrefixUnavailable('softmax-shape-contract')
+                    output_shapes = [sh]
             elif op == 'FW_linear':
                 sh, weight = (ss[t.tid] for t in ins)
                 if len(sh) not in (2, 3) or len(weight) != 2 or sh[-1] != weight[1]:
@@ -136,11 +215,20 @@ def render(label, view, raw, world, loaders):
         return '', dict(frontier or dict(status='prefix-proof-unavailable', reason='no-supported-guard'),
                         prefix_nodes=[r['index'] for r in rows], frontier=frontier,
                         whole_world_option_success=False)
-    return _render(label, rows, feeds, initial, frontier)
+    return _render(label, rows, feeds, initial, frontier, structured=structured)
 
 
-def _render(label, rows, feeds, initial, frontier):
+def _render(label, rows, feeds, initial, frontier, *, structured=False):
     stem = label + 'Prefix'; lines = []; names = []; guards = []; steps = []
+    groups = []; definitions = []; opaque = []; group_start = 0
+    def definition(text):
+        definitions.append(text)
+        lines.append(text)
+    def group(final=False):
+        nonlocal group_start
+        groups.append(ProofGroup('\n'.join(lines), len(definitions) + len(names) - group_start,
+                                 tuple(opaque), final))
+        lines.clear(); definitions.clear(); opaque.clear(); group_start = len(names)
     values = {tid: f'(init {tid})' for tid in initial}; writers = {}; shape_proofs = {}
     def state(j): return f'({stem}State_{j} init)'
     def theorem(name, args, proof):
@@ -149,16 +237,15 @@ def _render(label, rows, feeds, initial, frontier):
     advance = f'(fun row s => stepWithInputs {label}Graph ({label}Scope row.1) ({label}Peers row.1) s row.1 row.2)'
     args = f'(init : Store) (hInitShapes : {stem}InitShapes init)'
     goal = ' ∧ '.join(f'(init {p["tid"]}).shape = {p["shape"]}' for p in initial.values()) or 'True'
-    lines += ['namespace TrainVerify.Denote.RuntimeWorld', 'noncomputable section',
-              'open SourceScopedEval', 'set_option maxHeartbeats 500000', 'set_option maxRecDepth 4096',
-              f'def {stem}InitShapes (init : Store) : Prop := {goal}',
-              f'def {stem}State_0 (init : Store) : Store := init']
+    definition(f'def {stem}InitShapes (init : Store) : Prop := {goal}')
+    definition(f'def {stem}State_0 (init : Store) : Store := init')
     hs = [f'h{q}' for q in range(len(initial))]
     destruct = f'  rcases hInitShapes with ⟨{", ".join(hs)}⟩\n' if len(hs)>1 else ('  have h0 := hInitShapes\n' if hs else '')
     for q, (tid, p) in enumerate(initial.items()):
         name = f'{stem}InitialShape_{q}'
         theorem(name, f'{args} : (init {tid}).shape = {p["shape"]}', 'by\n'+destruct+f'  exact h{q}')
         shape_proofs[tid] = f'{name} init hInitShapes'
+    group()
     for j, row in enumerate(rows):
         i, op, ins, outs, scope = (row[k] for k in ('index','op','ins','outs','scope'))
         node = f'{label}Node_{i}'; prev = state(j); nxt = state(j+1)
@@ -178,6 +265,9 @@ def _render(label, rows, feeds, initial, frontier):
             if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op in ('FW_view', 'FW_reshape'): return [f'fw_view {row["params"]} {xs[0]}']
             if op == 'FW_transpose': return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
+            if op == 'FW_matmul': return [f'fw_matmul {xs[0]} {xs[1]}']
+            if op == 'FW_div': return [f'fw_div (({row["params"][0]} : Nat) : Scalar) {xs[0]}']
+            if op == 'FW_softmax': return [f'fw_softmax {xs[0]}']
             if op == 'FW_linear': return [f'fw_linear {xs[0]} {xs[1]}']
             if op == 'FW_layernorm': return [f'fw_layernorm {xs[0]} {xs[1]} {xs[2]}']
             if op == 'ChunkPrim': return [f'chunkPrimDimN {scope.dim} {len(scope.ranks)} {scope.local_index} {xs[0]}']
@@ -186,7 +276,7 @@ def _render(label, rows, feeds, initial, frontier):
             return [xs[0]] * len(outs)
         pure, computed = expressions(v), expressions(actual)
         for p, value in enumerate(pure):
-            lines.append(f'def {stem}Value_{j}_{p} (init : Store) : Tensor := {value}')
+            definition(f'def {stem}Value_{j}_{p} (init : Store) : Tensor := {value}')
         feed = f'(some {node}_feed)' if op == 'DATALOADER' else 'none'
         update = f'storeSet {prev} ['+', '.join(f'({t.tid}, {value})' for t, value in zip(outs, computed))+']'
         if op == 'DATALOADER':
@@ -207,7 +297,7 @@ def _render(label, rows, feeds, initial, frontier):
                      f'  rw [GroupScopedEval.step_scoped _ _ _ {rs} (by decide) (by rfl)]\n  rfl')
         else:
             proof = 'by\n  change some (applyNode _ _ _) = _\n  rfl'
-        lines.append(f'def {stem}State_{j+1} (init : Store) : Store := {update}')
+        definition(f'def {stem}State_{j+1} (init : Store) : Store := {update}')
         condition = op == 'AllToAllPrim'
         theorem(f'{stem}Step_{j}', f'{args if condition else "(init : Store)"} : stepWithInputs {label}Graph ({label}Scope {node}) ({label}Peers {node}) {prev} {node} {feed} = some {nxt}', proof)
         steps.append(f'{stem}Step_{j} init'+(' hInitShapes' if condition else ''))
@@ -230,6 +320,14 @@ def _render(label, rows, feeds, initial, frontier):
             elif op == 'FW_transpose':
                 shape_proof = ('  change listSwapAt _ _ _ = _\n'
                                f'  rw [{input_shapes[0]}]\n  rfl')
+            elif op == 'FW_matmul':
+                shape_proof = ('  unfold fw_matmul batchedMatmul\n'
+                               f'  rw [{input_shapes[0]}, {input_shapes[1]}]\n  rfl')
+            elif op == 'FW_div':
+                shape_proof = f'  exact {input_shapes[0]}'
+            elif op == 'FW_softmax':
+                shape_proof = ('  unfold fw_softmax softmax\n'
+                               f'  split <;> exact {input_shapes[0]}')
             elif op == 'FW_layernorm':
                 shape_proof = ('  rw [SourceScopedPrefix.layernorm_shape]\n'
                                f'  exact {input_shapes[0]}')
@@ -264,8 +362,11 @@ def _render(label, rows, feeds, initial, frontier):
             # recursively evaluate normalization or matrix entries. Local only:
             # the generated value definitions and exported statements are unchanged.
             lines.append(f'attribute [local irreducible] {vn}')
+            opaque.append(vn)
             values[t.tid] = f'({vn} init)'; writers[t.tid] = (j, on); shape_proofs[t.tid] = f'{sn} init hInitShapes'
         lines.append(f'attribute [local irreducible] {stem}State_{j+1}')
+        opaque.append(f'{stem}State_{j+1}')
+        group()
     selected = [r['index'] for r in rows]; length = len(rows); final = state(length)
     run = f'runUsing {advance} ({label}InputRequests.take {length}) (some init)'
     theorem(stem+'Success', f'{args} : {run} = some {final}',
@@ -278,8 +379,9 @@ def _render(label, rows, feeds, initial, frontier):
             f'SourceScopedPrefix.frame {label}Graph {label}Scope {label}Peers _ init {final} tid ht ({stem}Success init hInitShapes)')
     theorem(stem+'Continuation', f'{args} : {label}DenoteWithInputs init = runUsing {advance} ({label}InputRequests.drop {length}) (some {final})',
             f'by\n  rw [{label}DenoteWithInputs_entry]\n  exact SourceScopedPrefix.continuation _ _ {length} init {final} ({stem}Success init hInitShapes)')
-    lines += ['end', 'end TrainVerify.Denote.RuntimeWorld', '']
-    return '\n'.join(lines), dict(status='conditional-prefix-emitted', prefix_nodes=selected,
+    group(final=True)
+    text = groups if structured else _HEADER + '\n'.join(g.text for g in groups) + _FOOTER
+    return text, dict(status='conditional-prefix-emitted', prefix_nodes=selected,
         prefix_length=length, boundary_index=guards[-1]['index'], guards=guards, frontier=frontier,
         initial_premises=list(initial.values()), output_tid=out.tid, output_shape=shapes_out,
         kernel_checks=names, kernel_checked=False, whole_world_option_success=False, external_adapter_proved=False)
