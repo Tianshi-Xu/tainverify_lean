@@ -542,10 +542,9 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             # An overwrite below invalidates this entry, including every port.
             if t.tid in read_certificates:
                 stop, anchor = read_certificates[t.tid]
-            proof = 'by\n'
-            for start, end in read_intervals(stop, j):
-                proof += f'  rw [{no_write(start, end)} init {t.tid} (by decide)]\n'
-            proof += f'  exact {anchor}' if anchor is not None else '  rfl'
+            proof = anchor if anchor is not None else 'rfl'
+            for start, end in reversed(list(read_intervals(stop, j))):
+                proof = f'prefixRead ({no_write(start, end)} init) ({proof})'
             theorem(name, f'(init : Store) : {prev} {t.tid} = {values[t.tid]}', proof)
             read_certificates[t.tid] = (j, f'{name} init')
         v = [values[t.tid] for t in ins]; actual = [f'({prev} {t.tid})' for t in ins]
@@ -619,7 +618,8 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
         for p, (t, value, sh) in enumerate(zip(outs, computed, row['output_shapes'])):
             vn = f'{stem}Value_{j}_{p}'; on = f'{stem}Written_{j}_{p}'; sn = f'{stem}Shape_{j}_{p}'
             theorem(on, f'(init : Store) : {nxt} {t.tid} = {vn} init',
-                    f'by\n  change {value} = {vn} init\n  simp only [{vn}'+(', '+', '.join(reads) if reads else '')+']')
+                    f'by\n  unfold {stem}State_{j+1}\n' + wrappers +
+                    f'  simp only [storeSet, List.find?, List.map, Nat.reduceEqDiff, decide_true, decide_false, {vn}'+(', '+', '.join(reads) if reads else '')+'] <;> rfl')
             # Project shape through this operator only. Never simplify a nested
             # value graph: real-width normalization/linear arithmetic is costly
             # even though it is irrelevant to this theorem.

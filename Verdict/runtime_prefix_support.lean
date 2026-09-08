@@ -30,4 +30,11 @@ theorem prefixFrame_trans (s0 s1 s2 : Store) (xs ys : List Tid)
   have hn : t ∉ xs ∧ t ∉ ys := by simpa only [List.mem_append, not_or] using h
   exact (hy t hn.2).trans (hx t hn.1)
 #print axioms prefixFrame_trans
+
+-- Infer the concrete Tid from the unchanged goal; decide every full footprint.
+theorem prefixRead {s0 s1 : Store} {xs : List Tid} {tid : Tid} {v : Tensor}
+    (frame : ∀ t, t ∉ xs → s1 t = s0 t) (anchor : s0 tid = v)
+    (h : tid ∉ xs := by decide) : s1 tid = v :=
+  (frame tid h).trans anchor
+#print axioms prefixRead
 end TrainVerify.Denote
