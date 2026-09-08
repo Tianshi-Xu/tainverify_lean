@@ -319,7 +319,156 @@ def _bind_generated_adapters(snapshot, adapters, writers):
     if covered != inventory:
         raise ValueError("generated primitive inventory coverage mismatch")
     _bind_generated_readpoints(snapshot, adapters, writers)
+    _bind_backward_contexts(snapshot, adapters, writers)
     return mismatch
+
+
+def _runtime_autograd_context(runtime, call):
+    """Interpret straight-line ctx plumbing only; collective values are symbolic."""
+    import ast
+    wrapper, = ast.parse(runtime["wrapper_source"]).body
+    cls, = ast.parse(runtime["class_source"]).body
+    if (not isinstance(wrapper, ast.FunctionDef) or not isinstance(cls, ast.ClassDef)
+            or wrapper.name != call["signature"].rsplit(".", 1)[-1]
+            or cls.name != runtime["class_name"] or len(wrapper.body) != 1
+            or not isinstance(wrapper.body[0], ast.Return)):
+        raise ValueError("unsupported wrapper/class source")
+    dispatch = wrapper.body[0].value
+    if (not isinstance(dispatch, ast.Call) or ast.unparse(dispatch.func) != cls.name + ".apply"
+            or dispatch.keywords):
+        raise ValueError("runtime dispatch differs from captured Function")
+    if any(not isinstance(arg, ast.Name) for arg in dispatch.args):
+        raise ValueError("unsupported wrapper dispatch argument expression")
+    names = [a.arg for a in wrapper.args.args]
+    env = dict(zip(names, ["primal"] + [call["kwargs"][n] for n in names[1:]]))
+    effects = []
+    def value(node, env, slots):
+        if isinstance(node, ast.Name):
+            return env[node.id]
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Attribute) and ast.unparse(node.value) == "ctx":
+            return slots[node.attr]
+        if isinstance(node, (ast.Tuple, ast.List)):
+            return [value(n, env, slots) for n in node.elts]
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.keywords:
+            signatures = {"all_reduce": ("AllReducePrim", ["ranks"]),
+                "all_gather": ("AllGatherPrim", ["dim", "ranks"]),
+                "reduce_scatter": ("ReduceScatterPrim", ["dim", "ranks"]),
+                "all_to_all": ("AllToAllPrim", ["idim", "odim", "ranks"]),
+                "all_to_all_single": ("AllToAllPrim", ["idim", "odim", "ranks"])}
+            op, params = signatures[node.func.id]
+            args = [value(n, env, slots) for n in node.args]
+            if len(args) != len(params) + 1:
+                raise ValueError("unsupported collective arity")
+            effect = dict(op=op, function=node.func.id, tensor=args[0], kwargs=dict(zip(params, args[1:])))
+            effects.append(effect)
+            return effect
+        raise ValueError("unsupported ctx expression")
+    actuals = [value(n, env, {}) for n in dispatch.args]
+    slots = {}
+    def run(method, actuals, save):
+        first_effect = len(effects)
+        args = [a.arg for a in method.args.args]
+        if args[0] != "ctx" or len(args) != len(actuals) + 1:
+            raise ValueError("unsupported Function argument binding")
+        env = dict(zip(args[1:], actuals))
+        def assign(target, v):
+            if isinstance(target, ast.Name):
+                env[target.id] = v
+            elif isinstance(target, ast.Attribute) and ast.unparse(target.value) == "ctx" and save:
+                slots[target.attr] = v
+            elif isinstance(target, (ast.Tuple, ast.List)) and isinstance(v, list) and len(target.elts) == len(v):
+                for t, item in zip(target.elts, v):
+                    assign(t, item)
+            else:
+                raise ValueError("unsupported ctx assignment")
+        for i, stmt in enumerate(method.body):
+            if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+                assign(stmt.targets[0], value(stmt.value, env, slots))
+            elif isinstance(stmt, ast.Return) and i == len(method.body) - 1:
+                result = value(stmt.value, env, slots)
+                if len(effects) - first_effect != 1:
+                    raise ValueError("unsupported Function: expected exactly one collective effect")
+                return result
+            else:
+                raise ValueError("unsupported Function control flow")
+        raise ValueError("missing Function return")
+    fw, = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "forward"]
+    bw, = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "backward"]
+    forward = run(fw, actuals, True)
+    backward = run(bw, ["output-gradient"], False)
+    if (not isinstance(forward, dict) or forward["tensor"] != "primal"
+            or not isinstance(backward, list) or len(backward) != len(actuals)
+            or any(v is not None for v in backward[1:])
+            or not isinstance(backward[0], dict) or backward[0]["tensor"] != "output-gradient"):
+        raise ValueError("unsupported Function gradient return")
+    # Independently observed live Function bytecode global references retain the
+    # actual dispatched implementation, not merely an equivalent primitive name.
+    function = backward[0]["function"]
+    binding = runtime["backward_global_functions"].get(function)
+    if (binding is None or binding["name"] != function
+            or binding["module"] != "nnscaler.runtime.adapter.collectives"):
+        raise ValueError("backward collective function differs from runtime dispatch")
+    return dict(class_name=cls.name, source_file=runtime["source_file"],
+                backward_function_source=binding,
+                ctx_slots=slots, forward=forward, backward=backward[0])
+
+
+def _bind_backward_contexts(snapshot, adapters, writers):
+    """IR mirror/gradient ports and source structure, never a BW value proof."""
+    from copy import deepcopy
+    rows = {writer_export_id(r["ref"]): r for r in snapshot["adapter_source"]}
+    for row in adapters:
+        if row["primitive"]["forward"]:
+            continue
+        a = writers[writer_export_id(row["ref"])]["adapter"]
+        result = dict(status="missing", gradient_value_proved=False,
+                      reason="missing independent autograd mirror source")
+        try:
+            ctx = row["autograd"]
+            fw_id = writer_export_id(ctx["forward_writer"])
+            fw = rows[fw_id]
+            fa = writers[fw_id]["adapter"]
+            bi, fi = row["adapter_identity"], fw["adapter_identity"]
+            if (bi["forward"] is not False or fi["forward"] is not True
+                    or bi["cid"] != row["ref"]["source_cid"] or fi["cid"] != fw["ref"]["source_cid"]
+                    or bi["mirror_cid"] != fi["cid"] or fi["mirror_cid"] != bi["cid"]
+                    or any(fw["ref"][k] != row["ref"][k] for k in ("world", "runtime_rank", "microbatch"))
+                    or ctx["forward_inputs"] != fw["inputs"] or ctx["forward_outputs"] != fw["outputs"]
+                    or ctx["mirror_inputs"] != fi["inputs"] or ctx["mirror_outputs"] != fi["outputs"]
+                    or ctx["mirror_input_grads"] != fi["input_grads"]
+                    or ctx["mirror_output_grads"] != fi["output_grads"]
+                    or [t["source_tid"] for t in row["inputs"]] != fi["output_grads"]
+                    or [t["source_tid"] for t in row["outputs"]] != fi["input_grads"]
+                    or bi["inputs"] != fi["output_grads"] or bi["outputs"] != fi["input_grads"]):
+                raise ValueError("IR mirror/primal-gradient port correspondence differs")
+            call, fcall = a["generated_call"], fa["generated_call"]
+            if (not fw["primitive"]["forward"] or fa["generated_read_binding"] != "complete"
+                    or {k: v for k, v in call.items() if k != "forward"} != {k: v for k, v in fcall.items() if k != "forward"}
+                    or call["status"] != "bound"):
+                raise ValueError("unique forward generated call/read context missing")
+            runtime = _runtime_autograd_context(ctx["runtime"], fcall)
+            if (runtime["backward"]["op"] != row["ref"]["op"]
+                    or runtime["backward"]["kwargs"] != dict(a["parameters"], ranks=a["ranks"])
+                    or runtime["forward"]["op"] != fw["ref"]["op"]
+                    or runtime["forward"]["kwargs"] != dict(fa["parameters"], ranks=fa["ranks"])):
+                raise ValueError("runtime ctx effective collective/ranks/dimensions differ")
+            for point in a["local_read_points"]:
+                producer = rows.get(point["writer"])
+                if producer is None or point["ref"] not in producer["outputs"]:
+                    raise ValueError("current prepared gradient producer missing")
+            result = dict(status="structurally-bound", gradient_value_proved=False,
+                reason="gradient computation/value provenance not proved", forward_writer=fw_id,
+                forward_call=deepcopy(fcall), forward_inputs=deepcopy(fw["inputs"]),
+                forward_outputs=deepcopy(fw["outputs"]), input_gradient=deepcopy(row["outputs"]),
+                output_gradient=deepcopy(row["inputs"]),
+                gradient_read_points=deepcopy(a["local_read_points"]), runtime=runtime)
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError, SyntaxError) as exc:
+            result["reason"] = "missing/rejected backward context: " + str(exc)
+        a["backward_context"] = result
+        if result["status"] == "structurally-bound":
+            a["generated_read_missing"] = "missing: backward gradient computation/value provenance not proved; ctx/source structurally bound"
 
 
 def _bind_generated_readpoints(snapshot, adapters, writers):

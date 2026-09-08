@@ -67,7 +67,62 @@ def capture_adapter_source(cells):
                 forward=cell.adapter is None or cell.adapter.isfw(),
                 generated_inputs=[f"{t.name}_{t.tid}" for t in cell.ir.inputs()],
                 generated_outputs=[f"{t.name}_{t.tid}" for t in cell.ir.outputs()])
+        if cell.adapter is not None and hasattr(cell.adapter, "mirror"):
+            adapter = cell.adapter
+            mirror = adapter.mirror
+            row["adapter_identity"] = dict(cid=adapter.cid, forward=adapter.isfw(),
+                mirror_cid=mirror.cid if mirror is not None else None,
+                inputs=[t.tid for t in adapter.inputs()], outputs=[t.tid for t in adapter.outputs()],
+                input_grads=[t.grad.tid if t.grad is not None else None for t in adapter.inputs()],
+                output_grads=[t.grad.tid if t.grad is not None else None for t in adapter.outputs()])
         stream.append(row)
+    # Scaling deep-copies cells, so Python object identity is not a mirror key.
+    # Match reciprocal IR adapter identities AND the mirrored primal tensor ports.
+    for cell, row in zip(cells, stream):
+        if row.get("primitive", {}).get("forward") is not False:
+            continue
+        mirror = getattr(cell.adapter, "mirror", None)
+        if mirror is None:
+            continue
+        candidates = [r for r in stream if r.get("adapter_identity", {}).get("forward") is True
+            and r["ref"]["runtime_rank"] == row["ref"]["runtime_rank"]
+            and r["ref"]["microbatch"] == row["ref"]["microbatch"]
+            and r["adapter_identity"]["cid"] == mirror.cid
+            and r["adapter_identity"]["mirror_cid"] == cell.adapter.cid
+            and r["adapter_identity"]["inputs"] == [t.tid for t in mirror.inputs()]
+            and r["adapter_identity"]["outputs"] == [t.tid for t in mirror.outputs()]]
+        if len(candidates) != 1:
+            continue
+        fw, = candidates
+        import ast
+        import importlib
+        import inspect
+        import textwrap
+        signature = row["primitive"]["signature"]
+        module_name, function_name = signature.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        wrapper = getattr(module, function_name)
+        wrapper_source = textwrap.dedent(inspect.getsource(wrapper))
+        calls = [n for n in ast.walk(ast.parse(wrapper_source)) if isinstance(n, ast.Call)
+                 and isinstance(n.func, ast.Attribute) and n.func.attr == "apply"
+                 and isinstance(n.func.value, ast.Name)]
+        if len(calls) != 1:
+            continue
+        class_name = calls[0].func.value.id
+        cls = wrapper.__globals__.get(class_name)
+        if cls is None:
+            continue
+        row["autograd"] = dict(forward_writer=deepcopy(fw["ref"]),
+            forward_inputs=deepcopy(fw["inputs"]), forward_outputs=deepcopy(fw["outputs"]),
+            mirror_inputs=[t.tid for t in mirror.inputs()], mirror_outputs=[t.tid for t in mirror.outputs()],
+            mirror_input_grads=[t.grad.tid if t.grad is not None else None for t in mirror.inputs()],
+            mirror_output_grads=[t.grad.tid if t.grad is not None else None for t in mirror.outputs()],
+            runtime=dict(wrapper_source=wrapper_source, class_source=textwrap.dedent(inspect.getsource(cls)),
+                         class_name=class_name, source_file=inspect.getsourcefile(cls),
+                         backward_global_functions={name: dict(module=fn.__module__, name=fn.__name__,
+                             source_file=inspect.getsourcefile(fn))
+                             for name in cls.backward.__code__.co_names
+                             if inspect.isfunction(fn := cls.backward.__globals__.get(name))}))
     return deepcopy(stream)
 
 
