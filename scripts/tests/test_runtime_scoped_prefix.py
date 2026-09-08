@@ -5,7 +5,7 @@ from pathlib import Path
 from scripts.tests.test_runtime_input_schedule_kernel import mixed_world
 
 
-def collective_world(root, k, unsupported=False):
+def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None):
     """Independent raw IR + source-adapter snapshot, with actual CPU loader feeds."""
     import copy
     from types import SimpleNamespace as NS
@@ -38,6 +38,48 @@ def collective_world(root, k, unsupported=False):
             unknown._input_irs=[p._output_irs[0]];unknown._output_irs=[IR(80,'unused',(1,2,k*3))]
             pm.shapes[unknown.outputs[0]]=(1,2,k*3);cells.append(unknown)
         cells.append(collective)
+    aliases = []
+    if chain:
+        first = [cell for cell in cells if cell.opname == 'AllToAllPrim']
+        aliases = []
+        for rank, a in enumerate(first):
+            def ordinary(cid, op, ins, tids, shape, kwargs):
+                outs = [T('p', rank, 0, tid, 1) for tid in tids]
+                cell = NS(node=N('p',rank,0,cid,op), rank=rank, opname=op,
+                    kwargs=kwargs, inputs=ins, outputs=outs,
+                    _input_irs=[IR(t.tid,'activation',pm.shapes[t]) for t in ins],
+                    _output_irs=[IR(t.tid,'activation',shape) for t in outs])
+                pm.shapes.update({t:shape for t in outs})
+                cells.append(cell)
+                return cell
+            add = ordinary(21, 'FW_add', a.outputs*2, [91], (1,2*k,3), {})
+            ref = ordinary(22, 'FW_multiref', add.outputs, list(range(100,100+k)),
+                           (1,2*k,3), dict(times=k))
+            aliases.append(ref)
+        for rank in range(k):
+            a=NS(node=N('p',rank,0,30,'AllToAllAllToAllPrim'), rank=rank,
+                 opname='AllToAllPrim', kwargs=dict(ranks=list(range(k)),idim=2,odim=1),
+                 inputs=[q.outputs[-1] for q in aliases], outputs=[T('p',rank,0,120,1)])
+            pm.shapes[a.outputs[0]]=(1,2,k*3)
+            cells.append(a)
+        if between:
+            # A real raw ordinary producer in rank zero's order, after a good guard.
+            u=copy.deepcopy(aliases[0]); u.node=u.node._replace(cid=23,irname='FW_contiguous')
+            u.opname='FW_contiguous';u.kwargs={};u.inputs=[aliases[0].outputs[0]]
+            u.outputs=[T('p',0,0,119,1)]
+            u._input_irs=[IR(100,'activation',(1,2*k,3))]
+            u._output_irs=[IR(119,'activation',(1,2*k,3))]
+            pm.shapes[u.outputs[0]]=(1,2*k,3)
+            cells.insert(cells.index(aliases[0])+1,u)
+    if fault:
+        cell = aliases[0] if fault != 'unary-add' else next(c for c in cells if c.opname=='FW_add')
+        if fault == 'missing-times':
+            cell.kwargs = {}
+        elif fault == 'unary-add':
+            cell.inputs=cell.inputs[:1]; cell._input_irs=cell._input_irs[:1]
+        elif fault == 'output-shape':
+            t=cell.outputs[0]
+            pm.shapes[t]=(1,2*k,4);cell._output_irs[0]=IR(t.tid,'activation',(1,2*k,4))
     pm.cells=cells
     fields=('world','runtime_rank','microbatch','source_tid','version')
     writers=[]; prepared=[]
@@ -48,7 +90,7 @@ def collective_world(root, k, unsupported=False):
         pr=copy.deepcopy(row)
         if cell.opname=='AllToAllPrim':
             row['adapter_kwargs']=copy.deepcopy(cell.kwargs)
-            pr['inputs']=[dict(zip(fields,producers[cell.rank].outputs[0]))]
+            pr['inputs']=[dict(zip(fields,cell.inputs[cell.rank]))]
             pr['primitive']=dict(kind='AllToAllAllToAllPrim',forward=True,kwargs=copy.deepcopy(cell.kwargs))
         writers.append(row);prepared.append(pr)
     snapshot=build_snapshot(writers);snapshot['runtime_ndevs']=k;snapshot['adapter_source']=prepared
@@ -73,7 +115,10 @@ class PrefixTests(unittest.TestCase):
                 fed=collective_world(Path(d),k)
                 p=fed.receipt['scoped_prefix']['pm']
                 self.assertEqual(p['status'],'conditional-prefix-emitted')
-                self.assertEqual(p['prefix_length'],2*k+1)
+                self.assertEqual(p['prefix_nodes'],fed.receipt['execution_order']['pm']['execution_to_source'])
+                self.assertEqual(p['prefix_length'],3*k)
+                self.assertEqual(len(p['guards']),k)
+                self.assertIsNone(p['frontier'])
                 self.assertEqual(p['output_shape'],[1,2*k,3])
                 self.assertEqual(len(p['initial_premises']),k)
                 self.assertTrue(all(row['ref'][2] == -1 for row in p['initial_premises']))
@@ -81,6 +126,40 @@ class PrefixTests(unittest.TestCase):
                 self.assertIn('pmInputRequests.drop',fed.lean)
                 self.assertIn('theorem pmPrefixSuccess',fed.lean)
                 self.assertFalse(p['whole_world_option_success'])
+
+    def test_add_multiref_inverse_chain_and_first_frontier(self):
+        for k in (2,3):
+            for between in (False,True):
+                with self.subTest(k=k,between=between), tempfile.TemporaryDirectory() as d:
+                    fed=collective_world(Path(d),k,chain=True,between=between)
+                    p=fed.receipt['scoped_prefix']['pm']
+                    order=fed.receipt['execution_order']['pm']['execution_to_source']
+                    self.assertEqual(p['status'],'conditional-prefix-emitted')
+                    self.assertEqual(p['prefix_nodes'],order[:p['prefix_length']])
+                    if between:
+                        self.assertEqual(p['frontier']['op'],'FW_contiguous')
+                        self.assertEqual(p['frontier']['execution_index'],p['prefix_length'])
+                        self.assertLess(p['prefix_length'],len(order))
+                    else:
+                        self.assertEqual(p['prefix_nodes'],order)
+                        self.assertEqual(len(p['guards']),2*k)
+                        self.assertEqual(p['output_shape'],[1,2,k*3])
+                    self.assertEqual(len(p['initial_premises']),k)
+                    self.assertEqual(fed.lean.count('def pmPrefixInitShapes '),1)
+                    self.assertEqual(len({g['theorem'] for g in p['guards']}),len(p['guards']))
+
+    def test_source_arity_and_computed_shape_frontiers(self):
+        for k in (2,3):
+            for fault in ('missing-times','unary-add','output-shape'):
+                with self.subTest(k=k,fault=fault), tempfile.TemporaryDirectory() as d:
+                    fed=collective_world(Path(d),k,chain=True,fault=fault)
+                    p=fed.receipt['scoped_prefix']['pm']
+                    self.assertEqual(p['status'],'conditional-prefix-emitted')
+                    self.assertIsNotNone(p['frontier'])
+                    self.assertEqual(p['frontier']['execution_index'],p['prefix_length'])
+                    self.assertEqual(p['prefix_nodes'],fed.receipt['execution_order']['pm']['execution_to_source'][:p['prefix_length']])
+                    self.assertEqual(p['frontier']['reason'], 'computed-source-shape-mismatch' if fault=='output-shape' else 'unsupported-source-arity')
+                    self.assertIn('theorem pmPrefixContinuation',fed.lean)
 
     def test_unsupported_producer_keeps_complete_feed(self):
         with tempfile.TemporaryDirectory() as d:
