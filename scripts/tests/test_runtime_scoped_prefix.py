@@ -5,7 +5,7 @@ from pathlib import Path
 from scripts.tests.test_runtime_input_schedule_kernel import mixed_world
 
 
-def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False):
+def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None):
     """Independent raw IR + source-adapter snapshot, with actual CPU loader feeds."""
     import copy
     from types import SimpleNamespace as NS
@@ -133,6 +133,36 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
         elif fault == 'output-shape':
             t=cell.outputs[0]
             pm.shapes[t]=(1,2*k,4);cell._output_irs[0]=IR(t.tid,'activation',(1,2*k,4))
+    if layout:
+        sources = [c for c in cells if c.opname == ('AllGatherPrim' if gather else 'FW_linear')]
+        views = []
+        def layout_node(rank, cid, op, inputs, shape, kwargs):
+            t=T('p',rank,0,cid,1); pm.shapes[t]=tuple(shape)
+            c=NS(node=N('p',rank,0,cid,op),rank=rank,opname=op,kwargs=kwargs,
+                inputs=inputs,outputs=[t],_input_irs=[IR(x.tid,'activation',pm.shapes[x]) for x in inputs],
+                _output_irs=[IR(cid,'layout',tuple(shape))])
+            cells.append(c); return c
+        for rank, src in enumerate(sources):
+            sh=list(pm.shapes[src.outputs[0]])
+            target=[1,k,sh[1]//k,sh[2]]
+            kw=dict(size=tuple(target))
+            if layout=='product': target[-1]+=1;kw['size']=tuple(target)
+            if rank == 0:
+                if layout=='params': kw['size']=(1,k,sh[2],sh[1]//k)
+                elif layout=='missing': kw={}
+                elif layout=='infer': kw['size']=(1,k,-1,sh[2])
+            v=layout_node(rank,50,'FW_view',src.outputs,target,kw)
+            v=layout_node(rank,51,'FW_reshape',v.outputs,target,dict(shape=tuple(target)))
+            views.append(v)
+        for rank in range(k):
+            sh=list(pm.shapes[views[0].outputs[0]]);sh[1]//=k;sh[2]*=k
+            a=NS(node=N('p',rank,0,52,'AllToAllAllToAllPrim'),rank=rank,opname='AllToAllPrim',
+                kwargs=dict(ranks=list(range(k)),idim=2,odim=1),inputs=[v.outputs[0] for v in views],outputs=[T('p',rank,0,52,1)])
+            pm.shapes[a.outputs[0]]=tuple(sh);cells.append(a)
+            sh[1],sh[2]=sh[2],sh[1]
+            if layout=='shape' and rank==0: sh[-1]+=1
+            t=layout_node(rank,53,'FW_transpose',a.outputs,sh,dict(dim0=1,dim1=9 if layout=='axis' and rank==0 else -2))
+            layout_node(rank,54,'FW_contiguous',t.outputs,sh,{})
     pm.cells=cells
     fields=('world','runtime_rank','microbatch','source_tid','version')
     writers=[]; prepared=[]
@@ -153,6 +183,35 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
     return bind(legacy,sv,pv,sm.cells,pm.cells,*source,root)
 
 class PrefixTests(unittest.TestCase):
+    def test_layout_source_parameters_and_value_chain(self):
+        for k in (2,3):
+            for gather in (False,True):
+                for layout in ('valid','infer'):
+                    with self.subTest(k=k,gather=gather,layout=layout), tempfile.TemporaryDirectory() as d:
+                        fed=collective_world(Path(d),k,normalize=True,project=True,gather=gather,layout=layout)
+                        p=fed.receipt['scoped_prefix']['pm']
+                        self.assertEqual(p['frontier']['op'],'FW_contiguous')
+                        self.assertEqual(p['prefix_nodes'],fed.receipt['execution_order']['pm']['execution_to_source'][:p['prefix_length']])
+                        self.assertEqual(p['frontier']['execution_index'],p['prefix_length'])
+                        self.assertIn(':= fw_view ',fed.lean)
+                        self.assertIn(':= transposeAxes 1 2 ',fed.lean)
+                        self.assertIn('pmPrefixWritten_',fed.lean)
+                        self.assertIn('pmPrefixFrame',fed.lean)
+                        self.assertIn('pmPrefixContinuation',fed.lean)
+                        self.assertEqual(len(p['initial_premises']),4*k)
+
+    def test_layout_source_controls(self):
+        for k in (2,3):
+            for fault,reason in [('product','layout-product-contract'),('params','layout-source-params'),
+                                 ('missing','layout-source-params'),('shape','computed-source-shape-mismatch')]:
+                with self.subTest(k=k,fault=fault), tempfile.TemporaryDirectory() as d:
+                    fed=collective_world(Path(d),k,normalize=True,project=True,gather=True,layout=fault)
+                    p=fed.receipt['scoped_prefix']['pm']
+                    self.assertEqual(p['frontier']['reason'],reason)
+                    self.assertEqual(p['frontier']['execution_index'],p['prefix_length'])
+            with tempfile.TemporaryDirectory() as d, self.assertRaises(ValueError):
+                collective_world(Path(d),k,normalize=True,project=True,gather=True,layout='axis')
+
     def test_shape_proofs_do_not_unfold_unrelated_value_operators(self):
         import re
         with tempfile.TemporaryDirectory() as d:

@@ -4,6 +4,7 @@ Only unwritten raw parameter shapes are premises. Values are computed from the
 actual feeds and arbitrary initial weights, in one Store chain. Unsupported nodes
 are frontiers, never skipped. Small read/value-shape lemmas bound elaboration.
 """
+from math import prod
 from Verdict.runtime_lineage import _Index
 
 
@@ -29,7 +30,7 @@ def render(label, view, raw, world, loaders):
         ins = view.node_inputs(n); outs = view.node_outputs(n)
         ss = dict(shapes); ii = dict(initial)
         try:
-            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim'):
+            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
                 raise PrefixUnavailable(missing[i], op=op)
@@ -45,7 +46,7 @@ def render(label, view, raw, world, loaders):
                         raise PrefixUnavailable('unauthorized-initial-weight', tid=t.tid)
                     ii[t.tid] = dict(tid=t.tid, ref=list(ref), shape=list(ep.shape), authority='unwritten-raw-parameter')
                     ss[t.tid] = list(ep.shape)
-            scope = None
+            scope = None; params = None
             if op == 'DATALOADER':
                 if i not in feeds: raise PrefixUnavailable('missing-feed')
                 output_shapes = [p['shape'] for p in feeds[i]['ports']]
@@ -70,6 +71,39 @@ def render(label, view, raw, world, loaders):
                     raise PrefixUnavailable('allgather-shape-contract')
                 sh[dim] *= len(scope.ranks)
                 output_shapes = [sh]
+            elif op in ('FW_view', 'FW_reshape', 'FW_transpose'):
+                from Verdict import graph_to_lean as c
+                from Verdict.runtime_world import _ordinary
+                params, reason = _ordinary(view, n, c._get_node_params)
+                if reason or len(ins) != 1 or len(outs) != 1:
+                    raise PrefixUnavailable(reason or 'unsupported-producer-schema')
+                sh = ss[ins[0].tid]
+                if op == 'FW_transpose':
+                    if len(params) != 2 or any(d >= len(sh) for d in params):
+                        raise PrefixUnavailable('layout-axis-contract')
+                    target = sh.copy(); a, b = params
+                    target[a], target[b] = target[b], target[a]
+                else:
+                    # Lowering uses output metadata; independently validate the
+                    # literal source request, never infer it from that metadata.
+                    kw = view.node_kwargs(n)
+                    keys = [key for key in ('size', 'shape') if key in kw]
+                    if len(keys) != 1 or (op == 'FW_view' and keys != ['size']):
+                        raise PrefixUnavailable('layout-source-params')
+                    requested = kw[keys[0]]
+                    if not isinstance(requested, (tuple, list)) or not requested or any(type(d) is not int or d < -1 for d in requested) or requested.count(-1) > 1:
+                        raise PrefixUnavailable('layout-source-params')
+                    target = list(requested)
+                    if -1 in target:
+                        known = prod(d for d in target if d != -1)
+                        if known <= 0 or prod(sh) % known:
+                            raise PrefixUnavailable('layout-product-contract')
+                        target[target.index(-1)] = prod(sh) // known
+                    if prod(target) != prod(sh):
+                        raise PrefixUnavailable('layout-product-contract')
+                    if target != params:
+                        raise PrefixUnavailable('layout-source-params')
+                output_shapes = [target]
             elif op == 'FW_linear':
                 sh, weight = (ss[t.tid] for t in ins)
                 if len(sh) not in (2, 3) or len(weight) != 2 or sh[-1] != weight[1]:
@@ -93,7 +127,7 @@ def render(label, view, raw, world, loaders):
                     raise PrefixUnavailable('computed-source-shape-mismatch', tid=t.tid, computed_shape=sh, source_shape=list(view.tensor_shape(t)))
                 ss[t.tid] = sh
             rows.append(dict(index=i, op=op, ins=ins, outs=outs, scope=scope,
-                             input_shapes=[ss[t.tid] for t in ins], output_shapes=output_shapes))
+                             input_shapes=[ss[t.tid] for t in ins], output_shapes=output_shapes, params=params))
             shapes, initial = ss, ii
         except PrefixUnavailable as exc:
             frontier = dict(exc.details, index=i, source_index=i, execution_index=j, op=op)
@@ -142,6 +176,8 @@ def _render(label, rows, feeds, initial, frontier):
             if op == 'DATALOADER': return [f'{node}_port{p["port"]}' for p in feeds[i]['ports']]
             if op == 'FW_embedding': return [f'fw_embedding {xs[0]} {xs[1]}']
             if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
+            if op in ('FW_view', 'FW_reshape'): return [f'fw_view {row["params"]} {xs[0]}']
+            if op == 'FW_transpose': return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
             if op == 'FW_linear': return [f'fw_linear {xs[0]} {xs[1]}']
             if op == 'FW_layernorm': return [f'fw_layernorm {xs[0]} {xs[1]} {xs[2]}']
             if op == 'ChunkPrim': return [f'chunkPrimDimN {scope.dim} {len(scope.ranks)} {scope.local_index} {xs[0]}']
@@ -189,7 +225,12 @@ def _render(label, rows, feeds, initial, frontier):
             # value graph: real-width normalization/linear arithmetic is costly
             # even though it is irrelevant to this theorem.
             shape_start = f'by\n  unfold {vn}\n'
-            if op == 'FW_layernorm':
+            if op in ('FW_view', 'FW_reshape'):
+                shape_proof = '  rfl'
+            elif op == 'FW_transpose':
+                shape_proof = ('  change listSwapAt _ _ _ = _\n'
+                               f'  rw [{input_shapes[0]}]\n  rfl')
+            elif op == 'FW_layernorm':
                 shape_proof = ('  rw [SourceScopedPrefix.layernorm_shape]\n'
                                f'  exact {input_shapes[0]}')
             elif op == 'FW_linear':
