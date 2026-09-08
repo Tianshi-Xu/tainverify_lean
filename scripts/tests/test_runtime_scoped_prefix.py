@@ -10,7 +10,7 @@ def proof_text(fed):
     return '\n'.join([*fed.supporting_sources.values(), fed.lean])
 
 
-def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None):
+def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None, tail=None, tail_fault=None):
     """Independent raw IR + source-adapter snapshot, with actual CPU loader feeds."""
     import copy
     from types import SimpleNamespace as NS
@@ -37,8 +37,8 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
         pm.shapes[collective.outputs[0]] = (1,2*k,3)
         cells += [pm.cells[2*rank],p]
         if unsupported:
-            unknown=copy.deepcopy(p); unknown.node=unknown.node._replace(cid=15,irname='FW_contiguous')
-            unknown.opname='FW_contiguous';unknown.kwargs={};unknown.inputs=[p.outputs[0]]
+            unknown=copy.deepcopy(p); unknown.node=unknown.node._replace(cid=15,irname='FW_dropout')
+            unknown.opname='FW_dropout';unknown.kwargs={};unknown.inputs=[p.outputs[0]]
             unknown.outputs=[T('p',rank,0,80,1)]
             unknown._input_irs=[p._output_irs[0]];unknown._output_irs=[IR(80,'unused',(1,2,k*3))]
             pm.shapes[unknown.outputs[0]]=(1,2,k*3);cells.append(unknown)
@@ -69,8 +69,8 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
             cells.append(a)
         if between:
             # A real raw ordinary producer in rank zero's order, after a good guard.
-            u=copy.deepcopy(aliases[0]); u.node=u.node._replace(cid=23,irname='FW_contiguous')
-            u.opname='FW_contiguous';u.kwargs={};u.inputs=[aliases[0].outputs[0]]
+            u=copy.deepcopy(aliases[0]); u.node=u.node._replace(cid=23,irname='FW_dropout')
+            u.opname='FW_dropout';u.kwargs={};u.inputs=[aliases[0].outputs[0]]
             u.outputs=[T('p',0,0,119,1)]
             u._input_irs=[IR(100,'activation',(1,2*k,3))]
             u._output_irs=[IR(119,'activation',(1,2*k,3))]
@@ -126,7 +126,7 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
         elif fault == 'unsupported-after':
             last=cells[-1];t=T('p',last.rank,0,250,1);shape=pm.shapes[last.outputs[0]]
             pm.shapes[t]=shape
-            cells.append(NS(node=N('p',last.rank,0,43,'FW_contiguous'),rank=last.rank,opname='FW_contiguous',
+            cells.append(NS(node=N('p',last.rank,0,43,'FW_dropout'),rank=last.rank,opname='FW_dropout',
                 kwargs={},inputs=last.outputs,outputs=[t],_input_irs=[IR(last.outputs[0].tid,'activation',shape)],
                 _output_irs=[IR(t.tid,'activation',shape)]))
     if fault and not normalize:
@@ -198,7 +198,29 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
                 y=layout_node(rank,67,'FW_transpose',a.outputs,rhs,dict(dim0=len(shape)-2,dim1=len(shape)-1))
                 out=shape[:-1]+[shape[-2]]
                 m=layout_node(rank,68,'FW_matmul',a.outputs+y.outputs,out,{})
-                layout_node(rank,69,'FW_contiguous',m.outputs,out,{})
+                prev = layout_node(rank,69,'FW_contiguous',m.outputs,out,{})
+                if tail:
+                    prev = layout_node(rank,70,'FW_gelu',prev.outputs,out,dict(approximate='none'))
+                    if tail == 'sum':
+                        prev = layout_node(rank,71,'FW_sum',prev.outputs,[1],{})
+                    layout_node(rank,72,'BW_sum',prev.outputs+m.outputs,out,{})
+    if tail_fault:
+        op, mode, payload = tail_fault
+        cell = next(c for c in cells if c.opname == op)
+        if mode == 'kwargs': cell.kwargs.update(payload)
+        elif mode == 'arity': cell.inputs = cell.inputs * 2; cell._input_irs = cell._input_irs * 2
+        elif mode == 'outputs':
+            extra = cell.outputs[0]._replace(tid=999)
+            cell.outputs = cell.outputs + [extra]; pm.shapes[extra] = pm.shapes[cell.outputs[0]]
+            cell._output_irs = cell._output_irs + [IR(999, 'activation', pm.shapes[extra])]
+        elif mode == 'shape':
+            pm.shapes[cell.outputs[0]] = tuple(payload)
+            changed = cell.outputs[0]
+            for other in cells:
+                for attr, tids in (('_input_irs', other.inputs), ('_output_irs', other.outputs)):
+                    if hasattr(other, attr):
+                        setattr(other, attr, [IR(t.tid, 'activation', tuple(payload)) if t == changed else ir
+                            for t, ir in zip(tids, getattr(other, attr))])
     pm.cells=cells
     fields=('world','runtime_rank','microbatch','source_tid','version')
     writers=[]; prepared=[]
@@ -225,7 +247,7 @@ class PrefixTests(unittest.TestCase):
                 with self.subTest(k=k,rank=rank), tempfile.TemporaryDirectory() as d:
                     fed=collective_world(Path(d),k,normalize=True,project=True,gather=True,layout='valid',attention={'rank':rank})
                     p=fed.receipt['scoped_prefix']['pm']
-                    self.assertEqual(p['frontier']['op'],'FW_contiguous')
+                    self.assertIsNone(p['frontier'])
                     self.assertEqual(p['prefix_nodes'],fed.receipt['execution_order']['pm']['execution_to_source'][:p['prefix_length']])
                     self.assertEqual(len(p['initial_premises']),4*k)
                     self.assertIn(':= fw_matmul ',proof_text(fed))
@@ -234,6 +256,50 @@ class PrefixTests(unittest.TestCase):
                     self.assertIn('pmPrefixContinuation',proof_text(fed))
                     self.assertFalse(p['kernel_checked'])
 
+
+    def test_forward_gelu_tail(self):
+        for k in (2, 3):
+            with self.subTest(k=k), tempfile.TemporaryDirectory() as d:
+                fed = collective_world(Path(d), k, normalize=True, project=True, gather=True,
+                    layout='valid', attention={'rank': 3}, tail='gelu')
+                p = fed.receipt['scoped_prefix']['pm']
+                self.assertEqual(p['frontier']['op'], 'BW_sum')
+                self.assertIn(':= fw_gelu ', proof_text(fed))
+                self.assertEqual(len(p['initial_premises']), 4*k)
+
+    def test_forward_sum_tail(self):
+        for k in (2, 3):
+            with self.subTest(k=k), tempfile.TemporaryDirectory() as d:
+                fed = collective_world(Path(d), k, normalize=True, project=True, gather=True,
+                    layout='valid', attention={'rank': 3}, tail='sum')
+                p = fed.receipt['scoped_prefix']['pm']
+                self.assertEqual(p['frontier']['op'], 'BW_sum')
+                self.assertEqual(p['output_shape'], [1])
+                self.assertIn(':= fw_sum ', proof_text(fed))
+                self.assertEqual(len(p['initial_premises']), 4*k)
+                self.assertFalse(p['whole_world_option_success'])
+
+    def test_forward_tail_source_controls(self):
+        for k in (2, 3):
+            for op in ('FW_contiguous', 'FW_gelu', 'FW_sum'):
+                for mode, payload, reason in [('arity', None, 'unsupported-source-arity'),
+                        ('outputs', None, 'unsupported-source-arity'),
+                        ('shape', [], 'computed-source-shape-mismatch')]:
+                    with self.subTest(k=k, op=op, mode=mode), tempfile.TemporaryDirectory() as d:
+                        fed = collective_world(Path(d), k, normalize=True, project=True, gather=True,
+                            layout='valid', attention={'rank': 3}, tail='sum', tail_fault=(op, mode, payload))
+                        p = fed.receipt['scoped_prefix']['pm']
+                        self.assertEqual(p['frontier']['op'], op)
+                        self.assertEqual(p['frontier']['reason'], reason)
+                        self.assertEqual(p['frontier']['execution_index'], p['prefix_length'])
+                        self.assertEqual(len(p['initial_premises']), 4*k)
+            for op, kw in [('FW_contiguous', {'memory_format': 'channels_last'}),
+                    ('FW_gelu', {'approximate': 'tanh'}), ('FW_gelu', {'approximate': None}),
+                    ('FW_sum', {'dim': -1}), ('FW_sum', {'keepdim': True}), ('FW_sum', {'dtype': 'float64'})]:
+                with self.subTest(k=k, op=op, kw=kw), tempfile.TemporaryDirectory() as d:
+                    with self.assertRaises(ValueError):
+                        collective_world(Path(d), k, normalize=True, project=True, gather=True,
+                            layout='valid', attention={'rank': 3}, tail='sum', tail_fault=(op, 'kwargs', kw))
 
     def test_attention_contract_controls(self):
         for k in (2,3):
@@ -256,9 +322,8 @@ class PrefixTests(unittest.TestCase):
                     with self.subTest(k=k,gather=gather,layout=layout), tempfile.TemporaryDirectory() as d:
                         fed=collective_world(Path(d),k,normalize=True,project=True,gather=gather,layout=layout)
                         p=fed.receipt['scoped_prefix']['pm']
-                        self.assertEqual(p['frontier']['op'],'FW_contiguous')
+                        self.assertIsNone(p['frontier'])
                         self.assertEqual(p['prefix_nodes'],fed.receipt['execution_order']['pm']['execution_to_source'][:p['prefix_length']])
-                        self.assertEqual(p['frontier']['execution_index'],p['prefix_length'])
                         self.assertIn(':= fw_view ',proof_text(fed))
                         self.assertIn(':= transposeAxes 1 2 ',proof_text(fed))
                         self.assertIn('pmPrefixWritten_',proof_text(fed))
@@ -378,7 +443,7 @@ class PrefixTests(unittest.TestCase):
                     self.assertEqual(p['status'],'conditional-prefix-emitted')
                     self.assertEqual(p['prefix_nodes'],order[:p['prefix_length']])
                     if between:
-                        self.assertEqual(p['frontier']['op'],'FW_contiguous')
+                        self.assertEqual(p['frontier']['op'],'FW_dropout')
                         self.assertEqual(p['frontier']['execution_index'],p['prefix_length'])
                         self.assertLess(p['prefix_length'],len(order))
                     else:

@@ -89,7 +89,7 @@ def render(label, view, raw, world, loaders, *, structured=False):
         ins = view.node_inputs(n); outs = view.node_outputs(n)
         ss = dict(shapes); ii = dict(initial)
         try:
-            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax'):
+            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
                 raise PrefixUnavailable(missing[i], op=op)
@@ -183,6 +183,11 @@ def render(label, view, raw, world, loaders, *, structured=False):
                     if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
                         raise PrefixUnavailable('softmax-shape-contract')
                     output_shapes = [sh]
+            elif op == 'FW_sum':
+                # Denote's existing full-reduction scalar representation.
+                output_shapes = [[1]]
+            elif op in ('FW_contiguous', 'FW_gelu'):
+                output_shapes = [ss[ins[0].tid]]
             elif op == 'FW_linear':
                 sh, weight = (ss[t.tid] for t in ins)
                 if len(sh) not in (2, 3) or len(weight) != 2 or sh[-1] != weight[1]:
@@ -267,6 +272,10 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
             if op == 'FW_transpose': return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
             if op == 'FW_matmul': return [f'fw_matmul {xs[0]} {xs[1]}']
             if op == 'FW_div': return [f'fw_div (({row["params"][0]} : Nat) : Scalar) {xs[0]}']
+            if op == 'FW_sum': return [f'fw_sum {xs[0]}']
+            # Tensor has no storage/stride fields: contiguous is value identity.
+            if op == 'FW_contiguous': return [xs[0]]
+            if op == 'FW_gelu': return [f'fw_gelu {xs[0]}']
             if op == 'FW_softmax': return [f'fw_softmax {xs[0]}']
             if op == 'FW_linear': return [f'fw_linear {xs[0]} {xs[1]}']
             if op == 'FW_layernorm': return [f'fw_layernorm {xs[0]} {xs[1]} {xs[2]}']
@@ -315,7 +324,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
             # value graph: real-width normalization/linear arithmetic is costly
             # even though it is irrelevant to this theorem.
             shape_start = f'by\n  unfold {vn}\n'
-            if op in ('FW_view', 'FW_reshape'):
+            if op in ('FW_view', 'FW_reshape', 'FW_sum'):
                 shape_proof = '  rfl'
             elif op == 'FW_transpose':
                 shape_proof = ('  change listSwapAt _ _ _ = _\n'
@@ -323,7 +332,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
             elif op == 'FW_matmul':
                 shape_proof = ('  unfold fw_matmul batchedMatmul\n'
                                f'  rw [{input_shapes[0]}, {input_shapes[1]}]\n  rfl')
-            elif op == 'FW_div':
+            elif op in ('FW_div', 'FW_contiguous', 'FW_gelu'):
                 shape_proof = f'  exact {input_shapes[0]}'
             elif op == 'FW_softmax':
                 shape_proof = ('  unfold fw_softmax softmax\n'
