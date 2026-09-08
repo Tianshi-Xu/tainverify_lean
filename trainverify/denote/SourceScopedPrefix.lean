@@ -5,6 +5,20 @@ open SourceScopedEval
 set_option maxHeartbeats 500000
 noncomputable section
 
+/-- Shape projection avoids traversing normalization's value arithmetic. -/
+theorem layernorm_shape (x w b : Tensor) : (fw_layernorm x w b).shape = x.shape := by
+  unfold fw_layernorm
+  split <;> rfl
+
+/-- The 2D analogue of Denote's existing generic 3D shape theorem. -/
+theorem linear_shape_2d (b i o : Nat) (x w : Tensor)
+    (hx : x.shape = [b, i]) (hw : w.shape = [o, i]) :
+    (fw_linear x w).shape = [b, o] := by
+  simp only [fw_linear, hx, hw, Tensor.mkShape]
+
+#print axioms layernorm_shape
+#print axioms linear_shape_2d
+
 /-- Composition of the existing shared engine, without another graph or evaluator. -/
 theorem runUsing_append {α : Type} (advance : α → Store → Option Store)
     (xs ys : List α) (s : Option Store) :

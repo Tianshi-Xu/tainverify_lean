@@ -5,7 +5,9 @@ Unknown operations and graph-written loader inputs get a missing request, never
 Denote's permissive ordinary/zero fallback. All graph nodes remain represented.
 """
 from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import hashlib
+import re
 import json
 from pathlib import Path
 import tempfile
@@ -138,6 +140,32 @@ def _authenticate(view, raw_cells, c):
 class WorldDefinitions:
     lean: str
     receipt: dict
+    supporting_sources: dict = field(default_factory=dict)
+
+
+WORLD_DATA_MODULE = 'TrainVerifyRuntimeWorldData'
+WORLD_DATA_FILE = WORLD_DATA_MODULE + '.lean'
+
+
+def _proof_bundle(lean, supporting_sources, entry='$entry'):
+    """Source consistency inventory, not a kernel or execution certificate."""
+    if type(supporting_sources) is not dict or set(supporting_sources) != {WORLD_DATA_FILE}:
+        raise ValueError('world bundle requires exactly one data module')
+    if not lean.startswith(f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\n'):
+        raise ValueError('world bundle entry must import its data and prefix helper')
+    modules = []
+    for filename, text, role in [(WORLD_DATA_FILE, supporting_sources[WORLD_DATA_FILE], 'data'),
+                                  (entry, lean, 'entry')]:
+        if type(text) is not str:
+            raise ValueError('world bundle source must be text')
+        imports = re.findall(r'^import (\S+)$', text, re.M)
+        expected = ['denote.SourceScopedEval'] if role == 'data' else [WORLD_DATA_MODULE, 'denote.SourceScopedPrefix']
+        if imports != expected:
+            raise ValueError('world bundle import membership mismatch')
+        modules.append(dict(file=filename, module=Path(filename).stem, role=role, imports=imports,
+            source_sha256=hashlib.sha256(text.encode('utf-8')).hexdigest(),
+            theorems=re.findall(r'^theorem (\S+)', text, re.M), kernel_checked=False))
+    return dict(modules=modules, dependency_order=[WORLD_DATA_FILE, entry], kernel_checked=False)
 
 
 def render(sm, pm, raw_sm, raw_pm):
@@ -207,12 +235,32 @@ def publish(artifact, out):
     from Verdict import graph_to_lean as c
     out = Path(out)
     if out.suffix != '.lean': raise ValueError('world definitions require a .lean destination')
+    receipt = artifact.receipt
+    if (artifact.supporting_sources or 'proof_bundle' in receipt
+            or artifact.lean.startswith(f'import {WORLD_DATA_MODULE}\n')):
+        from trainverify.batch_source_authority import _same_handoff_data
+        if out.name == WORLD_DATA_FILE:
+            raise ValueError('world entry collides with reserved data module')
+        expected = _proof_bundle(artifact.lean, artifact.supporting_sources)
+        if not _same_handoff_data(receipt.get('proof_bundle'), expected):
+            raise ValueError('world bundle source inventory mismatch')
+        receipt = dict(receipt, proof_bundle=_proof_bundle(artifact.lean, artifact.supporting_sources, out.name))
     c._validate_definitions_only_destination(out)
     out.parent.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='trainverify-world-', dir=out.parent.parent) as staging:
         root = Path(staging)
         (root / out.name).write_text(artifact.lean, encoding='utf-8')
-        (root / 'world-receipt.json').write_text(json.dumps(artifact.receipt, indent=2) + '\n')
+        for name, text in artifact.supporting_sources.items():
+            (root / name).write_text(text, encoding='utf-8')
+        (root / 'world-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
         c._validate_generated_authority_tree(root)
+        if 'proof_bundle' in receipt:
+            sources = {out.name: artifact.lean, **artifact.supporting_sources}
+            if {p.name for p in root.iterdir()} != set(sources) | {'world-receipt.json'}:
+                raise ValueError('staged world bundle membership mismatch')
+            if any((root/name).read_text(encoding='utf-8') != text for name, text in sources.items()):
+                raise ValueError('staged world bundle source mismatch')
+            if (root/'world-receipt.json').read_text() != json.dumps(receipt, indent=2) + '\n':
+                raise ValueError('staged world bundle receipt mismatch')
         c._validate_definitions_only_destination(out)
         c._atomic_publish_generated_directory(root, out.parent)

@@ -38,11 +38,12 @@ def load_handoff(root, snapshot, batch, receipt, reference_receipt):
 def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, root):
     """Append feeds to the SAME authenticated worlds; never initialize loader tids."""
     import torch
-    from Verdict.runtime_world import WorldDefinitions, render
+    from Verdict.runtime_world import WorldDefinitions, render, WORLD_DATA_MODULE, WORLD_DATA_FILE, _proof_bundle
     from Verdict.runtime_lineage import _Index, _training_readpoint
     from trainverify.batch_source_authority import _same_handoff_data
     current = render(sm, pm, raw_sm, raw_pm)
-    if world.lean != current.lean or not _same_handoff_data(world.receipt, current.receipt):
+    if (world.lean != current.lean or not _same_handoff_data(world.receipt, current.receipt)
+            or not _same_handoff_data(world.supporting_sources, current.supporting_sources)):
         raise ValueError('input feed world differs from current source authority')
     globals_, posts, run = load_handoff(root, snapshot, batch, receipt, reference)
     lines = ['namespace TrainVerify.Denote.RuntimeWorld', 'noncomputable section',
@@ -128,5 +129,10 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
         text, detail = render_prefix(label, view, raw, world, inventory)
         result['scoped_prefix'][label] = detail
         if text: prefixes.append(text)
-    imports = 'import denote.SourceScopedPrefix\n' if prefixes else ''
-    return WorldDefinitions(imports+world.lean+'\n'+'\n'.join(lines+prefixes), result)
+    base = world.lean+'\n'+'\n'.join(lines)
+    if not prefixes:
+        return WorldDefinitions(base, result)
+    entry = f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\n' + '\n'.join(prefixes)
+    supporting = {WORLD_DATA_FILE: base}
+    result['proof_bundle'] = _proof_bundle(entry, supporting)
+    return WorldDefinitions(entry, result, supporting)

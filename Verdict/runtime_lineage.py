@@ -77,7 +77,7 @@ class _Index:
             raise ValueError('ambiguous raw writer')
         self.meta = {}
         for cell in cells:
-            if op(cell) not in ('DATALOADER', 'FW_embedding'):
+            if op(cell) not in ('DATALOADER', 'FW_embedding', 'FW_layernorm', 'FW_linear'):
                 continue
             n = cell.node
             if n not in view.nodes() or str(view.node_opname(n)).split('.')[-1] != op(cell):

@@ -29,16 +29,16 @@ def render(label, view, raw, world, loaders):
         ins = view.node_inputs(n); outs = view.node_outputs(n)
         ss = dict(shapes); ii = dict(initial)
         try:
-            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref'):
+            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
                 raise PrefixUnavailable(missing[i], op=op)
             if not outs or (op == 'FW_embedding' and (len(ins) != 2 or len(outs) != 1)) or (op == 'FW_add' and (len(ins) not in (1, 2) or len(outs) != 1)) or (op == 'FW_multiref' and (len(ins) != 1 or view.node_kwargs(n).get('times', len(outs)) != len(outs))):
                 raise PrefixUnavailable('unsupported-producer-schema', op=op)
-            for t in ins:
+            for port, t in enumerate(ins):
                 if t.tid not in ss:
                     ref = tuple(view.source_tensor(t))
-                    if op != 'FW_embedding' or t != ins[1] or ref in index.writers:
+                    if port not in {'FW_embedding': (1,), 'FW_layernorm': (1, 2), 'FW_linear': (1,)}.get(op, ()) or ref in index.writers:
                         raise PrefixUnavailable('unsupported-producer-input', tid=t.tid, op=op)
                     ep = index.endpoint(ref, 'initial'); meta = index.meta.get(ref)
                     if not meta or not meta[4] or meta[5]:
@@ -61,6 +61,24 @@ def render(label, view, raw, world, loaders):
                     raise PrefixUnavailable('chunk-shape-contract' if op == 'ChunkPrim' else 'alltoall-shape-contract', computed_shapes=[ss[t.tid] for t in ins])
                 sh[odim] //= len(rs)
                 if op == 'AllToAllPrim': sh[dim] *= len(rs)
+                output_shapes = [sh]
+            elif op == 'AllGatherPrim':
+                scope = view.collective_scopes[n]
+                sh = ss[ins[0].tid].copy(); dim, = scope.params
+                if (len(outs) != 1 or len(ins) != len(scope.ranks) or dim >= len(sh)
+                        or any(ss[t.tid] != sh for t in ins)):
+                    raise PrefixUnavailable('allgather-shape-contract')
+                sh[dim] *= len(scope.ranks)
+                output_shapes = [sh]
+            elif op == 'FW_linear':
+                sh, weight = (ss[t.tid] for t in ins)
+                if len(sh) not in (2, 3) or len(weight) != 2 or sh[-1] != weight[1]:
+                    raise PrefixUnavailable('linear-shape-contract')
+                output_shapes = [sh[:-1] + [weight[0]]]
+            elif op == 'FW_layernorm':
+                sh = ss[ins[0].tid]
+                if not sh or any(ss[t.tid] != [sh[-1]] for t in ins[1:]):
+                    raise PrefixUnavailable('layernorm-shape-contract')
                 output_shapes = [sh]
             elif op == 'FW_add':
                 sh = ss[ins[0].tid]
@@ -113,12 +131,19 @@ def _render(label, rows, feeds, initial, frontier):
         reads = []
         for p, t in enumerate(ins):
             name = f'{stem}Read_{j}_{p}'; reads.append(f'{name} init')
-            proof = 'by\n  rfl' if t.tid not in writers else f'by\n  change {state(writers[t.tid][0]+1)} {t.tid} = _\n  exact {writers[t.tid][1]} init'
+            stop = writers[t.tid][0] + 1 if t.tid in writers else 0
+            proof = 'by\n' + ''.join(
+                f'  rw [{stem}Skip_{q} init {t.tid} (by decide)]\n'
+                for q in range(j - 1, stop - 1, -1))
+            proof += f'  exact {writers[t.tid][1]} init' if t.tid in writers else '  rfl'
             theorem(name, f'(init : Store) : {prev} {t.tid} = {values[t.tid]}', proof)
         v = [values[t.tid] for t in ins]; actual = [f'({prev} {t.tid})' for t in ins]
         def expressions(xs):
             if op == 'DATALOADER': return [f'{node}_port{p["port"]}' for p in feeds[i]['ports']]
             if op == 'FW_embedding': return [f'fw_embedding {xs[0]} {xs[1]}']
+            if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
+            if op == 'FW_linear': return [f'fw_linear {xs[0]} {xs[1]}']
+            if op == 'FW_layernorm': return [f'fw_layernorm {xs[0]} {xs[1]} {xs[2]}']
             if op == 'ChunkPrim': return [f'chunkPrimDimN {scope.dim} {len(scope.ranks)} {scope.local_index} {xs[0]}']
             if op == 'AllToAllPrim': return [f'AllToAllSourceFaithful.tensor {len(scope.ranks)} {scope.local_index} {scope.params[0]} {scope.params[1]} [{", ".join(xs)}]']
             if op == 'FW_add': return [xs[0] if len(xs)==1 else f'elemwiseAdd {xs[0]} {xs[1]}']
@@ -140,7 +165,7 @@ def _render(label, rows, feeds, initial, frontier):
             update = f'AllToAllSourceFaithful.localStep {rs} {prev} {node} {dim} {odim}'
             proof = (f'by\n  change (AllToAllSourceFaithful.step {label}Graph (some {rs}) ({label}Peers {node}) {prev} {node}).toOption = _\n'
                      f'  rw [AllToAllSourceFaithful.step_valid _ _ _ _ _ {dim} {odim} {out.tid} (by decide) ({guard} init hInitShapes)]\n  rfl')
-        elif op == 'ChunkPrim':
+        elif op in ('ChunkPrim', 'AllGatherPrim'):
             rs = list(scope.ranks)
             proof = (f'by\n  change GroupScopedEval.step {label}Graph (.group (some {rs})) {prev} {node} = _\n'
                      f'  rw [GroupScopedEval.step_scoped _ _ _ {rs} (by decide) (by rfl)]\n  rfl')
@@ -150,16 +175,56 @@ def _render(label, rows, feeds, initial, frontier):
         condition = op == 'AllToAllPrim'
         theorem(f'{stem}Step_{j}', f'{args if condition else "(init : Store)"} : stepWithInputs {label}Graph ({label}Scope {node}) ({label}Peers {node}) {prev} {node} {feed} = some {nxt}', proof)
         steps.append(f'{stem}Step_{j} init'+(' hInitShapes' if condition else ''))
+        pairs = '[' + ', '.join(f'({t.tid}, {value})' for t, value in zip(outs, computed)) + ']'
+        theorem(f'{stem}Skip_{j}',
+                f'(init : Store) (tid : Tid) (h : tid ∉ {[t.tid for t in outs]}) : {nxt} tid = {prev} tid',
+                f'by\n  change storeSet {prev} {pairs} tid = {prev} tid\n'
+                f'  exact storeSet_eq_of_not_mem_fst _ _ _ (by simpa only [List.map] using h)')
         input_shapes = [shape_proofs[t.tid] for t in ins]
         for p, (t, value, sh) in enumerate(zip(outs, computed, row['output_shapes'])):
             vn = f'{stem}Value_{j}_{p}'; on = f'{stem}Written_{j}_{p}'; sn = f'{stem}Shape_{j}_{p}'
             theorem(on, f'(init : Store) : {nxt} {t.tid} = {vn} init',
                     f'by\n  change {value} = {vn} init\n  simp only [{vn}'+(', '+', '.join(reads) if reads else '')+']')
-            shape_defs = [vn, 'fw_embedding_shape', 'chunkPrimDimN', 'Tensor.mkShape', 'lastD', 'elemwiseAdd', 'outShape2'] + input_shapes
-            if op == 'DATALOADER': shape_defs.append(f'{node}_port{p}')
-            shape_start = f'by\n  unfold {vn}\n  rw [AllToAllSourceFaithful.tensor_shape _ _ _ _ _ _ (by decide)]\n' if op == 'AllToAllPrim' else 'by\n'
-            theorem(sn, f'{args} : ({vn} init).shape = {sh}', shape_start+'  simp ['+', '.join(shape_defs)+']')
+            # Project shape through this operator only. Never simplify a nested
+            # value graph: real-width normalization/linear arithmetic is costly
+            # even though it is irrelevant to this theorem.
+            shape_start = f'by\n  unfold {vn}\n'
+            if op == 'FW_layernorm':
+                shape_proof = ('  rw [SourceScopedPrefix.layernorm_shape]\n'
+                               f'  exact {input_shapes[0]}')
+            elif op == 'FW_linear':
+                dims = row['input_shapes'][0] + [row['input_shapes'][1][0]]
+                lemma = 'fw_linear_3d_shape' if len(dims) == 4 else 'SourceScopedPrefix.linear_shape_2d'
+                shape_proof = f'  exact {lemma} {" ".join(map(str, dims))} {" ".join(v)} ' + ' '.join(f'({h})' for h in input_shapes)
+            elif op == 'AllGatherPrim':
+                dim, = scope.params
+                shape_proof = (f'  exact allGatherPrimDimN_shape {dim} {len(scope.ranks)} '
+                               f'[{", ".join(v)}] {row["input_shapes"][0]} ({input_shapes[0]})')
+            elif op == 'ChunkPrim':
+                shape_proof = (f'  exact chunkPrimDimN_shape {scope.dim} {len(scope.ranks)} '
+                               f'{scope.local_index} {v[0]} {row["input_shapes"][0]} '
+                               f'({input_shapes[0]}) (by decide)')
+            elif op == 'FW_multiref' or (op == 'FW_add' and len(ins) == 1):
+                shape_proof = f'  exact {input_shapes[0]}'
+            else:
+                shape_defs = []
+                if op == 'DATALOADER':
+                    shape_defs += [f'{node}_port{p}', 'Tensor.mkShape']
+                elif op == 'FW_embedding':
+                    shape_defs += ['fw_embedding_shape', 'lastD'] + input_shapes
+                elif op == 'FW_add':
+                    shape_defs += ['elemwiseAdd', 'Tensor.mkShape', 'outShape2'] + input_shapes
+                elif op == 'AllToAllPrim':
+                    shape_start += '  rw [AllToAllSourceFaithful.tensor_shape _ _ _ _ _ _ (by decide)]\n'
+                    shape_defs = input_shapes[:1]
+                shape_proof = '  simp [' + ', '.join(shape_defs) + ']'
+            theorem(sn, f'{args} : ({vn} init).shape = {sh}', shape_start + shape_proof)
+            # Later proof elaboration must use the named read/shape facts, not
+            # recursively evaluate normalization or matrix entries. Local only:
+            # the generated value definitions and exported statements are unchanged.
+            lines.append(f'attribute [local irreducible] {vn}')
             values[t.tid] = f'({vn} init)'; writers[t.tid] = (j, on); shape_proofs[t.tid] = f'{sn} init hInitShapes'
+        lines.append(f'attribute [local irreducible] {stem}State_{j+1}')
     selected = [r['index'] for r in rows]; length = len(rows); final = state(length)
     run = f'runUsing {advance} ({label}InputRequests.take {length}) (some init)'
     theorem(stem+'Success', f'{args} : {run} = some {final}',
