@@ -6,7 +6,7 @@ from Verdict import runtime_prefix as prefix
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None, *, layernorm=False):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -82,8 +82,36 @@ def linear_world(root, k, ndim=3, fault=None, *, layernorm=False):
                         port = ('ln-dx', 'ln-dgamma', 'ln-dbeta').index(fault)
                         t = lnback.outputs[port]; graph.shapes[t] = (7,)
                         lnback._output_irs[port] = IR(t.tid, 'gradient', (7,))
-                    ordinary(graph, rank, 935, 'BW_add', [lnback.outputs[0], x, x], [graph.shapes[x]]*2)
+                    if elementwise:
+                        y = x if elementwise == 'equal' else gamma
+                        addins = [lnback.outputs[0], x, y]
+                        if fault == 'add-dy': addins[0] = gamma
+                        if fault == 'add-broadcast':
+                            addins[2] = ordinary(graph, rank, 933, 'FW_view', [x], [(3, 2*k)], {'size': (3, 2*k)}).outputs[0]
+                        add = ordinary(graph, rank, 935, 'BW_add', addins,
+                            [graph.shapes[x], graph.shapes[y]], {'alpha': 1})
+                        if fault == 'add-alpha': add.kwargs['alpha'] = 2
+                        if fault == 'add-params': add.kwargs['unknown'] = 1
+                        if fault == 'add-arity': add.inputs.pop(); add._input_irs.pop()
+                        if fault == 'add-outputs': add.outputs.pop(); add._output_irs.pop()
+                        if fault == 'add-duplicate': add.outputs[1] = add.outputs[0]
+                        if fault in ('add-dx', 'add-dyout'):
+                            port = int(fault == 'add-dyout'); t = add.outputs[port]
+                            graph.shapes[t] = (7,); add._output_irs[port] = IR(t.tid, 'gradient', (7,))
+                        geluins = [add.outputs[0], x]
+                        if fault == 'gelu-dy': geluins[0] = gamma
+                        gelu = ordinary(graph, rank, 938, 'BW_gelu', geluins, [graph.shapes[x]], {'approximate': 'none'})
+                        if fault == 'gelu-approx': gelu.kwargs['approximate'] = 'tanh'
+                        if fault == 'gelu-params': gelu.kwargs['unknown'] = 1
+                        if fault == 'gelu-arity': gelu.inputs.pop(); gelu._input_irs.pop()
+                        if fault == 'gelu-output':
+                            t = gelu.outputs[0]; graph.shapes[t] = (7,); gelu._output_irs[0] = IR(t.tid, 'gradient', (7,))
+                        ordinary(graph, rank, 960, 'BW_gelu', [add.outputs[-1], y], [graph.shapes[y]], {'approximate': 'none'})
+                    else:
+                        ordinary(graph, rank, 935, 'BW_multiref', [lnback.outputs[0]], [graph.shapes[x]])
                 grads.append(bw)
+        if elementwise:
+            ordinary(pm, 0, 970, 'BW_multiref', [grads[0].outputs[0]], [pm.shapes[grads[0].outputs[0]]])
         if fault: return
         for rank in range(k):
             inputs = [g.outputs[0] for g in grads]
@@ -111,6 +139,103 @@ def layernorm_world(root, k, ndim=3, fault=None):
 
 
 class ProductionSeedTests(unittest.TestCase):
+    def test_leaf_run_simplifies_steps_bottom_up_in_one_pass(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        import re
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        with TemporaryDirectory() as d:
+            text = proof_text(linear_world(Path(d), 3, layernorm=True, elementwise='broadcast'))
+        leaves = re.findall(r'theorem \w+Run_\d+_\d+[^\n]* := by\n  simp only \[([^\n]+)\]', text)
+        self.assertTrue(leaves)
+        for rules in leaves:
+            self.assertIn('Step_', rules)
+        self.assertNotRegex(text, r'  rw \[pmSeededPrefixStep_')
+
+    def test_add_broadcast_ordered_computed_outputs(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for ndim in (2, 3):
+                for mode in ('equal', 'broadcast'):
+                    with self.subTest(k=k, ndim=ndim, mode=mode), TemporaryDirectory() as d:
+                        fed = linear_world(Path(d), k, ndim, layernorm=True, elementwise=mode)
+                        p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                        self.assertEqual(p['frontier']['op'], 'BW_multiref')
+                        self.assertEqual(len(p['initial_premises']), 4*k)
+                        self.assertIn(':= (bw_add2 ', text)
+                        for port in (0, 1):
+                            import re
+                            names = re.findall(r'def (pmSeededPrefixValue_\d+_'+str(port)+r') .* := \(bw_add2 ', text)
+                            self.assertEqual(len(names), k)
+                            for name in names:
+                                self.assertRegex(text, r'def '+name+r' .* := \(bw_add2 .*\)\.'+str(port+1)+r'\n')
+                                suffix = name.split('Value_')[1]
+                                for role in ('Written', 'Shape'):
+                                    self.assertIn('theorem pmSeededPrefix'+role+'_'+suffix, text)
+
+    def test_gelu_exact_computed_and_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for fault in (None, 'gelu-dy', 'gelu-approx', 'gelu-params', 'gelu-arity', 'gelu-output'):
+                with self.subTest(k=k, fault=fault), TemporaryDirectory() as d:
+                    if fault in ('gelu-approx', 'gelu-params'):
+                        with self.assertRaises(ValueError):
+                            linear_world(Path(d), k, layernorm=True, elementwise='broadcast', fault=fault)
+                        continue
+                    fed = linear_world(Path(d), k, layernorm=True, elementwise='broadcast', fault=fault)
+                    text = proof_text(fed); p = fed.receipt['scoped_prefix']['pm']
+                    self.assertEqual(p['frontier']['op'], 'BW_gelu' if fault else 'BW_multiref')
+                    self.assertEqual(':= bw_gelu ' in text, fault is None)
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+
+    def test_gelu_nonconstant_cpu_exact_derivative(self):
+        import torch, math
+        x = torch.tensor([-3., -1., 0., .5, 2., 4.], dtype=torch.float64, requires_grad=True)
+        dy = torch.tensor([2., -.5, 3., -2., 4., .7], dtype=torch.float64)
+        torch.nn.functional.gelu(x, approximate='none').backward(dy)
+        derivative = .5*(1+torch.erf(x.detach()/math.sqrt(2))) + x.detach()*torch.exp(-x.detach()**2/2)/math.sqrt(2*math.pi)
+        torch.testing.assert_close(x.grad, dy*derivative, rtol=1e-12, atol=1e-12)
+        self.assertFalse(torch.allclose(x.grad, dy))
+        z = x.detach().requires_grad_()
+        torch.nn.functional.gelu(z, approximate='tanh').backward(dy)
+        self.assertFalse(torch.allclose(z.grad, x.grad, rtol=1e-8, atol=1e-8))
+
+    def test_add_raw_source_and_shape_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for fault in ('add-alpha', 'add-params', 'add-arity', 'add-outputs', 'add-duplicate', 'add-dy', 'add-broadcast', 'add-dx', 'add-dyout'):
+                with self.subTest(k=k, fault=fault), TemporaryDirectory() as d:
+                    if fault in ('add-alpha', 'add-params', 'add-duplicate'):
+                        with self.assertRaises(ValueError):
+                            linear_world(Path(d), k, layernorm=True, elementwise='broadcast', fault=fault)
+                    else:
+                        fed = linear_world(Path(d), k, layernorm=True, elementwise='broadcast', fault=fault)
+                        self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_add')
+                        self.assertNotIn(':= (bw_add2 ', proof_text(fed))
+
+    def test_add_nonconstant_cpu_both_broadcast_reductions(self):
+        import torch
+        for sx, sy in (((2, 1), (1, 3)), ((2, 3), (3,)), ((2, 3), (2, 3))):
+            x = torch.arange(torch.tensor(sx).prod().item(), dtype=torch.float64).reshape(sx).requires_grad_()
+            y = torch.arange(torch.tensor(sy).prod().item(), dtype=torch.float64).reshape(sy).requires_grad_()
+            out = x + y
+            dy = torch.arange(1, out.numel()+1, dtype=torch.float64).reshape(out.shape)
+            out.backward(dy)
+            for t in (x, y):
+                expected = torch.zeros_like(t)
+                import itertools
+                for coord in itertools.product(*(range(d) for d in out.shape)):
+                    target = tuple(0 if d == 1 else c for d, c in zip(t.shape, coord[len(out.shape)-len(t.shape):]))
+                    expected[target] += dy[coord]
+                torch.testing.assert_close(t.grad, expected)
+                self.assertGreater(t.grad.unique().numel(), 1)
+
     def test_layernorm_three_ordered_outputs(self):
         import re
         from pathlib import Path
@@ -121,7 +246,7 @@ class ProductionSeedTests(unittest.TestCase):
                 with self.subTest(k=k, ndim=ndim), TemporaryDirectory() as d:
                     fed = layernorm_world(Path(d), k, ndim)
                     p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
-                    self.assertEqual(p['frontier']['op'], 'BW_add')
+                    self.assertEqual(p['frontier']['op'], 'BW_multiref')
                     self.assertEqual(len(p['initial_premises']), 4*k)
                     defs = re.findall(r'def (pmSeededPrefixValue_\d+_\d+) .* := \(bw_layernorm .*\)\.(1|2\.1|2\.2)\n', text)
                     self.assertEqual([v for _, v in defs], ['1', '2.1', '2.2'])

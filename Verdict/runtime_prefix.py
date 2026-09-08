@@ -100,11 +100,11 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                         or list(n) != seeds[seed_ids[ins[0].tid]]['consumer']
                         or dict(view.node_kwargs(n)) not in ({}, {'__consts': []})):
                     raise PrefixUnavailable('unsupported-seed-sum-contract', op=op)
-            elif op in ('BW_linear', 'BW_layernorm') and seeds is not None:
+            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu') and seeds is not None:
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
                 _, reason = _ordinary(view, n, c._get_node_params)
-                arity = (3, 2) if op == 'BW_linear' else (4, 3)
+                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op == 'BW_gelu' else (3, 2)
                 if reason or (len(ins), len(outs)) != arity or len({t.tid for t in outs}) != len(outs):
                     raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
             elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
@@ -215,6 +215,19 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 output_shapes = [[1]]
             elif op in ('FW_contiguous', 'FW_gelu'):
                 output_shapes = [ss[ins[0].tid]]
+            elif op == 'BW_gelu':
+                grad, sh = (ss[t.tid] for t in ins)
+                if grad != sh:
+                    raise PrefixUnavailable('bw-gelu-shape-contract', computed_shapes=[grad, sh])
+                output_shapes = [sh.copy()]
+            elif op == 'BW_add':
+                grad, sh, other = (ss[t.tid] for t in ins)
+                size = max(len(sh), len(other))
+                aligned = list(zip([1]*(size-len(sh))+sh, [1]*(size-len(other))+other))
+                if (any(a <= 0 or b <= 0 or (a != b and a != 1 and b != 1) for a, b in aligned)
+                        or grad != [max(a, b) for a, b in aligned]):
+                    raise PrefixUnavailable('bw-add-broadcast-contract', computed_shapes=[grad, sh, other])
+                output_shapes = [sh.copy(), other.copy()]
             elif op == 'BW_layernorm':
                 grad, sh, gamma, beta = (ss[t.tid] for t in ins)
                 if (len(sh) not in (2, 3) or sh[-1] <= 0 or grad != sh
@@ -336,6 +349,8 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op == 'FW_gelu': return [f'fw_gelu {xs[0]}']
             if op == 'FW_softmax': return [f'fw_softmax {xs[0]}']
             if op == 'BW_layernorm': return [f'(bw_layernorm {xs[0]} {xs[1]} {xs[2]} {xs[3]}).{p}' for p in ('1', '2.1', '2.2')]
+            if op == 'BW_gelu': return [f'bw_gelu {xs[0]} {xs[1]}']
+            if op == 'BW_add': return [f'(bw_add2 {xs[0]} {xs[1]} {xs[2]}).{p}' for p in (1, 2)]
             if op == 'BW_linear': return [f'(bw_linear {xs[0]} {xs[1]} {xs[2]}).{p}' for p in (1, 2)]
             if op == 'FW_linear': return [f'fw_linear {xs[0]} {xs[1]}']
             if op == 'FW_layernorm': return [f'fw_layernorm {xs[0]} {xs[1]} {xs[2]}']
@@ -386,6 +401,10 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             shape_start = f'by\n  unfold {vn}\n'
             if op in ('FW_view', 'FW_reshape', 'FW_sum'):
                 shape_proof = '  rfl'
+            elif op == 'BW_add':
+                shape_proof = f'  exact {input_shapes[p+1]}'
+            elif op == 'BW_gelu':
+                shape_proof = f'  exact {input_shapes[1]}'
             elif op == 'BW_sum':
                 shape_proof = f'  exact {input_shapes[1]}'
             elif op == 'FW_transpose':
@@ -472,9 +491,12 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
                 (f'some {label}Node_{i}_feed' if i in feeds else 'none') + ')'
                 for i in selected[a:b])
             definition(f'def {req} : List InputRequest := [{items}]')
-            proof = f'by\n  simp only [{req}, runUsing, List.foldl_cons, List.foldl_nil, Option.bind_some]\n'
-            proof += '\n'.join(f'  rw [{steps[q]}]' +
-                ('\n  simp only [Option.bind_some]' if q < b-1 else '') for q in range(a, b))
+            # Simplify the bounded leaf bottom-up. Repeated rw searches start at
+            # outer steps and repeatedly compare concrete node/scope expressions
+            # before reaching the innermost matching computed Store.
+            rules = ', '.join(steps[q] for q in range(a, b))
+            proof = (f'by\n  simp only [{req}, runUsing, List.foldl_cons, '
+                     f'List.foldl_nil, Option.bind_some, {rules}]')
             if a == b:
                 proof = f'by\n  rfl'
         else:
