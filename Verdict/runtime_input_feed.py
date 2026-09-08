@@ -132,11 +132,14 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
         adapter = render_adapter(seeds['inventories'], structured=True)
         prefixes.append(adapter)
         import re
-        result['seed_input'] = dict(seeds, seed_input_adapter_emitted=True,
+        result['seed_input'] = dict({k:v for k,v in seeds.items() if k != 'internal_multiref'},
+            internal_multiref={k:v.receipt() for k,v in seeds.get('internal_multiref', {}).items()},
+            seed_input_adapter_emitted=True,
             kernel_checks=[n for g in adapter for n in re.findall(r'^theorem (\S+)', g.text, re.M)])
     for label, view, raw in [('sm', sm, raw_sm), ('pm', pm, raw_pm)]:
         text, detail = render_prefix(label, view, raw, world, inventory, structured=True,
-            seed_inventories=seeds['inventories'] if seeds is not None else None)
+            seed_inventories=seeds['inventories'] if seeds is not None else None,
+            internal_multiref=seeds.get('internal_multiref', {}).get(label) if seeds is not None else None)
         result['scoped_prefix'][label] = detail
         if text: prefixes.append(text)
     base = world.lean+'\n'+'\n'.join(lines)

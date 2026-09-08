@@ -6,7 +6,7 @@ from Verdict import runtime_prefix as prefix
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -108,10 +108,23 @@ def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=No
                             t = gelu.outputs[0]; graph.shapes[t] = (7,); gelu._output_irs[0] = IR(t.tid, 'gradient', (7,))
                         ordinary(graph, rank, 960, 'BW_gelu', [add.outputs[-1], y], [graph.shapes[y]], {'approximate': 'none'})
                     else:
-                        ordinary(graph, rank, 935, 'BW_multiref', [lnback.outputs[0]], [graph.shapes[x]])
+                        ordinary(graph, rank, 935, 'BW_view', [lnback.outputs[0]], [graph.shapes[x]], {'size': graph.shapes[x]})
                 grads.append(bw)
         if elementwise:
-            ordinary(pm, 0, 970, 'BW_multiref', [grads[0].outputs[0]], [pm.shapes[grads[0].outputs[0]]])
+            t = grads[0].outputs[0]; sh = pm.shapes[t]
+            if multiref is not None:
+                branches = [ordinary(pm, 0, 980+q, 'FW_div', [t], [sh], {'__consts': [q+1]}).outputs[0]
+                            for q in range(multiref)]
+                branches.reverse()
+                if repeated and branches: branches[-1] = branches[0]
+                if fault == 'multiref-shape' and branches:
+                    branches[-1] = ordinary(pm, 0, 990, 'FW_view', [t], [tuple(reversed(sh))], {'size': tuple(reversed(sh))}).outputs[0]
+                if fault == 'multiref-uncomputed': branches[0] = next(c.inputs[0] for c in pm.cells if c.opname == 'BW_sum')
+                kw = {'times': multiref} if fault == 'multiref-times' else {'unknown': 1} if fault == 'multiref-params' else {'__consts': [2]} if fault == 'multiref-consts' else {}
+                outs = [sh, sh] if fault == 'multiref-outputs' else [(7,)] if fault == 'multiref-output-shape' else [sh]
+                merged = ordinary(pm, 0, 995, 'BW_multiref', branches, outs, kw)
+                t = merged.outputs[0]
+            ordinary(pm, 0, 997, 'BW_view', [t], [pm.shapes[t]], {'size': pm.shapes[t]})
         if fault: return
         for rank in range(k):
             inputs = [g.outputs[0] for g in grads]
@@ -139,6 +152,73 @@ def layernorm_world(root, k, ndim=3, fault=None):
 
 
 class ProductionSeedTests(unittest.TestCase):
+    def test_internal_retained_single_root_accumulates_alias_branches(self):
+        import torch
+        from nnscaler.runtime.executor import Executor
+        from nnscaler.runtime.function.function import multiref
+        for n in (1, 2, 3):
+            for level in (0, 1, 2):
+                name = f'internal_multiref_test_{n}_{level}'
+                x = torch.tensor([1., -2., 3.], requires_grad=True)
+                g = torch.tensor([2., -1., 4.])
+                def segment(t):
+                    outputs = multiref(t, n, clone_level=level)
+                    outputs = [outputs] if n == 1 else list(outputs)
+                    return sum((y * g).sum() for y in outputs)
+                loss = Executor.fexecute(name, segment, x)
+                actual = Executor.backward(name, [x], [loss], [None])
+                self.assertTrue(torch.equal(actual, n * g))
+                self.assertEqual(Executor._detach.pop(name), [])
+
+    def test_multiref_unbound_ordered_branches_fail_closed(self):
+        import re
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for n in (1, 2, 3):
+                for repeated in (False, True):
+                    with self.subTest(k=k, n=n, repeated=repeated), TemporaryDirectory() as d:
+                        fed = linear_world(Path(d), k, layernorm=True, elementwise='equal', multiref=n, repeated=repeated)
+                        p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                        self.assertEqual(p['frontier']['op'], 'BW_multiref')
+                        self.assertEqual(p['frontier']['reason'], 'missing-internal-autograd-edge-authority')
+                        self.assertNotIn(':= tensorSum [', text)
+    def test_multiref_source_and_computed_shape_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for fault in ('multiref-empty', 'multiref-params', 'multiref-consts', 'multiref-outputs', 'multiref-shape', 'multiref-output-shape', 'multiref-uncomputed', 'multiref-times'):
+                with self.subTest(k=k, fault=fault), TemporaryDirectory() as d:
+                    if fault in ('multiref-params', 'multiref-consts'):
+                        with self.assertRaises(ValueError):
+                            linear_world(Path(d), k, layernorm=True, elementwise='equal', multiref=2, fault=fault)
+                    else:
+                        fed = linear_world(Path(d), k, layernorm=True, elementwise='equal', multiref=0 if fault == 'multiref-empty' else 2, fault=fault)
+                        self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_multiref')
+                        self.assertNotIn(':= tensorSum [', proof_text(fed))
+                        if fault == 'multiref-uncomputed':
+                            self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['reason'], 'missing-internal-autograd-edge-authority')
+
+    def test_multiref_nonconstant_cpu_branch_autograd(self):
+        import torch
+        for n in (1, 2, 3):
+            for repeated in (False, True):
+                x = torch.tensor([1., -2., 3.], dtype=torch.float64, requires_grad=True)
+                grads = [torch.tensor([2.+q*3, -1.-q, 4.+q], dtype=torch.float64) for q in range(n)]
+                grads.reverse()
+                if repeated: grads[-1] = grads[0]
+                from nnscaler.runtime.function.function import multiref
+                branches = multiref(x, n)
+                torch.autograd.backward([branches] if n == 1 else list(branches), grads)
+                expected = sum(grads, torch.zeros_like(x))
+                self.assertEqual(x.grad.tolist(), expected.tolist())
+                self.assertGreater(expected.unique().numel(), 1)
+                if n > 1:
+                    self.assertFalse(torch.equal(x.grad, grads[0]))
+                    self.assertFalse(torch.equal(x.grad, expected/n))
+
     def test_leaf_run_simplifies_steps_bottom_up_in_one_pass(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory
@@ -162,7 +242,7 @@ class ProductionSeedTests(unittest.TestCase):
                     with self.subTest(k=k, ndim=ndim, mode=mode), TemporaryDirectory() as d:
                         fed = linear_world(Path(d), k, ndim, layernorm=True, elementwise=mode)
                         p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
-                        self.assertEqual(p['frontier']['op'], 'BW_multiref')
+                        self.assertEqual(p['frontier']['op'], 'BW_view')
                         self.assertEqual(len(p['initial_premises']), 4*k)
                         self.assertIn(':= (bw_add2 ', text)
                         for port in (0, 1):
@@ -188,7 +268,7 @@ class ProductionSeedTests(unittest.TestCase):
                         continue
                     fed = linear_world(Path(d), k, layernorm=True, elementwise='broadcast', fault=fault)
                     text = proof_text(fed); p = fed.receipt['scoped_prefix']['pm']
-                    self.assertEqual(p['frontier']['op'], 'BW_gelu' if fault else 'BW_multiref')
+                    self.assertEqual(p['frontier']['op'], 'BW_gelu' if fault else 'BW_view')
                     self.assertEqual(':= bw_gelu ' in text, fault is None)
                     self.assertEqual(len(p['initial_premises']), 4*k)
 
@@ -246,7 +326,7 @@ class ProductionSeedTests(unittest.TestCase):
                 with self.subTest(k=k, ndim=ndim), TemporaryDirectory() as d:
                     fed = layernorm_world(Path(d), k, ndim)
                     p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
-                    self.assertEqual(p['frontier']['op'], 'BW_multiref')
+                    self.assertEqual(p['frontier']['op'], 'BW_view')
                     self.assertEqual(len(p['initial_premises']), 4*k)
                     defs = re.findall(r'def (pmSeededPrefixValue_\d+_\d+) .* := \(bw_layernorm .*\)\.(1|2\.1|2\.2)\n', text)
                     self.assertEqual([v for _, v in defs], ['1', '2.1', '2.2'])

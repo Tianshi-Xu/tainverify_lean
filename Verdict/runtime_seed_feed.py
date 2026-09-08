@@ -94,7 +94,7 @@ def load_bundle(config, sm, pm, raw_sm, raw_pm, handoff_root):
         raise ValueError('explicit SM/PM capture and run directories required')
     if Path(config['pm_run']).resolve() != Path(handoff_root).resolve():
         raise ValueError('seed run must equal current input handoff run')
-    inventories = {}; runs = {}; pins = {}; actuals = {}
+    inventories = {}; runs = {}; pins = {}; actuals = {}; internal = {}
     for label, world_type, view, raw in [('sm','s',sm,raw_sm), ('pm','p',pm,raw_pm)]:
         root, run = Path(config[label+'_capture']), Path(config[label+'_run'])
         authority, _ = load_seed_capture(root, world_type)
@@ -128,6 +128,8 @@ def load_bundle(config, sm, pm, raw_sm, raw_pm, handoff_root):
         inventories[label] = map_requests(view, raw, authority['requests'])
         runs[label] = manifest['run_id']; pins.update(authority['pins'])
         pins.update({str(p.resolve()):hashlib.sha256(p.read_bytes()).hexdigest() for p in files})
+        from Verdict.runtime_multiref_authority import derive
+        internal[label] = derive(view, cells, deepcopy(mg), world, authority['requests'], pins)
     from scripts.gpt_batch_runtime import exact
     reference_file = Path(config['pm_run'])/'reference.pt'
     reference = torch.load(reference_file, weights_only=True, map_location='cpu')
@@ -137,7 +139,7 @@ def load_bundle(config, sm, pm, raw_sm, raw_pm, handoff_root):
     tids = [row['tid'] for rows in inventories.values() for row in rows]
     if len(set(tids)) != len(tids):
         raise ValueError('cross-world seed ID collision')
-    return dict(inventories=inventories, runs=runs, pins=pins,
+    return dict(inventories=inventories, runs=runs, pins=pins, internal_multiref=internal,
                 seed_input_adapter_emitted=False, kernel_value_proved=False,
                 proof_admissible=False, torch_refinement=False)
 

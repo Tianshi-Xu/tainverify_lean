@@ -75,12 +75,15 @@ class PrefixUnavailable(ValueError):
         self.details = dict(status='prefix-proof-unavailable', reason=reason, **details)
 
 
-def render(label, view, raw, world, loaders, *, structured=False, seed_inventories=None):
+def render(label, view, raw, world, loaders, *, structured=False, seed_inventories=None, internal_multiref=None):
     """Called after bind's canonical world and raw/feed authentication."""
     order = world.receipt['execution_order'][label]['execution_to_source']
     if not any(str(view.node_opname(view.nodes()[i])).split('.')[-1]
                in ('AllToAllPrim', 'CROSS_DP_WRED') for i in order):
         return '', dict(status='prefix-proof-unavailable', reason='no-state-dependent-boundary')
+    from Verdict.runtime_multiref_authority import InternalEdges
+    authorized_multirefs = (internal_multiref.validate(view)
+        if isinstance(internal_multiref, InternalEdges) else set())
     index = _Index(view, raw)
     feeds = {row['index']: row for row in loaders if row['world'] == label}
     missing = {row['index']: row['reason'] for row in world.receipt['missing'] if row['world'] == label}
@@ -100,6 +103,17 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                         or list(n) != seeds[seed_ids[ins[0].tid]]['consumer']
                         or dict(view.node_kwargs(n)) not in ({}, {'__consts': []})):
                     raise PrefixUnavailable('unsupported-seed-sum-contract', op=op)
+            elif op == 'BW_multiref' and seeds is not None:
+                if tuple(n) not in authorized_multirefs:
+                    raise PrefixUnavailable('missing-internal-autograd-edge-authority', op=op)
+                from Verdict import graph_to_lean as c
+                from Verdict.runtime_world import _ordinary
+                params, reason = _ordinary(view, n, c._get_node_params)
+                if reason or params or dict(view.node_kwargs(n)) not in ({}, {'__consts': []}):
+                    raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
             elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu') and seeds is not None:
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
@@ -215,6 +229,11 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 output_shapes = [[1]]
             elif op in ('FW_contiguous', 'FW_gelu'):
                 output_shapes = [ss[ins[0].tid]]
+            elif op == 'BW_multiref':
+                sh = ss[ins[0].tid]
+                if any(ss[t.tid] != sh for t in ins):
+                    raise PrefixUnavailable('bw-multiref-shape-contract', computed_shapes=[ss[t.tid] for t in ins])
+                output_shapes = [sh.copy()]
             elif op == 'BW_gelu':
                 grad, sh = (ss[t.tid] for t in ins)
                 if grad != sh:
@@ -349,6 +368,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op == 'FW_gelu': return [f'fw_gelu {xs[0]}']
             if op == 'FW_softmax': return [f'fw_softmax {xs[0]}']
             if op == 'BW_layernorm': return [f'(bw_layernorm {xs[0]} {xs[1]} {xs[2]} {xs[3]}).{p}' for p in ('1', '2.1', '2.2')]
+            if op == 'BW_multiref': return [f'tensorSum [{", ".join(xs)}]']
             if op == 'BW_gelu': return [f'bw_gelu {xs[0]} {xs[1]}']
             if op == 'BW_add': return [f'(bw_add2 {xs[0]} {xs[1]} {xs[2]}).{p}' for p in (1, 2)]
             if op == 'BW_linear': return [f'(bw_linear {xs[0]} {xs[1]} {xs[2]}).{p}' for p in (1, 2)]
@@ -401,6 +421,9 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             shape_start = f'by\n  unfold {vn}\n'
             if op in ('FW_view', 'FW_reshape', 'FW_sum'):
                 shape_proof = '  rfl'
+            elif op == 'BW_multiref':
+                shape_proof = ('  rw [tensorSum_shape]\n'
+                               f'  exact {input_shapes[0]}')
             elif op == 'BW_add':
                 shape_proof = f'  exact {input_shapes[p+1]}'
             elif op == 'BW_gelu':
