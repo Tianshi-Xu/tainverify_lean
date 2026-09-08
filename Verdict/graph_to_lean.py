@@ -209,6 +209,7 @@ def parse_args() -> argparse.Namespace:
 		"--artifact-sha256", action="append", default=[], metavar="NAME=SHA256",
 		help="Expected non-JSON authority artifact hash (repeatable).",
 	)
+	p.add_argument("--runtime-batch-authority", help="Source-only CPU batch record/result JSON; never value proof authority.")
 	return p.parse_args()
 
 
@@ -722,6 +723,7 @@ class _SourceSnapshot(dict):
 	"""JSON source plus separate pre-export raw authority; plain JSON is insufficient."""
 	raw_writers: Dict[Any, Any]
 	raw_rank_sources: Dict[str, str]
+	raw_cells: List[Any]
 
 
 def _load_chunk_source(capture: str, rank_code_directory: str):
@@ -780,6 +782,7 @@ def _load_chunk_source(capture: str, rank_code_directory: str):
 	snapshot['source'] = dict(capture=str(path),world_sidecar=str(path.with_suffix('.json')),
 		rank_code_directory=str(rank_code_directory),plan_ndevs=world.plan_ndevs,runtime_ndevs=world.runtime_ndevs,
 		dataflow_order='expanded-cell-order; fused-inputs-indmap-order',call_instance='zero-based expanded occurrence per world/rank/mb/cid/origin')
+	snapshot.raw_cells=cells
 	snapshot.raw_writers=raw
 	snapshot.raw_rank_sources={str(r): text for r,text in sources.items()}
 	validate_snapshot(snapshot)
@@ -4631,6 +4634,31 @@ def _remap_output_path(path: str, final_root: Path, staged_root: Path) -> str:
 	return str(staged_root / relative)
 
 
+def _load_runtime_lineage_inputs(args, source=None):
+	import json
+	import pickle
+	from verdict.graph import World, WType
+	from nnscaler_backend.build_graph import _prepare_rank_cells
+	from nnscaler_backend.load_graph import _sanity_check_world
+	def raw(path, kind):
+		path = Path(path)
+		with path.open('rb') as stream: mg = pickle.load(stream)
+		world = World(wtype=WType(kind), plan_ndevs=len(mg.devices), runtime_ndevs=mg.runtime_ndevs,
+			**json.loads(path.with_suffix('.json').read_text()))
+		_sanity_check_world(world)
+		return [c for r in range(world.runtime_ndevs) for c in _prepare_rank_cells(world, mg, r)]
+	if source is None:
+		code = getattr(args, 'runtime_rank_code_directory', None)
+		if not code: raise ValueError('missing current rank source for runtime batch authority')
+		source = _load_chunk_source(args.pm_pkl, code)
+	payload = json.loads(Path(args.runtime_batch_authority).read_text())
+	batch = payload.get('batch', payload)
+	# Receipts are read beside the CURRENT captures, never taken from supplied JSON.
+	receipt = json.loads(Path(args.pm_pkl).with_suffix('.receipt.json').read_text())
+	reference = json.loads(Path(args.sm_pkl).with_suffix('.receipt.json').read_text())
+	return raw(args.sm_pkl, 's'), source.raw_cells, source, batch, receipt, reference
+
+
 def _generate(args: argparse.Namespace) -> None:
 	_validate_definitions_only_options(
 		bool(getattr(args, "definitions_only", False)),
@@ -4649,6 +4677,7 @@ def _generate(args: argparse.Namespace) -> None:
 	# the raw-tid quotient, even for definitions-only exports.
 	if any(G.W.num_dp != 1 or G.W.num_mb != 1 for G in (GsE, GpE)):
 		GsE, GsC, GpE = _lower_runtime_graphs(GsE, GsC, GpE)
+		source = None
 		if any(str(GpE.node_opname(n)).split('.')[-1] in (*_COLLECTIVE_OPS, 'ChunkPrim', 'CROSS_DP_WRED') for n in GpE.nodes()):
 			code_dir = getattr(args, 'runtime_rank_code_directory', None)
 			if not code_dir:
@@ -4667,6 +4696,17 @@ def _generate(args: argparse.Namespace) -> None:
 			print(f'[graph_to_lean] validated {len(GpE.collective_scopes)} conditional collective steps; '
 				f'{len(GpE.chunk_scopes)} conditional Chunk steps; '
 				'input values unproved; remaining DP lineage/other scoped evaluators unavailable', flush=True)
+		if not getattr(args, 'runtime_batch_authority', None):
+			first = next((GpE.source_tensor(t) for n in GpE.nodes() for t in GpE.node_outputs(n)), None)
+			raise ValueError(f'missing batch authority at fullref {first!r}; runtime-identity lineage reconstruction is unavailable without source batch/readpoint authority; remaining DP lineage blocked')
+		from Verdict.runtime_lineage import trace, consume, RuntimeLineageBlocked
+		inputs = _load_runtime_lineage_inputs(args, source)
+		lineages, gaps, validation = trace(GsE, GpE, *inputs)
+		receipt = consume(GsE, GpE, lineages, gaps, validation, backward_closure_tids)
+		receipt['inventory'] = dict(sm_nodes=len(GsE.nodes()), pm_nodes=len(GpE.nodes()),
+			pm_fullrefs=len(GpE.tensors()), combined_fullrefs=len(set(GsE._original)|set(GsC._original)|set(GpE._original)),
+			wred_scopes=len(getattr(GpE, 'wred_scopes', ())), collective_scopes=len(getattr(GpE, 'collective_scopes', ())), chunk_scopes=len(getattr(GpE, 'chunk_scopes', ())))
+		raise RuntimeLineageBlocked('runtime-world-render/public-adapter unavailable; typed source closure consumed; values unproved', receipt)
 	sm_logical_ids, pm_logical_ids = aligned_logical_node_ids(GsE, GpE)
 
 	t0 = time.perf_counter()

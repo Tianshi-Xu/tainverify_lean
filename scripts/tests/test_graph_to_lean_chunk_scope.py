@@ -159,14 +159,14 @@ class ChunkCompilerTests(unittest.TestCase):
             emit_segment_patterns=False, out='unused-public.lean', spec_out='unused-spec.lean',
             sm_pkl='sm', pm_pkl='pm', verifier_cache_dir=None, runtime_rank_code_directory='source')
         observed = []
-        def stop(sm, pm):
-            observed.append(pm.chunk_scopes)
-            raise ValueError('remaining DP lineage')
+        emit = compiler.emit_chunk_scope_certificates
+        def observe(view):
+            observed.append(view.chunk_scopes)
+            return emit(view)
         with patch.object(compiler, 'load_verifier', return_value=v), \
              patch.object(compiler, '_load_chunk_source', return_value=s), \
-             patch.object(compiler, 'aligned_logical_node_ids', return_value=({}, {})), \
-             patch.object(compiler, 'infer_coarse_lineages_from_expanded', side_effect=stop):
-            with self.assertRaisesRegex(ValueError, 'remaining DP lineage'):
+             patch.object(compiler, 'emit_chunk_scope_certificates', side_effect=observe):
+            with self.assertRaisesRegex(ValueError, 'missing batch authority'):
                 compiler._generate(args)
         self.assertEqual(len(observed[0]), 1)
         self.assertFalse(Path(args.out).exists())
