@@ -331,13 +331,26 @@ def execute_observed_training(args, parallel, module, snapshot, record, rank, in
     import torch
     run_id = read_run(args, receipt['compute']['runtime_ngpus'])
     observer = InputHandoffObserver(parallel, module, snapshot, record, rank, run_id)
+    seed_observer = None
+    if getattr(args, 'seed_capture', None) is not None:
+        from trainverify.runtime_seed_authority import load_seed_capture, GeneratedSeedObserver
+        authority, sources = load_seed_capture(args.seed_capture)
+        request, = [q for q in authority['requests'] if q['seed']['runtime_rank'] == rank]
+        seed_observer = GeneratedSeedObserver(parallel, module, sources[rank], request, run_id)
+        save_json(args.out/f'seed-source{rank}.json', authority)
     actual = dict(rank=rank, handoff=observer.events, handoff_tensors=observer.payload)
     row = dict(rank=rank, inner_exit=1, handoff=observer.events,
         new_run_segment_input_association=False, historicalcapture_sample_association=False,
         proof_admissible=False, kernel_value_proved=False)
     try:
         with observer:
-            outputs = parallel.train_step([inputs])
+            if seed_observer is None:
+                outputs = parallel.train_step([inputs])
+            else:
+                outputs = seed_observer.run(lambda: parallel.train_step([inputs]))
+                event, payload = seed_observer.evidence()
+                actual.update(seed_event=event, seed_tensors=payload)
+                save_json(args.out/f'seed-event{rank}.json', event)
         # Durable measured post is written even when preservation below fails.
         torch.save(actual, args.out/f'rank{rank}.pt')
         validation = validate_rank_handoff(row, actual, record, snapshot, receipt,
@@ -429,6 +442,15 @@ def aggregate(args):
     for row in rows:
         actual = torch.load(args.out/f"rank{row['rank']}.pt", weights_only=True, map_location='cpu')
         validate_rank_handoff(row, actual, record, snapshot, receipt, reference_receipt, run_id)
+    if getattr(args, 'seed_capture', None) is not None:
+        from trainverify.runtime_seed_authority import load_seed_capture, validate_seed_event
+        authority, _ = load_seed_capture(args.seed_capture)
+        if {p.name for p in args.out.glob('seed-event*.json')} != {f'seed-event{r}.json' for r in range(world)}:
+            raise ValueError('missing/duplicate seed event file domain')
+        for rank in range(world):
+            actual = torch.load(args.out/f'rank{rank}.pt', weights_only=True, map_location='cpu')
+            validate_seed_event(authority, read(args.out/f'seed-event{rank}.json'), actual,
+                                read(args.out/'run.json'), rank)
     model, state = canonical(receipt, tensors, 'cpu')
     names = set(dict(model.named_parameters()))
     reference = torch.load(args.out/'reference.pt', weights_only=True)
@@ -483,6 +505,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('receipt','config','snapshot','batch-witness','tensors','code','out'):
         parser.add_argument('--'+name, type=Path, required=True)
+    parser.add_argument('--seed-capture', type=Path, help='explicit trusted original capture directory; opt-in seed observation')
     parser.add_argument('--worker', action='store_true')
     parser.add_argument('--validate-only', action='store_true')
     args = parser.parse_args()
@@ -513,6 +536,8 @@ def main():
             '-m','scripts.gpt_batch_runtime']
     for name in ('receipt','config','snapshot','batch_witness','tensors','code','out'):
         argv += ['--'+name.replace('_','-'), str(getattr(args,name).resolve())]
+    if args.seed_capture is not None:
+        argv += ['--seed-capture', str(args.seed_capture.resolve())]
     argv += ['--worker']
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', OMP_NUM_THREADS='1',
                TMPDIR=str(args.out.resolve()), XDG_CACHE_HOME=str(args.out.resolve()/'cache'),
