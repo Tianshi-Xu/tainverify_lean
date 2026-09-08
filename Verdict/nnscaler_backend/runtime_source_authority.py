@@ -14,7 +14,7 @@ def _tensor_ref(tensor):
                     (tensor.wtype, tensor.rank, tensor.mb, tensor.tid, tensor.v)))
 
 
-def capture_adapter_source(cells):
+def capture_adapter_source(cells, training_sequences=None):
     """Detach the prepared, pre-fusion stream while primitive IR is still live."""
     from copy import deepcopy
     from trainverify.runtime_source_authority import ADAPTER_OPS
@@ -133,7 +133,59 @@ def capture_adapter_source(cells):
                              source_file=inspect.getsourcefile(fn))
                              for name in cls.backward.__code__.co_names
                              if inspect.isfunction(fn := cls.backward.__globals__.get(name))}))
+    if training_sequences is not None:
+        _capture_training_calls(stream, cells, training_sequences)
     return deepcopy(stream)
+
+
+def _capture_training_calls(stream, cells, sequences):
+    """Detach real scaled execution-plan ports before segment flattening is lost.
+
+    Only direct dataloader -> forward segment ports are represented here. This
+    is call alignment, not an assertion that executor synchronization is identity.
+    """
+    from copy import deepcopy
+    import inspect
+    import textwrap
+    from nnscaler.ir.operator import IRDataOperation
+    from nnscaler.graph.segment import IRSegment
+    from nnscaler.codegen.emit import CodeEmission
+    from nnscaler.runtime.executor import Executor
+    from nnscaler.runtime.adapter import AsyncCommHandler
+    emit = CodeEmission()
+    runtime = {name: textwrap.dedent(inspect.getsource(fn)) for name, fn in (
+        ("fexecute", Executor.fexecute), ("sync_tensors", Executor.sync_tensors),
+        ("wait", AsyncCommHandler().wait))}
+    for rank, sequence in sequences.items():
+        data = [(cell, row) for cell, row in zip(cells, stream)
+                if cell.rank == rank and isinstance(cell.ir, IRDataOperation)]
+        occurrences = defaultdict(int)
+        current, ordinal = {}, 0
+        calls = []
+        for ir in sequence:
+            occurrence = occurrences[ir.cid]
+            occurrences[ir.cid] += 1
+            if isinstance(ir, IRDataOperation):
+                matches = [(c, r) for c, r in data if c.ir.cid == ir.cid and c.node.mb == occurrence]
+                if len(matches) != 1:
+                    continue
+                cell, row = matches[0]
+                names = [emit.tensor_name(t) for t in ir.outputs()]
+                row["generated_dataloader"] = dict(loader=emit.tensor_name(ir.input(0)),
+                    outputs=names, output_refs=deepcopy(row["outputs"]),
+                    writer=deepcopy(row["ref"]), ordinal=occurrence + 1, runtime=deepcopy(runtime))
+                for name, ref in zip(names, row["outputs"]):
+                    current[name] = deepcopy(ref)
+            elif isinstance(ir, IRSegment) and ir.isfw():
+                ordinal += 1
+                args = [emit.tensor_name(t) for t in ir.inputs() if not t.is_attr()]
+                calls.append(dict(method=emit.node_name(ir), source_cid=ir.cid,
+                    runtime_rank=rank, microbatch=occurrence, call_instance=occurrence,
+                    ordinal=ordinal, arguments=args, parameters=list(args),
+                    input_refs=[deepcopy(current.get(name)) for name in args]))
+        for _, row in data:
+            if "generated_dataloader" in row:
+                row["generated_dataloader"]["training_calls"] = deepcopy(calls)
 
 
 def export_expanded_cells(world, cells, rank_sources=None, reducer_irs=None, adapter_source=None):
@@ -234,7 +286,11 @@ def load_capture(capture_path, world_path=None, wtype="p", rank_code_directory=N
     _sanity_check_world(world)
     cells = [cell for rank in range(world.runtime_ndevs)
              for cell in _prepare_rank_cells(world, mg, rank)]
-    adapter_source = capture_adapter_source(cells)
+    from nnscaler_backend.build_graph import _flatten_exereuse_then_scale
+    training_sequences = {rank: _flatten_exereuse_then_scale(
+        mg.execplan.seq(rank % world.plan_ndevs), mg, rank)
+        for rank in range(world.runtime_ndevs)}
+    adapter_source = capture_adapter_source(cells, training_sequences=training_sequences)
     cells, _ = _fuse_collective_inputs(cells)
     rank_sources, reducer_irs = None, {}
     if rank_code_directory is not None:

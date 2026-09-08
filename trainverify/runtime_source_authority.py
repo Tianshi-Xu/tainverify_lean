@@ -595,6 +595,117 @@ def _bind_backward_contexts(snapshot, adapters, writers):
             a["generated_read_missing"] = "missing: backward gradient computation/value provenance not proved; ctx/source structurally bound"
 
 
+def _dataloader_training_point(snapshot, producer, method, name, point, current, touched):
+    """Bind syntax to independent IR ports, never infer executor value identity."""
+    import ast
+    from copy import deepcopy
+    evidence = producer["generated_dataloader"]
+    def require(condition, reason):
+        if not condition:
+            raise ValueError("rejected: " + reason)
+    def names(target):
+        ts = target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target]
+        require(all(isinstance(t, ast.Name) for t in ts), "unsupported training assignment target")
+        return [t.id for t in ts]
+    def args(call):
+        result = []
+        for arg in call.args:
+            if isinstance(arg, ast.Starred):
+                require(isinstance(arg.value, (ast.Tuple, ast.List)), "hidden training star expression")
+                result.extend(arg.value.elts)
+            else:
+                result.append(arg)
+        return result
+    require(evidence["writer"] == producer["ref"] and evidence["output_refs"] == producer["outputs"],
+            "dataloader fullref/version mismatch")
+    require(name not in touched, "segment parameter assigned/deleted before Chunk")
+    rank = producer["ref"]["runtime_rank"]
+    known = {r["generated_producer"]["signature"] for r in snapshot["adapter_source"]
+             if r["ref"]["runtime_rank"] == rank and "generated_producer" in r}
+    for definition in current.values():
+        value = definition["statement"].value
+        require(isinstance(value, ast.Call) and ast.unparse(value.func) in known
+                and not ast.unparse(value.func).endswith("_")
+                and all(not isinstance(n, (ast.Call, ast.NamedExpr))
+                        for arg in list(value.args) + [k.value for k in value.keywords]
+                        for n in ast.walk(arg)), "unsupported segment alias/inplace/hidden side effect")
+    tree = ast.parse(snapshot["rank_sources"][str(rank)])
+    trains = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_train_step"]
+    require(len(trains) == 1, "missing/ambiguous training schedule")
+    train, = trains
+    require(not train.decorator_list and not train.args.defaults and not train.args.kw_defaults
+            and not train.args.vararg and not train.args.kwarg and not train.args.posonlyargs,
+            "unsupported training signature")
+    require([a.arg for a in train.args.args] == ["model", evidence["loader"]], "wrong loader parameter")
+    calls = evidence["training_calls"]
+    relevant = [c for c in calls if c["method"] == method]
+    require(len(relevant) == 1, "ambiguous repeated training segment")
+    expected, = relevant
+    require(expected["runtime_rank"] == rank and expected["microbatch"] == producer["ref"]["microbatch"]
+            and expected["call_instance"] == 0 and expected["microbatch"] == 0,
+            "unsupported training unit/microbatch/call instance")
+    require(evidence["ordinal"] == 1, "unsupported repeated next occurrence")
+    cls, = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "GenModel"]
+    methods = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == method]
+    require(len(methods) == 1, "ambiguous segment method")
+    fn, = methods
+    require(not fn.decorator_list and not fn.args.defaults and not fn.args.kw_defaults
+            and not fn.args.vararg and not fn.args.kwarg and not fn.args.posonlyargs,
+            "unsupported segment signature")
+    require([a.arg for a in fn.args.args] == ["self"] + expected["parameters"], "segment parameter order mismatch")
+    fsign = "nnscaler.runtime.executor.fexecute"
+    inventory = [n for n in ast.walk(train) if isinstance(n, ast.Call) and ast.unparse(n.func) == fsign]
+    nexts = [n for n in ast.walk(train) if isinstance(n, ast.Call) and ast.unparse(n.func) == "next"]
+    require(len(inventory) == len(calls) and len(nexts) == 1, "training next/fexecute inventory mismatch")
+    direct = [s.value for s in train.body if isinstance(s, ast.Assign) and isinstance(s.value, ast.Call)
+              and ast.unparse(s.value.func) == fsign]
+    require({id(c) for c in direct} == {id(c) for c in inventory}, "hidden/controlflow training call")
+    for ordinal, (actual, ircall) in enumerate(zip(direct, calls), 1):
+        actual_args = args(actual)
+        require(ircall["ordinal"] == ordinal and len(actual_args) == 2 + len(ircall["arguments"]),
+                "training call ordinal/arity mismatch")
+        require(isinstance(actual_args[0], ast.Constant) and actual_args[0].value == ircall["method"]
+                and ast.unparse(actual_args[1]) == "model." + ircall["method"]
+                and all(isinstance(a, ast.Name) for a in actual_args[2:])
+                and [a.id for a in actual_args[2:]] == ircall["arguments"]
+                and len(actual.keywords) == 1 and actual.keywords[0].arg == "requires_grad"
+                and isinstance(actual.keywords[0].value, ast.Constant) and actual.keywords[0].value.value is True,
+                "training fexecute arguments/method mismatch")
+    reaching, next_line = {}, None
+    selected = direct[expected["ordinal"] - 1]
+    for stmt in train.body:
+        if (next_line is None and isinstance(stmt, ast.Assign) and len(stmt.targets) == 1
+                and isinstance(stmt.targets[0], ast.Name) and isinstance(stmt.value, ast.Constant)
+                and stmt.targets[0].id not in ["model", evidence["loader"]] + evidence["outputs"]):
+            continue
+        if isinstance(stmt, ast.Expr) and ast.unparse(stmt.value) == "model.zero_grad()" and next_line is None:
+            continue
+        require(isinstance(stmt, ast.Assign) and len(stmt.targets) == 1
+                and isinstance(stmt.value, ast.Call), "unsupported training prefix/rebinding/side effect")
+        call = stmt.value
+        if ast.unparse(call.func) == "next":
+            argv = args(call)
+            require(len(argv) == 1 and isinstance(argv[0], ast.Name) and argv[0].id == evidence["loader"]
+                    and not call.keywords and names(stmt.targets[0]) == evidence["outputs"],
+                    "dataloader tuple/loader mismatch")
+            reaching = dict(zip(evidence["outputs"], evidence["output_refs"]))
+            next_line = stmt.lineno
+        elif call is selected:
+            require(next_line is not None, "segment called before next")
+            require([reaching.get(n) for n in expected["arguments"]] == expected["input_refs"],
+                    "training reaching input fullref/version mismatch")
+            break
+        else:
+            require(False, "unsupported intervening training call/definition")
+    require(name in expected["parameters"], "Chunk input is not a prepared segment parameter")
+    port = expected["parameters"].index(name)
+    require(expected["input_refs"][port] == point["ref"], "segment input/Chunk fullref mismatch")
+    return dict(ref=deepcopy(point["ref"]), writer=point["writer"], name=name,
+        training_scope="_train_step only; inference unclaimed", next_line=next_line,
+        call_line=selected.lineno, segment=deepcopy(expected), parameter_index=port,
+        runtime=deepcopy(evidence["runtime"]))
+
+
 def _bind_generated_readpoints(snapshot, adapters, writers, record_key="adapter"):
     """Direct straight-line methods only; syntax coverage is NOT value authority.
 
@@ -615,6 +726,7 @@ def _bind_generated_readpoints(snapshot, adapters, writers, record_key="adapter"
         methods = [n for n in cls.body if isinstance(n, ast.FunctionDef)]
         for method in methods:
             current, counts = {}, {}
+            touched = set()
             unsupported = False
             for stmt in method.body:
                 if isinstance(stmt, ast.Assign):
@@ -630,17 +742,20 @@ def _bind_generated_readpoints(snapshot, adapters, writers, record_key="adapter"
                         unsupported = True
                         continue
                     reads = dict(current)
+                    touched_before = frozenset(touched)
                     for name in targets(stmt):
+                        touched.add(name)
                         name_methods.setdefault((int(rank), name), set()).add(method.lineno)
                         counts[name] = counts.get(name, 0) + 1
                         current[name] = dict(line=stmt.lineno, ordinal=counts[name],
                             method=method.name, statement=stmt)
-                    sites[(int(rank), stmt.lineno)] = (method.name, reads, unsupported)
+                    sites[(int(rank), stmt.lineno)] = (method.name, reads, unsupported, touched_before)
                 elif isinstance(stmt, ast.Delete):
                     if any(not isinstance(name, ast.Name) for name in stmt.targets):
                         unsupported = True
                         continue
                     for name in stmt.targets:
+                        touched.add(name.id)
                         current.pop(name.id, None)
                 elif isinstance(stmt, ast.Return):
                     break
@@ -664,10 +779,24 @@ def _bind_generated_readpoints(snapshot, adapters, writers, record_key="adapter"
         elif site is None or site[2]:
             reason = "unsupported: non-straight-line generated method/call context"
         else:
-            method, current, _ = site
+            method, current, _, touched = site
             for name, point in zip(call["inputs"], a["local_read_points"]):
                 producer = rows.get(point["writer"])
                 evidence = producer.get("generated_producer") if producer else None
+                if evidence is None and producer and "generated_dataloader" in producer:
+                    a["training_call_binding"] = "missing"
+                    a["training_call_points"] = []
+                    try:
+                        training = _dataloader_training_point(snapshot, producer, method, name, point, current, touched)
+                    except (KeyError, ValueError, IndexError, TypeError) as exc:
+                        reason = str(exc)
+                    else:
+                        a["training_call_binding"] = "bound"
+                        a["training_call_points"] = [training]
+                        reason = ("missing: executor value preservation: fexecute -> sync_tensors -> "
+                                  "AsyncCommHandler.wait can substitute a registered tensor/callback result; "
+                                  "no independent no-pending-work/input-value authority")
+                    break
                 if evidence is None:
                     reason = "missing: independently prepared generated producer evidence"
                     break
