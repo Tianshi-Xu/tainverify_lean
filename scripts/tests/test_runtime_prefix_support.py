@@ -61,5 +61,3 @@ def test_support_missing_tampered_and_staging_failure_are_atomic(tmp_path):
         publish(fed, tmp_path/'write-failure'/'World.lean')
     assert not (tmp_path/'write-failure').exists()
     assert not list(tmp_path.glob('trainverify-world-*'))
-
-

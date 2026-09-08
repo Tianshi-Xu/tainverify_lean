@@ -7,6 +7,7 @@ from pathlib import Path
 from scripts.tests.test_runtime_scoped_prefix import collective_world
 
 BASE = 'TrainVerifyRuntimeWorldData.lean'
+SUPPORT = 'TrainVerifyRuntimePrefixSupport.lean'
 
 
 class BundleTests(unittest.TestCase):
@@ -16,8 +17,10 @@ class BundleTests(unittest.TestCase):
             root = Path(d)
             fed = collective_world(root, 2, normalize=True, project=True, gather=True)
             self.assertIn(BASE, fed.supporting_sources)
-            chunks = sorted(set(fed.supporting_sources) - {BASE})
+            self.assertIn(SUPPORT, fed.supporting_sources)
+            chunks = sorted(set(fed.supporting_sources) - {BASE, SUPPORT})
             self.assertTrue(chunks)
+            self.assertEqual(chunks, [f'TrainVerifyRuntimePrefix{i:04d}.lean' for i in range(len(chunks))])
             base = fed.supporting_sources[BASE]
             self.assertTrue(fed.lean.startswith('import TrainVerifyRuntimeWorldData\nimport denote.SourceScopedPrefix\n'))
             self.assertEqual(base.count(' : GraphDecl :='), 2)
@@ -28,15 +31,20 @@ class BundleTests(unittest.TestCase):
                 self.assertIn(f'theorem {label}InputSchedule_valid', base)
             out = root/'published'/'World.lean'
             publish(fed, out)
-            self.assertEqual({p.name for p in out.parent.iterdir()}, {BASE, *chunks, 'World.lean', 'world-receipt.json'})
+            self.assertEqual({p.name for p in out.parent.iterdir()}, {BASE, SUPPORT, *chunks, 'World.lean', 'world-receipt.json'})
             self.assertEqual(out.read_text(), fed.lean)
             self.assertEqual((out.parent/BASE).read_text(), base)
             receipt = json.loads((out.parent/'world-receipt.json').read_text())
             bundle = receipt['proof_bundle']
-            self.assertEqual(bundle['dependency_order'], [BASE, *chunks, 'World.lean'])
+            self.assertEqual(bundle['dependency_order'], [BASE, SUPPORT, *chunks, 'World.lean'])
             self.assertFalse(bundle['kernel_checked'])
-            self.assertEqual([m['file'] for m in bundle['modules']], [BASE, *chunks, 'World.lean'])
-            for member in bundle['modules']:
+            self.assertEqual([m['file'] for m in bundle['modules']], [BASE, SUPPORT, *chunks, 'World.lean'])
+            positions = {member['module']: i for i, member in enumerate(bundle['modules'])}
+            self.assertEqual(bundle['modules'][1]['role'], 'support')
+            for i, member in enumerate(bundle['modules']):
+                for dependency in member['imports']:
+                    if dependency in positions:
+                        self.assertLess(positions[dependency], i)
                 text = (out.parent/member['file']).read_text()
                 self.assertEqual(member['imports'], re.findall(r'^import (\S+)$', text, re.M))
                 self.assertEqual(member['theorems'], re.findall(r'^theorem (\S+)', text, re.M))
