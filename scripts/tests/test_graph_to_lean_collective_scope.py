@@ -77,7 +77,13 @@ class CollectiveCompilerTests(unittest.TestCase):
                     self.assertEqual((c.ranks,c.local_index),((0,2,5),1))
                     self.assertFalse(c.proof_admissible)
                     text=compiler.emit_collective_scope_certificates(view)
-                    self.assertIn('GroupScopedEval.step_scoped',text)
+                    self.assertIn('AllToAllSourceFaithful.step_output' if op == 'AllToAllPrim'
+                                  else 'GroupScopedEval.step_scoped', text)
+                    if op == 'AllToAllPrim':
+                        self.assertIn('SourceScopedEval.step', text)
+                        self.assertIn('def peer_', text)
+                        self.assertNotIn('evalOp ', text)
+                        self.assertNotIn('(hc :', text)
                     self.assertIn('op := "OpName.'+op+'"',text)
                     self.assertIn('hworld : g.numRanks = 7',text)
                     self.assertNotIn('sorry',text);self.assertNotIn('houtput',text)
@@ -142,8 +148,10 @@ class CollectiveCompilerTests(unittest.TestCase):
         for row in s['adapter_source']:
             if 'primitive' in row: row['primitive']['kwargs']['odim']=0
         bind_adapters(s);view,=compiler._lower_runtime_graphs(g)
-        with self.assertRaisesRegex(ValueError,'same.axis'):
-            compiler.attach_collective_scopes(view,s)
+        compiler.attach_collective_scopes(view,s)
+        text = compiler.emit_collective_scope_certificates(view)
+        self.assertIn('AllToAllSourceFaithful.step_output', text)
+        self.assertNotIn('evalOp ', text)
 
     def test_reference_object_field_order_is_not_identity(self):
         g,s=fixture()

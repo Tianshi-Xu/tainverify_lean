@@ -511,10 +511,9 @@ def _bind_collective_scopes(view, snapshot, writers, ref):
 			expected[params[0]] //= k
 		elif op == 'AllToAllPrim':
 			idim, odim = params
-			if idim == odim and k > 1:
-				raise ValueError('unsupported same-axis AllToAll source/evalOp flow')
 			if ish[odim] % k: raise ValueError('collective input split shape not divisible')
-			expected[idim] *= k; expected[odim] //= k
+			# Source flow: split each sender first, then concatenate received pieces.
+			expected[odim] //= k; expected[idim] *= k
 		if list(osh) != expected:
 			raise ValueError(f'collective output shape mismatch: {node!r}: {ish} -> {osh}, expected {expected}')
 		bound[node] = _CollectiveScope(node, w['export_id'], op, ranks, ranks.index(node.rank),
@@ -530,7 +529,7 @@ def emit_collective_scope_certificates(view: _RuntimeGraphView) -> str:
 	attach_collective_scopes(view, view._collective_source)
 	if claimed != view.collective_scopes or view.nodes() != list(view.source.nodes()):
 		raise ValueError('collective attached scope/node mismatch')
-	lines = ['import denote.GroupScopedEval', 'namespace TrainVerify.Denote.CollectiveCompiler',
+	lines = ['import denote.SourceScopedEval', 'namespace TrainVerify.Denote.CollectiveCompiler',
 		'set_option maxHeartbeats 500000', 'noncomputable section',
 		'-- Conditional source-only certificates. Input values remain unproved.']
 	for i, node in enumerate(view.nodes()):
@@ -538,12 +537,54 @@ def emit_collective_scope_certificates(view: _RuntimeGraphView) -> str:
 		c = view.collective_scopes[node]
 		rs, ins, ps = str(list(c.ranks)), str(list(c.input_tids)), str(list(c.params))
 		n = f'{{rank := {node.rank}, op := "OpName.{c.op}", ins := {ins}, outs := [{c.output_tid}], params := {ps}}}'
+		if c.op == 'AllToAllPrim':
+			# Every literal rank is bound to its exact full-reference-lowered input.
+			peer = ' '.join(f'| {r} => {t}' for r, t in zip(c.ranks, c.input_tids))
+			lines.extend([f'def peer_{i} : Nat → Tid {peer} | _ => 0',
+				f'theorem peer_{i}_ordered : {rs}.map peer_{i} = {ins} := by decide',
+				f'#print axioms peer_{i}_ordered'])
 		lines.extend([f'-- original node {node!r}; source writer {c.source_writer}',
 			f'-- generated_read_binding={c.generated_read_binding}; proof_admissible=false',
 			f'theorem collective_{i} (g : GraphDecl) (s : Store)',
 			f'    (hworld : g.numRanks = {view.W.runtime_ndevs})'])
 		for j, tid in enumerate(c.input_tids):
 			lines.append(f'    (_hshape{j} : (s {tid}).shape = {list(c.input_shape)})')
+		if c.op == 'AllToAllPrim':
+			idim, odim = c.params
+			lines.extend([
+				f'    : ∃ s\', SourceScopedEval.step g (.group (some {rs})) peer_{i} s {n} = some s\' ∧',
+				f'      s\' {c.output_tid} = allGatherPrimDimN {idim} {len(c.ranks)} 0',
+				f'        (({ins}.map s).map (chunkPrimDimN {odim} {len(c.ranks)} {c.local_index})) ∧',
+				f'      (∀ tid, tid ∉ ([{c.output_tid}] : List Tid) → s\' tid = s tid) ∧',
+				f'      {c.local_index} < {len(c.ranks)} := by',
+				f'  have hg : GroupScopedEval.WellFormed g.numRanks {node.rank} {rs} := by rw [hworld]; decide',
+				f'  have hc : AllToAllSourceFaithful.NodeContract {rs} peer_{i} s {n} {idim} {odim} {c.output_tid} := by',
+				f'    refine ⟨rfl, rfl, peer_{i}_ordered.symm, rfl, ?_⟩',
+				f'    refine ⟨by decide, rfl, {list(c.input_shape)}, ?_, by decide, by decide, by decide, by decide⟩',
+				'    simp only [List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false]',
+				'    intro x hx',
+				'    rcases hx with ' + ' | '.join('rfl' for _ in c.input_tids),
+				*['    · exact _hshape' + str(j) for j in range(len(c.input_tids))],
+				f'  obtain ⟨s\', hs, hout, hframe, hi⟩ := AllToAllSourceFaithful.step_output g {rs} peer_{i} s {n} {idim} {odim} {c.output_tid} hg hc',
+				f'  refine ⟨s\', ?_, hout, hframe, hi⟩',
+				'  rw [SourceScopedEval.step_allToAll _ _ _ _ _ rfl, hs]',
+				'  rfl', f'#print axioms collective_{i}', ''])
+			lines.extend([
+				f'theorem collective_{i}_fold (g : GraphDecl) (s : Store)',
+				f'    (hworld : g.numRanks = {view.W.runtime_ndevs})',
+				*[f'    (hshape{j} : (s {tid}).shape = {list(c.input_shape)})' for j, tid in enumerate(c.input_tids)],
+				'    (scope : NodeDecl → GroupScopedEval.Request) (peer : NodeDecl → Nat → Tid)',
+				f'    (hs : scope {n} = .group (some {rs})) (hp : peer {n} = peer_{i})',
+				'    (rest : List NodeDecl) : ∃ s\',',
+				f'      SourceScopedEval.run g scope peer ({n} :: rest) (some s) =',
+				'        SourceScopedEval.run g scope peer rest (some s\') ∧',
+				f'      s\' {c.output_tid} = allGatherPrimDimN {idim} {len(c.ranks)} 0',
+				f'        (({ins}.map s).map (chunkPrimDimN {odim} {len(c.ranks)} {c.local_index})) := by',
+				f'  obtain ⟨s\', hstep, hout, _⟩ := collective_{i} g s hworld ' + ' '.join(f'hshape{j}' for j in range(len(c.input_tids))),
+				'  refine ⟨s\', ?_, hout⟩',
+				'  rw [SourceScopedEval.run_cons, hs, hp, hstep]',
+				f'#print axioms collective_{i}_fold', ''])
+			continue
 		lines.extend([f'    : GroupScopedEval.step g (.group (some {rs})) s {n} =',
 			f'    some (storeSet s ([{c.output_tid}].zip (evalOp {len(c.ranks)} {c.local_index} "OpName.{c.op}" {ps} ({ins}.map s)))) := by',
 			f'  exact GroupScopedEval.step_scoped g s {n} {rs}',
