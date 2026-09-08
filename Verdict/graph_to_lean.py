@@ -211,6 +211,7 @@ def parse_args() -> argparse.Namespace:
 	)
 	p.add_argument("--runtime-batch-authority", help="Source-only CPU batch record/result JSON; never value proof authority.")
 	p.add_argument("--runtime-world-definitions-out", help="Opt-in source-only complete world definitions in a fresh private directory, separate from --out; public proof still blocked.")
+	p.add_argument("--runtime-seed-bundle", help="Explicit trusted SM/PM capture/run JSON; requires runtime input handoff; seeded prefix only.")
 	p.add_argument("--runtime-input-handoff", help="Fresh observed postwait run directory; requires private runtime world output; no public closure.")
 	return p.parse_args()
 
@@ -4672,6 +4673,9 @@ def _generate(args: argparse.Namespace) -> None:
 	out_path = Path(args.out)
 	world_out = getattr(args, 'runtime_world_definitions_out', None)
 	handoff = getattr(args, 'runtime_input_handoff', None)
+	seed_bundle = getattr(args, 'runtime_seed_bundle', None)
+	if seed_bundle and not handoff:
+		raise ValueError('runtime seed bundle requires runtime input handoff')
 	if handoff and not world_out:
 		raise ValueError('runtime input handoff requires runtime world definitions output')
 	if world_out:
@@ -4725,7 +4729,9 @@ def _generate(args: argparse.Namespace) -> None:
 		world = render(GsE, GpE, inputs[0], inputs[1])
 		if handoff:
 			from Verdict.runtime_input_feed import bind
-			world = bind(world, GsE, GpE, *inputs, handoff)
+			import json
+			seed_options = {} if seed_bundle is None else {'seed_bundle': json.loads(Path(seed_bundle).read_text())}
+			world = bind(world, GsE, GpE, *inputs, handoff, **seed_options)
 		receipt['world_definitions'] = world.receipt
 		if world_out:
 			publish(world, world_out)

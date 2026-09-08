@@ -75,7 +75,7 @@ class PrefixUnavailable(ValueError):
         self.details = dict(status='prefix-proof-unavailable', reason=reason, **details)
 
 
-def render(label, view, raw, world, loaders, *, structured=False):
+def render(label, view, raw, world, loaders, *, structured=False, seed_inventories=None):
     """Called after bind's canonical world and raw/feed authentication."""
     order = world.receipt['execution_order'][label]['execution_to_source']
     if not any(str(view.node_opname(view.nodes()[i])).split('.')[-1]
@@ -84,14 +84,23 @@ def render(label, view, raw, world, loaders, *, structured=False):
     index = _Index(view, raw)
     feeds = {row['index']: row for row in loaders if row['world'] == label}
     missing = {row['index']: row['reason'] for row in world.receipt['missing'] if row['world'] == label}
-    shapes = {}; initial = {}; rows = []; frontier = None
+    seeds = None if seed_inventories is None else seed_inventories[label]
+    seed_ids = {} if seeds is None else {row['tid']: q for q, row in enumerate(seeds)}
+    shapes = {tid: [1] for tid in seed_ids}; initial = {}; rows = []; frontier = None
     # Commit each node's inferred shapes/premises only after all checks succeed.
     for j, i in enumerate(order):
         n = view.nodes()[i]; op = str(view.node_opname(n)).split('.')[-1]
         ins = view.node_inputs(n); outs = view.node_outputs(n)
         ss = dict(shapes); ii = dict(initial)
         try:
-            if op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
+            if op == 'BW_sum' and seeds is not None:
+                if (len(ins) != 2 or len(outs) != 1
+                        or ins[0].tid not in seed_ids
+                        or ins[1].tid not in {t.tid for row in rows for t in row['outs']}
+                        or list(n) != seeds[seed_ids[ins[0].tid]]['consumer']
+                        or dict(view.node_kwargs(n)) not in ({}, {'__consts': []})):
+                    raise PrefixUnavailable('unsupported-seed-sum-contract', op=op)
+            elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
                 raise PrefixUnavailable(missing[i], op=op)
@@ -192,6 +201,8 @@ def render(label, view, raw, world, loaders, *, structured=False):
                     if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
                         raise PrefixUnavailable('softmax-shape-contract')
                     output_shapes = [sh]
+            elif op == 'BW_sum':
+                output_shapes = [ss[ins[1].tid]]
             elif op == 'FW_sum':
                 # Denote's existing full-reduction scalar representation.
                 output_shapes = [[1]]
@@ -229,11 +240,11 @@ def render(label, view, raw, world, loaders, *, structured=False):
         return '', dict(frontier or dict(status='prefix-proof-unavailable', reason='no-supported-guard'),
                         prefix_nodes=[r['index'] for r in rows], frontier=frontier,
                         whole_world_option_success=False)
-    return _render(label, rows, feeds, initial, frontier, structured=structured)
+    return _render(label, rows, feeds, initial, frontier, structured=structured, seeds=seeds)
 
 
-def _render(label, rows, feeds, initial, frontier, *, structured=False):
-    stem = label + 'Prefix'; lines = []; names = []; guards = []; steps = []
+def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=None):
+    stem = label + ('Prefix' if seeds is None else 'SeededPrefix'); lines = []; names = []; guards = []; steps = []
     groups = []; definitions = []; opaque = []; group_start = 0
     def definition(text):
         definitions.append(text)
@@ -244,6 +255,11 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
                                  tuple(opaque), final))
         lines.clear(); definitions.clear(); opaque.clear(); group_start = len(names)
     values = {tid: f'(init {tid})' for tid in initial}; writers = {}; shape_proofs = {}
+    seed_ids = {} if seeds is None else {row['tid']: q for q, row in enumerate(seeds)}
+    values.update({tid: 'unitSeed' for tid in seed_ids})
+    shape_proofs.update({tid: 'unitSeed_shape' for tid in seed_ids})
+    initial_store = 'init' if seeds is None else f'({label}InitialWithSeeds init)'
+    initial_reads = {}
     def state(j): return f'({stem}State_{j} init)'
     def theorem(name, args, proof):
         names.append(name)
@@ -252,13 +268,21 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
     args = f'(init : Store) (hInitShapes : {stem}InitShapes init)'
     goal = ' ∧ '.join(f'(init {p["tid"]}).shape = {p["shape"]}' for p in initial.values()) or 'True'
     definition(f'def {stem}InitShapes (init : Store) : Prop := {goal}')
-    definition(f'def {stem}State_0 (init : Store) : Store := init')
+    definition(f'def {stem}State_0 (init : Store) : Store := {initial_store}')
     hs = [f'h{q}' for q in range(len(initial))]
     destruct = f'  rcases hInitShapes with ⟨{", ".join(hs)}⟩\n' if len(hs)>1 else ('  have h0 := hInitShapes\n' if hs else '')
     for q, (tid, p) in enumerate(initial.items()):
         name = f'{stem}InitialShape_{q}'
         theorem(name, f'{args} : (init {tid}).shape = {p["shape"]}', 'by\n'+destruct+f'  exact h{q}')
         shape_proofs[tid] = f'{name} init hInitShapes'
+        if seeds is not None:
+            read = f'{stem}InitialRead_{q}'
+            theorem(read, f'(init : Store) : {state(0)} {tid} = init {tid}',
+                f'{label}InitialWithSeeds_frame init {tid} (by decide)')
+            initial_reads[tid] = f'{read} init'
+            group()
+    for tid, q in seed_ids.items():
+        initial_reads[tid] = f'{label}InitialWithSeeds_seed_{q} init'
     group()
     for j, row in enumerate(rows):
         i, op, ins, outs, scope = (row[k] for k in ('index','op','ins','outs','scope'))
@@ -270,7 +294,8 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
             proof = 'by\n' + ''.join(
                 f'  rw [{stem}Skip_{q} init {t.tid} (by decide)]\n'
                 for q in range(j - 1, stop - 1, -1))
-            proof += f'  exact {writers[t.tid][1]} init' if t.tid in writers else '  rfl'
+            proof += (f'  exact {writers[t.tid][1]} init' if t.tid in writers else
+                      f'  exact {initial_reads[t.tid]}' if seeds is not None else '  rfl')
             theorem(name, f'(init : Store) : {prev} {t.tid} = {values[t.tid]}', proof)
         v = [values[t.tid] for t in ins]; actual = [f'({prev} {t.tid})' for t in ins]
         def expressions(xs):
@@ -283,6 +308,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
             if op == 'FW_transpose': return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
             if op == 'FW_matmul': return [f'fw_matmul {xs[0]} {xs[1]}']
             if op == 'FW_div': return [f'fw_div (({row["params"][0]} : Nat) : Scalar) {xs[0]}']
+            if op == 'BW_sum': return [f'bw_sum {xs[0]} {xs[1]}']
             if op == 'FW_sum': return [f'fw_sum {xs[0]}']
             # Tensor has no storage/stride fields: contiguous is value identity.
             if op == 'FW_contiguous': return [xs[0]]
@@ -337,6 +363,8 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
             shape_start = f'by\n  unfold {vn}\n'
             if op in ('FW_view', 'FW_reshape', 'FW_sum'):
                 shape_proof = '  rfl'
+            elif op == 'BW_sum':
+                shape_proof = f'  exact {input_shapes[1]}'
             elif op == 'FW_transpose':
                 shape_proof = ('  change listSwapAt _ _ _ = _\n'
                                f'  rw [{input_shapes[0]}]\n  rfl')
@@ -430,16 +458,18 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False):
     theorem(stem+'RequestsCoverage',
             f': {label}InputRequests.take {length} = {requests(0, length)}', 'by\n  rfl')
     group()
-    run = f'runUsing {advance} ({label}InputRequests.take {length}) (some init)'
+    run = f'runUsing {advance} ({label}InputRequests.take {length}) (some {initial_store})'
     theorem(stem+'Success', f'{args} : {run} = some {final}',
             f'by\n  rw [{stem}RequestsCoverage]\n  exact {run_name(0, length)} init hInitShapes')
     out = rows[-1]['outs'][-1]; sh = shapes_out = rows[-1]['output_shapes'][-1]
     theorem(stem+'Output', f'(init : Store) : {final} {out.tid} = {values[out.tid]}', f'{writers[out.tid][1]} init')
     theorem(stem+'OutputShape', f'{args} : ({final} {out.tid}).shape = {sh}', f'by\n  rw [{stem}Output]\n  exact {shape_proofs[out.tid]}')
-    theorem(stem+'Frame', f'{args} (tid : Tid) (ht : ∀ row ∈ {label}InputRequests.take {length}, tid ∉ row.1.outs) : {final} tid = init tid',
-            f'SourceScopedPrefix.frame {label}Graph {label}Scope {label}Peers _ init {final} tid ht ({stem}Success init hInitShapes)')
-    theorem(stem+'Continuation', f'{args} : {label}DenoteWithInputs init = runUsing {advance} ({label}InputRequests.drop {length}) (some {final})',
-            f'by\n  rw [{label}DenoteWithInputs_entry]\n  exact SourceScopedPrefix.continuation _ _ {length} init {final} ({stem}Success init hInitShapes)')
+    theorem(stem+'Frame', f'{args} (tid : Tid) (ht : ∀ row ∈ {label}InputRequests.take {length}, tid ∉ row.1.outs) : {final} tid = {initial_store} tid',
+            f'SourceScopedPrefix.frame {label}Graph {label}Scope {label}Peers _ {initial_store} {final} tid ht ({stem}Success init hInitShapes)')
+    denote = label + ('DenoteWithInputs' if seeds is None else 'SeededDenoteWithInputs')
+    entry_unfold = '' if seeds is None else f'  unfold {label}SeededDenoteWithInputs\n'
+    theorem(stem+'Continuation', f'{args} : {denote} init = runUsing {advance} ({label}InputRequests.drop {length}) (some {final})',
+            f'by\n{entry_unfold}  rw [{label}DenoteWithInputs_entry]\n  exact SourceScopedPrefix.continuation _ _ {length} {initial_store} {final} ({stem}Success init hInitShapes)')
     group(final=True)
     text = groups if structured else _HEADER + '\n'.join(g.text for g in groups) + _FOOTER
     return text, dict(status='conditional-prefix-emitted', prefix_nodes=selected,

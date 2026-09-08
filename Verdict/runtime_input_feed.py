@@ -35,7 +35,7 @@ def load_handoff(root, snapshot, batch, receipt, reference_receipt):
     return sm, pm, run
 
 
-def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, root):
+def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, root, *, seed_bundle=None):
     """Append feeds to the SAME authenticated worlds; never initialize loader tids."""
     import torch
     from Verdict.runtime_world import WorldDefinitions, render, WORLD_DATA_MODULE, WORLD_DATA_FILE, _proof_bundle
@@ -125,8 +125,18 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
         whole_world_option_success=False,torch_refinement=False,historicalcapture_sample_association=False)
     from Verdict.runtime_prefix import render as render_prefix, pack_proofs
     prefixes = []; result['scoped_prefix'] = {}
+    seeds = None
+    if seed_bundle is not None:
+        from Verdict.runtime_seed_feed import load_bundle, render_adapter
+        seeds = load_bundle(seed_bundle, sm, pm, raw_sm, raw_pm, root)
+        adapter = render_adapter(seeds['inventories'], structured=True)
+        prefixes.append(adapter)
+        import re
+        result['seed_input'] = dict(seeds, seed_input_adapter_emitted=True,
+            kernel_checks=[n for g in adapter for n in re.findall(r'^theorem (\S+)', g.text, re.M)])
     for label, view, raw in [('sm', sm, raw_sm), ('pm', pm, raw_pm)]:
-        text, detail = render_prefix(label, view, raw, world, inventory, structured=True)
+        text, detail = render_prefix(label, view, raw, world, inventory, structured=True,
+            seed_inventories=seeds['inventories'] if seeds is not None else None)
         result['scoped_prefix'][label] = detail
         if text: prefixes.append(text)
     base = world.lean+'\n'+'\n'.join(lines)

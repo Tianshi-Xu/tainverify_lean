@@ -10,7 +10,7 @@ def proof_text(fed):
     return '\n'.join([*fed.supporting_sources.values(), fed.lean])
 
 
-def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None, tail=None, tail_fault=None, scatter=None, allreduce=None):
+def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None, tail=None, tail_fault=None, scatter=None, allreduce=None, seeded_transform=None):
     """Independent raw IR + source-adapter snapshot, with actual CPU loader feeds."""
     import copy
     from types import SimpleNamespace as NS
@@ -288,6 +288,8 @@ def collective_world(root, k, unsupported=False, chain=False, between=False, fau
                         setattr(other, attr, [IR(t.tid, 'activation', tuple(payload)) if t == changed else ir
                             for t, ir in zip(tids, getattr(other, attr))])
     pm.cells=cells
+    if seeded_transform is not None:
+        seeded_transform(sm, pm)
     fields=('world','runtime_rank','microbatch','source_tid','version')
     writers=[]; prepared=[]
     for cell in cells:
