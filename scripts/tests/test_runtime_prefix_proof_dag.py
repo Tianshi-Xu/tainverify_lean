@@ -27,7 +27,10 @@ class PrefixProofDAGTests(unittest.TestCase):
                 self.assertEqual(len(re.findall(rf'^def pmPrefixState_{j+1} ', text, re.M)), 1)
                 self.assertEqual(len(re.findall(rf'^theorem pmPrefixStep_{j} ', text, re.M)), 1)
             self.assertIn('theorem pmPrefixSuccess', fed.lean)
-            self.assertIn('attribute [local irreducible] pmPrefixState_1', fed.lean)
+            imported_opaque = [name for names in re.findall(
+                r'^attribute \[local irreducible\] (.+)$', fed.lean, re.M)
+                for name in names.split()]
+            self.assertIn('pmPrefixState_1', imported_opaque)
             bundle = fed.receipt['proof_bundle']
             self.assertEqual(bundle['dependency_order'], [WORLD_DATA_FILE, *chunks, '$entry'])
             checks = [t for m in bundle['modules'] for t in m['theorems'] if t.startswith('pmPrefix')]
@@ -48,6 +51,32 @@ class PrefixProofDAGTests(unittest.TestCase):
             with self.assertRaises(ValueError): publish(fed, out)
             self.assertEqual(original, {p.name:p.read_bytes() for p in out.parent.iterdir()})
             self.assertFalse(list(root.glob('trainverify-world-*')))
+
+    def test_imported_irreducibility_is_one_ordered_command_per_boundary(self):
+        groups = [prefix.ProofGroup(
+            f'def state{i} := {i}\ndef value{i} := {i}\n'
+            f'attribute [local irreducible] state{i}\n',
+            2, (f'state{i}', f'value{i}')) for i in range(7)]
+        final = prefix.ProofGroup('theorem done : True := trivial\n', 1, (), True)
+        with patch.object(prefix, 'PROOF_DECLARATION_BUDGET', 4):
+            entry, support = prefix.pack_proofs([groups + [final]])
+        opaque = []
+        for index, source in enumerate([*support.values(), entry]):
+            chunk = groups[index * 2:index * 2 + 2] if index < 4 else [final]
+            edge = f'import TrainVerifyRuntimePrefix{index-1:04d}\n' if index else ''
+            attrs = ('attribute [local irreducible] ' + ' '.join(opaque) + '\n'
+                     if opaque else '')
+            expected = ('import TrainVerifyRuntimeWorldData\nimport denote.SourceScopedPrefix\n'
+                        + edge + prefix._HEADER + attrs
+                        + '\n'.join(g.text for g in chunk) + prefix._FOOTER)
+            self.assertEqual(source, expected)
+            opaque.extend(n for g in chunk for n in g.opaque)
+        self.assertEqual(list(support), [f'TrainVerifyRuntimePrefix{i:04d}.lean' for i in range(4)])
+        with patch.object(prefix, 'PROOF_DECLARATION_BUDGET', 80):
+            single, support = prefix.pack_proofs([groups + [final]])
+        self.assertFalse(support)
+        self.assertEqual(single, 'import TrainVerifyRuntimeWorldData\nimport denote.SourceScopedPrefix\n'
+                         + prefix._HEADER + '\n'.join(g.text for g in groups + [final]) + prefix._FOOTER)
 
     def test_packing_is_generic_greedy_and_bounded(self):
         gs = [prefix.ProofGroup(f'def x{i} := {i}\n', 1, ()) for i in range(7)]

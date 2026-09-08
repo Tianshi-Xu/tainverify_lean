@@ -59,7 +59,8 @@ def pack_proofs(prefixes):
     supporting = {}; opaque = []; previous = None
     def source(gs):
         edge = f'import {previous}\n' if previous else ''
-        attrs = ''.join(f'attribute [local irreducible] {n}\n' for n in opaque)
+        attrs = ('attribute [local irreducible] ' + ' '.join(opaque) + '\n'
+                 if opaque else '')
         return imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + _FOOTER
     for index, chunk in enumerate(chunks):
         name = f'{PREFIX_MODULE}{index:04d}'
@@ -114,7 +115,7 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 computed = {t.tid for row in rows for t in row['outs']}
                 if any(t.tid not in computed for t in ins):
                     raise PrefixUnavailable('unsupported-producer-input', op=op)
-            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose') and seeds is not None:
+            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_matmul') and seeds is not None:
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
                 _, reason = _ordinary(view, n, c._get_node_params)
@@ -222,6 +223,20 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                     if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
                         raise PrefixUnavailable('softmax-shape-contract')
                     output_shapes = [sh]
+            elif op == 'BW_matmul':
+                # batchedMatmulBwd uses a shared flat batch offset, not Torch
+                # broadcasting. All three values must come from earlier steps.
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
+                if dict(view.node_kwargs(n)) not in ({}, {'__consts': []}):
+                    raise PrefixUnavailable('bw-matmul-source-params')
+                grad, sh, other = (ss[t.tid] for t in ins)
+                if (len(sh) not in (2, 3, 4) or len(other) != len(sh)
+                        or sh[:-2] != other[:-2] or sh[-1] != other[-2]
+                        or grad != sh[:-1] + [other[-1]]):
+                    raise PrefixUnavailable('bw-matmul-shape-contract', computed_shapes=[grad, sh, other])
+                output_shapes = [sh.copy(), other.copy()]
             elif op == 'BW_transpose':
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
@@ -422,6 +437,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op in ('FW_view', 'FW_reshape'): return [f'fw_view {row["params"]} {xs[0]}']
             if op in ('FW_transpose', 'BW_transpose'): return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
             if op == 'FW_matmul': return [f'fw_matmul {xs[0]} {xs[1]}']
+            if op == 'BW_matmul': return [f'(batchedMatmulBwd {xs[0]} {xs[1]} {xs[2]}).{p}' for p in (1, 2)]
             if op == 'FW_div': return [f'fw_div (({row["params"][0]} : Nat) : Scalar) {xs[0]}']
             if op == 'BW_sum': return [f'bw_sum {xs[0]} {xs[1]}']
             if op == 'FW_sum': return [f'fw_sum {xs[0]}']
@@ -498,6 +514,11 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             elif op == 'FW_matmul':
                 shape_proof = ('  unfold fw_matmul batchedMatmul\n'
                                f'  rw [{input_shapes[0]}, {input_shapes[1]}]\n  rfl')
+            elif op == 'BW_matmul':
+                operands = f'{v[0]} (transpose2d {v[2]})' if p == 0 else f'(transpose2d {v[1]}) {v[0]}'
+                shape_proof = (f'  change (batchedMatmul {operands}).shape = _\n'
+                               '  unfold batchedMatmul transpose2d\n'
+                               f'  rw [{input_shapes[0]}, {input_shapes[2 if p == 0 else 1]}]\n  rfl')
             elif op in ('FW_div', 'FW_contiguous', 'BW_contiguous', 'FW_gelu'):
                 shape_proof = f'  exact {input_shapes[0]}'
             elif op == 'FW_softmax':

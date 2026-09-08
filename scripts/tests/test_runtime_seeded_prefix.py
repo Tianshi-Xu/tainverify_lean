@@ -3,10 +3,11 @@ import inspect
 import unittest
 from Verdict import runtime_input_feed as feed, runtime_seed_feed as seed
 from Verdict import runtime_prefix as prefix
+from math import prod
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None, matmul=None, matmul_batch=None):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -145,6 +146,54 @@ def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=No
                         graph.shapes[back.outputs[0]] = (7,)
                         back._output_irs[0] = IR(back.outputs[0].tid, 'gradient', (7,))
                     ordinary(graph, rank, 981, 'BW_multiref', [back.outputs[0]], [shape])
+                if matmul:
+                    batch = (1,) * (matmul - 2)
+                    shapes = [batch + (2*k, 5), batch + (2*k, 3), batch + (5, 3)]
+                    operands = [ordinary(graph, rank, 982+p, 'FW_view', [t], [sh], {'size': sh}).outputs[0]
+                                for p, (t, sh) in enumerate(zip((dy, x, w), shapes))]
+                    bshape = batch + (3, 5)
+                    operands[2] = ordinary(graph, rank, 986, 'FW_transpose', [operands[2]], [bshape],
+                                           {'dim0': matmul-2, 'dim1': matmul-1}).outputs[0]
+                    if matmul_batch is not None:
+                        # Repartition computed activation data into real batches;
+                        # compute g too, rather than adding an initial oracle.
+                        batch = tuple(matmul_batch)
+                        assert len(batch) == matmul-2 and (2*k) % prod(batch) == 0
+                        m = 2*k // prod(batch)
+                        shapes = [batch + (m, m), batch + (m, 3)]
+                        bshape = batch + (3, m)
+                        a = ordinary(graph, rank, 985, 'FW_view', [x], [shapes[1]], {'size': shapes[1]}).outputs[0]
+                        b = ordinary(graph, rank, 987, 'FW_view', [bw.outputs[0]], [bshape], {'size': bshape}).outputs[0]
+                        grad = ordinary(graph, rank, 990, 'FW_matmul', [a, b], [shapes[0]]).outputs[0]
+                        operands = [grad, a, b]
+                    if fault == 'matmul-broadcast-only':
+                        # Legal Torch broadcasting: A/g have batch K, B has 1.
+                        # Keeping g's batch equal to A isolates the batch guard.
+                        shapes = [(k, 2, 5), (k, 2, 3)]
+                        operands[:2] = [ordinary(graph, rank, 985+p*2, 'FW_view', [t], [sh], {'size': sh}).outputs[0]
+                                        for p, (t, sh) in enumerate(zip((dy, x), shapes))]
+                    if fault in ('matmul-g-shape', 'matmul-contraction', 'matmul-batch', 'matmul-rank'):
+                        port = 0 if fault == 'matmul-g-shape' else 2
+                        shape = list(graph.shapes[operands[port]])
+                        if fault == 'matmul-rank': shape = (prod(shape),)
+                        elif fault == 'matmul-batch': shape = (3, 1, 5)
+                        else: shape[-2], shape[-1] = shape[-1], shape[-2]
+                        operands[port] = ordinary(graph, rank, 987, 'FW_view', [operands[port]],
+                            [tuple(shape)], {'size': tuple(shape)}).outputs[0]
+                    if fault in ('matmul-g-uncomputed', 'matmul-a-uncomputed', 'matmul-b-uncomputed'):
+                        port = {'matmul-g-uncomputed': 0, 'matmul-a-uncomputed': 1, 'matmul-b-uncomputed': 2}[fault]
+                        operands[port] = g
+                    back = ordinary(graph, rank, 988, 'BW_matmul', operands.copy(), [shapes[1], bshape])
+                    if fault == 'matmul-input-arity': back.inputs.pop(); back._input_irs.pop()
+                    elif fault == 'matmul-output-arity': back.outputs.append(back.outputs[0]); back._output_irs.append(back._output_irs[0])
+                    elif fault == 'matmul-duplicate': back.outputs[1] = back.outputs[0]
+                    elif fault == 'matmul-params': back.kwargs['unknown'] = 1
+                    elif fault == 'matmul-output-shape':
+                        graph.shapes[back.outputs[1]] = (7,)
+                        back._output_irs[1] = IR(back.outputs[1].tid, 'gradient', (7,))
+                    ordinary(graph, rank, 991, 'BW_contiguous', [back.outputs[0], operands[1]], [shapes[1]])
+                    ordinary(graph, rank, 992, 'BW_contiguous', [back.outputs[1], operands[2]], [bshape])
+                    ordinary(graph, rank, 994, 'BW_multiref', [back.outputs[0]], [shapes[1]])
                 grads.append(bw)
         if elementwise:
             t = grads[0].outputs[0]; sh = pm.shapes[t]
@@ -188,6 +237,81 @@ def layernorm_world(root, k, ndim=3, fault=None):
 
 
 class ProductionSeedTests(unittest.TestCase):
+
+    def test_bw_matmul_contract_controls(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        faults = ('g-shape', 'contraction', 'batch', 'rank', 'g-uncomputed',
+                  'a-uncomputed', 'b-uncomputed', 'input-arity', 'output-arity',
+                  'duplicate', 'params', 'output-shape')
+        for k in (2, 3):
+            for fault in faults:
+                with self.subTest(k=k, fault=fault), TemporaryDirectory() as d:
+                    if fault in ('duplicate', 'params', 'output-arity'):
+                        with self.assertRaises(ValueError):
+                            linear_world(Path(d), k, matmul=3, fault='matmul-'+fault)
+                    else:
+                        fed = linear_world(Path(d), k, matmul=3, fault='matmul-'+fault)
+                        self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_matmul')
+                        self.assertNotIn(':= (batchedMatmulBwd ', proof_text(fed))
+
+    def test_bw_matmul_nonsingleton_generated_chain(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for rank, batch in ((2, ()), (3, (k,)), (4, (2, k))):
+                with self.subTest(k=k, rank=rank), TemporaryDirectory() as d:
+                    fed = linear_world(Path(d), k, matmul=rank, matmul_batch=batch)
+                    p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                    self.assertEqual(p['frontier']['op'], 'BW_multiref')
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+                    import re
+                    m = 2*k // prod(batch)
+                    self.assertEqual(p['output_shape'], list(batch) + [3, m])
+                    projections = re.findall(r'def pmSeededPrefixValue_(\d+)_(\d+) .*:= \(batchedMatmulBwd ((?:\(pmSeededPrefixValue_\d+_\d+ init\) ?){3})\)\.([12])', text)
+                    self.assertEqual(len(projections), 2)
+                    for step, port, operands, projection in projections:
+                        self.assertEqual(int(projection), int(port)+1)
+                        self.assertEqual(len(re.findall(r'pmSeededPrefixValue_', operands)), 3)
+                        shape = list(batch) + ([m, 3] if port == '0' else [3, m])
+                        self.assertRegex(text, rf'theorem pmSeededPrefixShape_{step}_{port} .* = {re.escape(str(shape))} :=')
+                        self.assertRegex(text, rf'theorem pmSeededPrefixWritten_{step}_{port} .* = pmSeededPrefixValue_{step}_{port} init :=')
+
+    def test_bw_matmul_legal_broadcast_only_rejected(self):
+        import torch
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            with self.subTest(k=k), TemporaryDirectory() as d:
+                a = torch.arange(6*k, dtype=torch.float32, requires_grad=True).reshape(k, 2, 3)
+                b = torch.arange(15., requires_grad=True).reshape(1, 3, 5)
+                g = torch.arange(10*k, dtype=torch.float32).reshape(k, 2, 5)
+                da, db = torch.autograd.grad(a @ b, (a, b), g)
+                self.assertEqual(tuple(da.shape), (k, 2, 3))
+                self.assertEqual(tuple(db.shape), (1, 3, 5))
+                fed = linear_world(Path(d), k, matmul=3, fault='matmul-broadcast-only')
+                p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                self.assertEqual(p['frontier']['op'], 'BW_matmul')
+                self.assertEqual(p['frontier']['reason'], 'bw-matmul-shape-contract')
+                self.assertEqual(p['frontier']['computed_shapes'], [[k, 2, 5], [k, 2, 3], [1, 3, 5]])
+                self.assertNotIn(':= (batchedMatmulBwd ', text)
+
+    def test_bw_matmul_both_computed_gradients(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for rank in (2, 3, 4):
+                with self.subTest(k=k, rank=rank), TemporaryDirectory() as d:
+                    fed = linear_world(Path(d), k, matmul=rank)
+                    p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                    self.assertEqual(p['frontier']['op'], 'BW_multiref')
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+                    for port in (1, 2):
+                        self.assertRegex(text, rf'def pmSeededPrefixValue_\d+_{port-1} .*:= \(batchedMatmulBwd \(pmSeededPrefixValue_.*\)\)\.{port}')
     def test_internal_retained_single_root_accumulates_alias_branches(self):
         import torch
         from nnscaler.runtime.executor import Executor
