@@ -6,7 +6,7 @@ from Verdict import runtime_prefix as prefix
 from scripts.tests.test_runtime_seed_feed import fixture
 
 
-def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None):
+def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=None, multiref=None, repeated=False, inverse=None, layout=None):
     """Real raw/source/feed fixture; mock only portable seed authentication."""
     from types import SimpleNamespace as NS
     from unittest.mock import patch
@@ -127,6 +127,24 @@ def linear_world(root, k, ndim=3, fault=None, *, layernorm=False, elementwise=No
                     if fault == 'inverse-product':
                         back.inputs[0] = dy; back._input_irs[0] = s._output_irs[0]
                     ordinary(graph, rank, 975, 'BW_contiguous', [back.outputs[0], original], [shape])
+                if layout:
+                    op, request, shape = layout
+                    original = ordinary(graph, rank, 976, 'FW_view', [x], [shape], {'size': shape}).outputs[0]
+                    gradshape = list(shape)
+                    if op == 'BW_transpose' and all(type(request.get(key)) is int and -len(shape) <= request[key] < len(shape) for key in ('dim0', 'dim1')):
+                        a, b = request['dim0'], request['dim1']
+                        gradshape[a], gradshape[b] = gradshape[b], gradshape[a]
+                    gradient = ordinary(graph, rank, 977, 'FW_view', [bw.outputs[0]], [tuple(gradshape)], {'size': tuple(gradshape)}).outputs[0]
+                    if op == 'BW_transpose':
+                        gradient = ordinary(graph, rank, 978, 'BW_contiguous', [gradient, gradient], [tuple(gradshape)]).outputs[0]
+                    back = ordinary(graph, rank, 979, op, [gradient, original], [shape], request)
+                    if fault == 'layout-arity': back.inputs.pop(); back._input_irs.pop()
+                    if fault == 'layout-initial': back.inputs[1] = w; back._input_irs[1] = src._input_irs[1]
+                    if fault == 'layout-dy': back.inputs[0] = dy; back._input_irs[0] = s._output_irs[0]
+                    if fault == 'layout-output':
+                        graph.shapes[back.outputs[0]] = (7,)
+                        back._output_irs[0] = IR(back.outputs[0].tid, 'gradient', (7,))
+                    ordinary(graph, rank, 981, 'BW_multiref', [back.outputs[0]], [shape])
                 grads.append(bw)
         if elementwise:
             t = grads[0].outputs[0]; sh = pm.shapes[t]
@@ -398,6 +416,91 @@ class ProductionSeedTests(unittest.TestCase):
                 self.assertGreater(actual.unique().numel(), 1)
             self.assertFalse(torch.allclose(dgamma, dbeta))
 
+    def test_bw_transpose_layout_family(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for shape in ((3, 2*k), (3, k, 2), (1, 3, k, 2)):
+                for a, b in ((0, -1), (-2, -1), (1, 1)):
+                    with self.subTest(k=k, shape=shape, axes=(a,b)), TemporaryDirectory() as d:
+                        fed = linear_world(Path(d), k, layout=('BW_transpose', {'dim0': a, 'dim1': b}, shape))
+                        p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                        self.assertEqual(p['frontier']['op'], 'BW_multiref')
+                        self.assertEqual(len(p['initial_premises']), 4*k)
+                        self.assertIn(f':= transposeAxes {a % len(shape)} {b % len(shape)} (pmSeededPrefixValue_', text)
+            for fault in ('layout-arity', 'layout-initial', 'layout-dy', 'layout-output'):
+                with self.subTest(k=k, fault=fault), TemporaryDirectory() as d:
+                    fed = linear_world(Path(d), k, fault=fault, layout=('BW_transpose', {'dim0': 0, 'dim1': 1}, (3, 2*k)))
+                    self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_transpose')
+            for kw in ({}, {'dim0': True, 'dim1': 1}, {'dim0': -3, 'dim1': 1}, {'dim0': 0, 'dim1': 2}, {'dim0': 0, 'dim1': 1, 'unknown': 1}):
+                with self.subTest(k=k, kw=kw), TemporaryDirectory() as d:
+                    with self.assertRaises(ValueError): linear_world(Path(d), k, layout=('BW_transpose', kw, (3, 2*k)))
+
+    def test_bw_transpose_requested_axes_not_output_authority(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        from Verdict import graph_to_lean as c
+        original = c._get_node_params
+        def wrong(view, node, num_parts=0):
+            params = original(view, node, num_parts=num_parts)
+            return [0, 1] if str(view.node_opname(node)).endswith('BW_transpose') else params
+        for k in (2, 3):
+            with self.subTest(k=k), TemporaryDirectory() as d, patch.object(c, '_get_node_params', wrong):
+                fed = linear_world(Path(d), k, layout=('BW_transpose', {'dim0': 1, 'dim1': 2}, (3, k, 2)))
+                p = fed.receipt['scoped_prefix']['pm']
+                self.assertEqual(p['frontier']['op'], 'BW_transpose')
+                self.assertEqual(p['frontier']['reason'], 'bw-transpose-source-params')
+
+    def test_bw_transpose_axis_sensitive_cpu_values(self):
+        import torch
+        from itertools import product
+        for k in (2, 3):
+            for shape in ((3, 2*k), (3, k, 2), (1, 3, k, 2), (k, k, k)):
+                for a, b in ((0, -1), (-2, -1), (1, 1)):
+                    x = torch.arange(__import__('math').prod(shape), dtype=torch.float64).reshape(shape).requires_grad_()
+                    y = x.transpose(a, b)
+                    g = torch.arange(1, x.numel()+1, dtype=torch.float64).reshape(y.shape)
+                    y.backward(g)
+                    expected = torch.empty_like(x)
+                    for ix in product(*(range(d) for d in shape)):
+                        src = list(ix); src[a], src[b] = src[b], src[a]
+                        expected[ix] = g[tuple(src)]
+                    self.assertTrue(torch.equal(x.grad, expected))
+                    if a % len(shape) != b % len(shape) and shape[a] > 1 and shape[b] > 1:
+                        self.assertFalse(torch.equal(x.grad.flatten(), g.flatten()))
+
+    def test_bw_contiguous_layout_family(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.tests.test_runtime_scoped_prefix import proof_text
+        for k in (2, 3):
+            for shape in ((3, 2*k), (3, k, 2), (1, 3, k, 2)):
+                with self.subTest(k=k, shape=shape), TemporaryDirectory() as d:
+                    fed = linear_world(Path(d), k, layout=('BW_contiguous', {}, shape))
+                    p = fed.receipt['scoped_prefix']['pm']; text = proof_text(fed)
+                    self.assertEqual(p['frontier']['op'], 'BW_multiref')
+                    self.assertEqual(len(p['initial_premises']), 4*k)
+                    self.assertRegex(text, r'def pmSeededPrefixValue_\d+_0 .* := \(pmSeededPrefixValue_')
+            for fault in ('layout-arity', 'layout-initial', 'layout-dy', 'layout-output'):
+                with self.subTest(k=k, fault=fault), TemporaryDirectory() as d:
+                    fed = linear_world(Path(d), k, fault=fault, layout=('BW_contiguous', {}, (3, 2*k)))
+                    self.assertEqual(fed.receipt['scoped_prefix']['pm']['frontier']['op'], 'BW_contiguous')
+            for kw in ({'memory_format': 'channels_last'}, {'unknown': 1}, {'__consts': [1]}):
+                with self.subTest(k=k, kw=kw), TemporaryDirectory() as d:
+                    with self.assertRaises(ValueError): linear_world(Path(d), k, layout=('BW_contiguous', kw, (3, 2*k)))
+
+    def test_bw_contiguous_noncontiguous_cpu_values(self):
+        import torch
+        for k in (2, 3):
+            for shape in ((3, 2*k), (3, k, 2), (1, 3, k, 2)):
+                x = torch.arange(6*k, dtype=torch.float64).reshape(shape).transpose(-1, -2).detach().requires_grad_()
+                self.assertFalse(x.is_contiguous())
+                g = torch.arange(1, 6*k+1, dtype=torch.float64).reshape(x.shape)
+                x.contiguous().backward(g)
+                self.assertTrue(torch.equal(x.grad, g))
+
     def test_inverse_reshape_computed_source_request(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory
@@ -412,7 +515,7 @@ class ProductionSeedTests(unittest.TestCase):
                             # No BW_reshape evalOp case: do not credit fallback identity.
                             self.assertEqual(p['frontier']['op'], 'BW_reshape')
                             continue
-                        self.assertEqual(p['frontier']['op'], 'BW_contiguous')
+                        self.assertEqual(p['frontier']['op'], 'BW_layernorm')
                         self.assertEqual(len(p['initial_premises']), 4*k)
                         self.assertIn(f':= fw_view {list(shape)} (pmSeededPrefixValue_', text)
                         self.assertIn('pmSeededPrefixWritten_', text)

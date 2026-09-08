@@ -114,11 +114,11 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 computed = {t.tid for row in rows for t in row['outs']}
                 if any(t.tid not in computed for t in ins):
                     raise PrefixUnavailable('unsupported-producer-input', op=op)
-            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view') and seeds is not None:
+            elif op in ('BW_linear', 'BW_layernorm', 'BW_add', 'BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose') and seeds is not None:
                 from Verdict import graph_to_lean as c
                 from Verdict.runtime_world import _ordinary
                 _, reason = _ordinary(view, n, c._get_node_params)
-                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view') else (3, 2)
+                arity = (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose') else (3, 2)
                 if reason or (len(ins), len(outs)) != arity or len({t.tid for t in outs}) != len(outs):
                     raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
             elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
@@ -222,6 +222,37 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                     if op == 'FW_softmax' and (not sh or sh[-1] <= 0):
                         raise PrefixUnavailable('softmax-shape-contract')
                     output_shapes = [sh]
+            elif op == 'BW_transpose':
+                from Verdict import graph_to_lean as c
+                from Verdict.runtime_world import _ordinary
+                params, _ = _ordinary(view, n, c._get_node_params)
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
+                grad, sh = (ss[t.tid] for t in ins)
+                kw = view.node_kwargs(n)
+                axes = [kw.get('dim0'), kw.get('dim1')]
+                if (not sh or any(type(d) is not int or not -len(sh) <= d < len(sh) for d in axes)):
+                    raise PrefixUnavailable('bw-transpose-source-params')
+                axes = [d + len(sh) if d < 0 else d for d in axes]
+                if params != axes:
+                    raise PrefixUnavailable('bw-transpose-source-params')
+                target = sh.copy(); a, b = axes
+                target[a], target[b] = target[b], target[a]
+                if grad != target:
+                    raise PrefixUnavailable('bw-transpose-shape-contract', computed_shapes=[grad, sh])
+                output_shapes = [sh.copy()]
+            elif op == 'BW_contiguous':
+                # Dense logical gradient values only; x is still a computed read.
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
+                grad, sh = (ss[t.tid] for t in ins)
+                if dict(view.node_kwargs(n)) not in ({}, {'__consts': []}):
+                    raise PrefixUnavailable('bw-contiguous-source-params')
+                if grad != sh:
+                    raise PrefixUnavailable('bw-contiguous-shape-contract', computed_shapes=[grad, sh])
+                output_shapes = [sh.copy()]
             elif op == 'BW_view':
                 # Backward kwargs retain the ORIGINAL forward shape request.
                 # Lowered params instead encode the inverse output shape. Neither
@@ -389,13 +420,13 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'BW_view': return [f'fw_view {row["params"]} {xs[0]}']
             if op in ('FW_view', 'FW_reshape'): return [f'fw_view {row["params"]} {xs[0]}']
-            if op == 'FW_transpose': return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
+            if op in ('FW_transpose', 'BW_transpose'): return [f'transposeAxes {row["params"][0]} {row["params"][1]} {xs[0]}']
             if op == 'FW_matmul': return [f'fw_matmul {xs[0]} {xs[1]}']
             if op == 'FW_div': return [f'fw_div (({row["params"][0]} : Nat) : Scalar) {xs[0]}']
             if op == 'BW_sum': return [f'bw_sum {xs[0]} {xs[1]}']
             if op == 'FW_sum': return [f'fw_sum {xs[0]}']
             # Tensor has no storage/stride fields: contiguous is value identity.
-            if op == 'FW_contiguous': return [xs[0]]
+            if op in ('FW_contiguous', 'BW_contiguous'): return [xs[0]]
             if op == 'FW_gelu': return [f'fw_gelu {xs[0]}']
             if op == 'FW_softmax': return [f'fw_softmax {xs[0]}']
             if op == 'BW_layernorm': return [f'(bw_layernorm {xs[0]} {xs[1]} {xs[2]} {xs[3]}).{p}' for p in ('1', '2.1', '2.2')]
@@ -461,13 +492,13 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
                 shape_proof = f'  exact {input_shapes[1]}'
             elif op == 'BW_sum':
                 shape_proof = f'  exact {input_shapes[1]}'
-            elif op == 'FW_transpose':
+            elif op in ('FW_transpose', 'BW_transpose'):
                 shape_proof = ('  change listSwapAt _ _ _ = _\n'
                                f'  rw [{input_shapes[0]}]\n  rfl')
             elif op == 'FW_matmul':
                 shape_proof = ('  unfold fw_matmul batchedMatmul\n'
                                f'  rw [{input_shapes[0]}, {input_shapes[1]}]\n  rfl')
-            elif op in ('FW_div', 'FW_contiguous', 'FW_gelu'):
+            elif op in ('FW_div', 'FW_contiguous', 'BW_contiguous', 'FW_gelu'):
                 shape_proof = f'  exact {input_shapes[0]}'
             elif op == 'FW_softmax':
                 shape_proof = ('  unfold fw_softmax softmax\n'
