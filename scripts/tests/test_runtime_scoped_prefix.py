@@ -537,7 +537,15 @@ class PrefixTests(unittest.TestCase):
             proofs = re.findall(r'theorem pmPrefixShape_.*?(?=#print axioms)', proof_text(fed), re.S)
             self.assertTrue(proofs)
             self.assertIn('attribute [local irreducible] pmPrefixState_', proof_text(fed))
-            self.assertIn('rw [pmPrefixSkip_', proof_text(fed))
+            self.assertRegex(proof_text(fed), r':= prefixRead \(pmPrefixSkip_\d+ init\) \(pmPrefixRead_\d+_\d+ init\)')
+            written = re.findall(r'theorem pmPrefixWritten_.*?(?=#print axioms)', proof_text(fed), re.S)
+            self.assertTrue(written)
+            for proof in written:
+                step = int(re.findall(r'pmPrefixWritten_(\d+)_', proof)[0])
+                self.assertIn(f'unfold pmPrefixState_{step + 1}', proof)
+                self.assertNotIn(f'unfold pmPrefixState_{step} ', proof)
+                self.assertNotIn('fw_layernorm', proof)
+                self.assertIn(f'pmPrefixValue_{step}_', proof)
             self.assertNotIn('  change (pmPrefixState_', proof_text(fed))
             for proof in proofs:
                 # Layernorm carries the input shape; unfolding its arithmetic (or

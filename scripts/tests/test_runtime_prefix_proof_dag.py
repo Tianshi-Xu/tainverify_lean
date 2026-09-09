@@ -101,15 +101,18 @@ class PrefixProofDAGTests(unittest.TestCase):
             stem = 'pPrefix' if seeds is None else 'pSeededPrefix'
             def body(j, port):
                 return text.split(f'theorem {stem}Read_{j}_{port} ', 1)[1].split('#print', 1)[0]
-            for port in (0, 1):
-                self.assertIn(f'exact {stem}Read_14_{port} init', body(15, port))
-                self.assertIn(f'exact {stem}Written_15_{port} init', body(16, port))
+            for port, tid in enumerate((17, 18)):
+                self.assertIn(f'({stem}State_15 init) {tid} =', body(15, port))
+                self.assertIn(f':= prefixRead ({stem}Skip_14 init) ({stem}Read_14_{port} init)', body(15, port))
+                self.assertIn(f':= {stem}Written_15_{port} init', body(16, port))
                 self.assertNotIn(f'Read_15_{port}', body(16, port))
-                self.assertIn(f'exact {stem}Written_23_{port} init', body(24, port))
+                self.assertIn(f'({stem}State_16 init) {tid} = ({stem}Value_15_{port} init)', body(16, port))
+                self.assertIn(f':= {stem}Written_23_{port} init', body(24, port))
                 self.assertNotIn(f'Read_23_{port}', body(24, port))
-                self.assertIn(f'exact {stem}Read_30_{port} init', body(31, port))
+                self.assertIn(f'({stem}State_24 init) {tid} = ({stem}Value_23_{port} init)', body(24, port))
+                self.assertIn(f':= prefixRead ({stem}Skip_30 init) ({stem}Read_30_{port} init)', body(31, port))
                 self.assertEqual(body(31, port).count('Skip_'), 1)
-            self.assertIn(f'exact {stem}Read_27_0 init', body(27, 1))
+            self.assertIn(f':= {stem}Read_27_0 init', body(27, 1))
             self.assertNotIn('Skip_', body(27, 1))
 
     def test_sparse_reads_use_shared_aligned_no_write_certificates(self):

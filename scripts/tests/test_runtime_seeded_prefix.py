@@ -1119,7 +1119,15 @@ class ProductionSeedTests(unittest.TestCase):
                         self.assertEqual(len(p['initial_premises']), k)
                         self.assertIn(':= bw_sum unitSeed', text)
                         self.assertIn('pmSeededPrefixState_0 (init : Store) : Store := (pmInitialWithSeeds init)', text)
-                        self.assertIn('exact pmInitialWithSeeds_seed_', text)
+                        import re
+                        seed_reads = re.findall(
+                            r'^theorem pmSeededPrefixRead_\d+_\d+ .* = unitSeed := (.+)$',
+                            text, re.M)
+                        self.assertTrue(seed_reads)
+                        self.assertEqual(
+                            {int(q) for proof in seed_reads for q in re.findall(
+                                r'pmInitialWithSeeds_seed_(\d+) init', proof)},
+                            set(range(k)))
                         self.assertIn('pmSeededDenoteWithInputs init = runUsing', text)
                         self.assertIn('pmInitialWithSeeds_frame init', text)
                         self.assertIn('= (pmInitialWithSeeds init) tid', text)

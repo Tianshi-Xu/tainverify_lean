@@ -21,6 +21,35 @@ def fixture():
     return '\n'.join(g.text for g in groups), receipt
 
 
+def seeded_kernel_fixture(root):
+    """Small production-rendered seed/external/duplicate/two-output BW case."""
+    from scripts.tests.test_runtime_seeded_prefix import linear_world
+    return linear_world(root, 2, layout=(
+        'BW_transpose', {'dim0': 1, 'dim1': 2}, (1, 4, 3)))
+
+
+def test_seeded_kernel_fixture_covers_read_written_boundaries(tmp_path):
+    fed = seeded_kernel_fixture(tmp_path)
+    text = '\n'.join([*fed.supporting_sources.values(), fed.lean])
+    receipt = fed.receipt['scoped_prefix']['pm']
+    # These nodes are inside the checked prefix, not merely present in Data.
+    assert receipt['prefix_nodes'][11] == 11
+    assert receipt['prefix_nodes'][14] == 14
+    assert 'op := "OpName.BW_linear", ins := [11, 8, 3], outs := [12, 13]' in text
+    assert 'op := "OpName.BW_contiguous", ins := [17, 17], outs := [18]' in text
+    for port, tid in enumerate((12, 13)):
+        assert (f'(pmSeededPrefixState_12 init) {tid} = '
+                f'pmSeededPrefixValue_11_{port} init') in text
+    assert 'pmSeededPrefixRead_7_1 init' in body(text, 'pmSeededPrefixRead_11_2')
+    assert 'pmSeededPrefixInitialRead_4 init' in body(text, 'pmSeededPrefixRead_7_1')
+    assert 'pmInitialWithSeeds_seed_0 init' in body(text, 'pmSeededPrefixRead_10_0')
+    assert body(text, 'pmSeededPrefixRead_14_1').strip() == 'pmSeededPrefixRead_14_0 init'
+    for suffix in ('Success', 'Output', 'OutputShape', 'Frame', 'Continuation'):
+        assert 'pmSeededPrefix' + suffix in receipt['kernel_checks']
+    assert text.count('#print axioms') == sum(
+        len(m['theorems']) for m in fed.receipt['proof_bundle']['modules'])
+
+
 def body(text, name):
     return text.split('theorem '+name+' ', 1)[1].split(' := ', 1)[1].split('#print', 1)[0]
 
