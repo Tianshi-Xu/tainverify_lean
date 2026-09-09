@@ -182,6 +182,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                     [WORLD_DATA_MODULE, 'denote.SourceScopedPrefix', SUPPORT_MODULE])
         if role == 'entry' and 'denote.SourceInitialParameters' in imports:
             expected.insert(2, 'denote.SourceInitialParameters')
+            if 'denote.SourceInitialInputEncoding' in imports:
+                expected.insert(3, 'denote.SourceInitialInputEncoding')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
         if imports != expected:
