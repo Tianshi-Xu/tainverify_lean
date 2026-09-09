@@ -175,5 +175,23 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                                   'import denote.SourceEmbeddingRead\n', 1)
             entry += '\n' + embedding_text
         result['embedding_values'] = embedding_detail
+        entry = entry.replace('import denote.SourceInitialParameterSpecs\n',
+                              'import denote.SourceParameterFrame\n', 1)
+        entry += '\n' + '\n'.join([
+            'namespace TrainVerify.Denote.RuntimeWorld', 'noncomputable section',
+            'set_option maxHeartbeats 500000',
+            'private theorem parameterUnwritten : SourceInitialParameterSpecs.All',
+            '    (fun spec => SourceParameterFrame.SpecUnwritten spec',
+            '      (smInputRequests.flatMap (fun r => r.1.outs))',
+            '      (pmInputRequests.flatMap (fun r => r.1.outs))) initialParameterSpecs := by decide',
+            'theorem initialParameterValues_final (s p t q : Store)',
+            '    (hs : smDenoteWithInputs s = some t) (hp : pmDenoteWithInputs p = some q)',
+            '    (h : InitialParameterValues s p) : InitialParameterValues t q :=',
+            '  SourceParameterFrame.all_values_runWithInputs initialParameterSpecs smGraph pmGraph',
+            '    smScope pmScope smPeers pmPeers smGraph.nodes pmGraph.nodes smInputRequests pmInputRequests',
+            '    s p t q parameterUnwritten hs hp h',
+            '#print axioms initialParameterValues_final',
+            'end', 'end TrainVerify.Denote.RuntimeWorld', ''])
+        result['initial_relations']['frame_emitted'] = True
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
     return WorldDefinitions(entry, result, world.supporting_sources)

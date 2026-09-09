@@ -180,7 +180,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
         expected = (['denote.SourceScopedEval'] if role == 'data' else
                     ['Lean', 'denote.Denote'] if role == 'support' else
                     [WORLD_DATA_MODULE, 'denote.SourceScopedPrefix', SUPPORT_MODULE])
-        parameter_helper = ('denote.SourceInitialParameterSpecs' if 'denote.SourceInitialParameterSpecs' in imports
+        parameter_helper = ('denote.SourceParameterFrame' if 'denote.SourceParameterFrame' in imports else
+                            'denote.SourceInitialParameterSpecs' if 'denote.SourceInitialParameterSpecs' in imports
                             else 'denote.SourceInitialParameters')
         if role == 'entry' and parameter_helper in imports:
             expected.insert(2, parameter_helper)
