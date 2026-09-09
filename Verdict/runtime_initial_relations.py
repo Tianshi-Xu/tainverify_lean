@@ -193,5 +193,16 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
             '#print axioms initialParameterValues_final',
             'end', 'end TrainVerify.Denote.RuntimeWorld', ''])
         result['initial_relations']['frame_emitted'] = True
+        from Verdict.runtime_embedding_units import render as render_embedding_units
+        unit_text, unit_detail = render_embedding_units(sm, pm, lineages, bound)
+        if unit_detail['units']:
+            entry = entry.replace('import denote.SourceEmbeddingRead\n',
+                                  'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingUnit\n', 1)
+            entry += '\n' + unit_text
+            from Verdict.runtime_relation_source import compact
+            prefix, boundary, suffix = entry.partition(text)
+            assert boundary
+            entry = prefix + compact(text + suffix)
+        result['embedding_units'] = unit_detail
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
     return WorldDefinitions(entry, result, world.supporting_sources)

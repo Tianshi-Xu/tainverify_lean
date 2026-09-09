@@ -191,6 +191,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                else 'denote.SourceInitialInputRead')
                 if read_helper in imports:
                     expected.insert(4, read_helper)
+                if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingUnit' in imports:
+                    expected.insert(5, 'denote.SourceEmbeddingUnit')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
         if imports != expected:
