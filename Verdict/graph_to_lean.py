@@ -4732,6 +4732,11 @@ def _generate(args: argparse.Namespace) -> None:
 			import json
 			seed_options = {} if seed_bundle is None else {'seed_bundle': json.loads(Path(seed_bundle).read_text())}
 			world = bind(world, GsE, GpE, *inputs, handoff, **seed_options)
+			parameters = world.receipt.get('seed_input', {}).get('parameter_inputs', {})
+			if parameters.get('status') == 'current-run-parameter-values-validated':
+				from Verdict.runtime_initial_relations import attach as attach_initial_relations
+				world = attach_initial_relations(
+					world, GsE, GpE, parameters, lineages, validation)
 		receipt['world_definitions'] = world.receipt
 		if world_out:
 			publish(world, world_out)
