@@ -31,6 +31,8 @@ private def family (s : String) : Option String :=
   | "q" => some "Requests" | "u" => some "Run" | _ => none
 private def expandName (stemPrefix : String) (n : Name) : Name := Id.run do
   let .str .anonymous text := n | return n
+  if text == "z" then return Name.mkSimple "init"
+  if text == "z_" then return Name.mkSimple "hInitShapes"
   let code :: parts := text.splitOn "_" | return n
   let some stem := family code | return n
   if parts.isEmpty || !parts.all (fun p => !p.isEmpty && p.toList.all Char.isDigit) then

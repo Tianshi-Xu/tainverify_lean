@@ -24,6 +24,17 @@ def test_compact_roundtrip_preserves_all_declarations_and_proofs():
     assert p.compact_names(compact) == compact
 
 
+def test_frequent_binders_are_losslessly_compacted():
+    source = sample().replace('(init : Store)', '(init : Store) (hInitShapes : True)')
+    compact = p.compact_names(source)
+    assert '(z : Store) (z_ : True)' in compact
+    assert p.expand_names(compact) == source
+    for extra in ('def z := 1\n', 'def z_ := 1\n'):
+        assert p.compact_names(source + extra) == source + extra
+    extended = source + '#check Other.init\n#check Other.hInitShapes\n'
+    assert p.expand_names(p.compact_names(extended)) == extended
+
+
 def test_compaction_does_not_capture_existing_names_or_strings():
     for extra in ('def s_1 := 1\n', 'def literal := "pmSeededPrefixRead_1_0"\n',
                   '/- nested /- comment -/ -/\n', 'def «quoted» := 1\n'):

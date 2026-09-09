@@ -26,6 +26,8 @@ _NAME_CODES: dict[str, str] = dict(zip(
     ('s', 'v', 'r', 'w', 'h', 'k', 't', 'n', 'g', 'i', 'e', 'q', 'u')))
 
 
+_LOCAL_CODES = {'init': 'z', 'hInitShapes': 'z_'}
+
 def compact_names(text):
     import re
     # The generated prefix subset has no quoted identifiers, strings or block
@@ -39,12 +41,12 @@ def compact_names(text):
     identifiers = [m[0] for m in tokens.finditer(text) if not m[0].startswith('--')]
     names = {name: pattern.fullmatch(name) for name in identifiers}
     stems = {m[1] for m in names.values() if m is not None}
-    if len(stems) != 1 or any(short.fullmatch(name) for name in identifiers):
+    if len(stems) != 1 or any(short.fullmatch(name) or name in _LOCAL_CODES.values() for name in identifiers):
         return text
     stem, = stems
     def replace(m):
         found = names.get(m[0])
-        return _NAME_CODES[found[2]] + '_' + found[3] if found else m[0]
+        return _NAME_CODES[found[2]] + '_' + found[3] if found else _LOCAL_CODES.get(m[0], m[0])
     rewritten = tokens.sub(replace, text)
     imports = re.findall(r'^(?:import [^\n]+\n)*', rewritten)[0]
     body = rewritten[len(imports):]
@@ -72,10 +74,11 @@ def expand_names(text):
         raise ValueError('invalid compact prefix indentation')
     body = ''.join(line[2:] if line.strip() else line for line in block)
     families = {code: name for name, code in _NAME_CODES.items()}
+    locals_ = {code: name for name, code in _LOCAL_CODES.items()}
     pattern = re.compile(r'([' + ''.join(families) + r'])_([0-9]+(?:_[0-9]+)*)\Z')
     def replace(m):
         short = pattern.fullmatch(m[0])
-        return header[1] + families[short[1]] + '_' + short[2] if short else m[0]
+        return header[1] + families[short[1]] + '_' + short[2] if short else locals_.get(m[0], m[0])
     return text[:header.start()] + re.sub(r"--[^\n]*|[^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*", replace, body) + expand_names(suffix)
 
 
@@ -195,6 +198,10 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 arity = (3, 1) if op == 'BW_embedding' else (4, 3) if op == 'BW_layernorm' else (2, 1) if op in ('BW_gelu', 'BW_view', 'BW_contiguous', 'BW_transpose', 'BW_softmax', 'BW_div') else (3, 2)
                 if reason or (len(ins), len(outs)) != arity or len({t.tid for t in outs}) != len(outs):
                     raise PrefixUnavailable(reason or 'unsupported-producer-schema', op=op)
+            elif op == 'CROSS_DP_WRED':
+                computed = {t.tid for row in rows for t in row['outs']}
+                if any(t.tid not in computed for t in ins):
+                    raise PrefixUnavailable('unsupported-producer-input', op=op)
             elif op not in ('DATALOADER', 'FW_embedding', 'ChunkPrim', 'AllToAllPrim', 'FW_add', 'FW_multiref', 'FW_layernorm', 'FW_linear', 'AllGatherPrim', 'FW_view', 'FW_reshape', 'FW_transpose', 'FW_matmul', 'FW_div', 'FW_softmax', 'FW_contiguous', 'FW_gelu', 'FW_sum', 'ReduceScatterPrim', 'AllReducePrim'):
                 raise PrefixUnavailable('unsupported-producer', op=op)
             if i in missing and op != 'DATALOADER':
@@ -228,6 +235,12 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
                 sh[odim] //= len(rs)
                 if op == 'AllToAllPrim': sh[dim] *= len(rs)
                 output_shapes = [sh]
+            elif op == 'CROSS_DP_WRED':
+                scope = view.wred_scopes[n]
+                if (len(outs) != 1 or not ins or len(ins) != len(scope.ranks)
+                        or any(ss[t.tid] != ss[ins[0].tid] for t in ins)):
+                    raise PrefixUnavailable('wred-shape-contract')
+                output_shapes = [ss[ins[0].tid].copy()]
             elif op == 'AllReducePrim':
                 scope = view.collective_scopes[n]
                 if (len(outs) != 1 or not ins or len(ins) != len(scope.ranks)
@@ -502,7 +515,7 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
         except PrefixUnavailable as exc:
             frontier = dict(exc.details, index=i, source_index=i, execution_index=j, op=op)
             break
-    if not any(r['op'] == 'AllToAllPrim' for r in rows):
+    if not any(r['op'] in ('AllToAllPrim', 'CROSS_DP_WRED') for r in rows):
         return '', dict(frontier or dict(status='prefix-proof-unavailable', reason='no-supported-guard'),
                         prefix_nodes=[r['index'] for r in rows], frontier=frontier,
                         whole_world_option_success=False)
@@ -614,6 +627,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             if op == 'DATALOADER': return [f'{node}_port{p["port"]}' for p in feeds[i]['ports']]
             if op == 'FW_embedding': return [f'fw_embedding {xs[0]} {xs[1]}']
             if op == 'BW_embedding': return [f'bw_embedding {xs[0]} {xs[1]} {xs[2]}']
+            if op == 'CROSS_DP_WRED': return [f'cross_dp_wred [{", ".join(xs)}]']
             if op == 'AllReducePrim': return [f'allReducePrim {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'ReduceScatterPrim': return [f'reduceScatterPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
             if op == 'AllGatherPrim': return [f'allGatherPrimDimN {scope.params[0]} {len(scope.ranks)} {scope.local_index} [{", ".join(xs)}]']
@@ -659,6 +673,19 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             update = f'AllToAllSourceFaithful.localStep {rs} {prev} {node} {dim} {odim}'
             proof = (f'by\n  change (AllToAllSourceFaithful.step {label}Graph (some {rs}) ({label}Peers {node}) {prev} {node}).toOption = _\n'
                      f'  rw [AllToAllSourceFaithful.step_valid _ _ _ _ _ {dim} {odim} {out.tid} (by decide) ({guard} init hInitShapes)]\n  rfl')
+        elif op == 'CROSS_DP_WRED':
+            rs = list(scope.ranks); guard = f'{stem}Guard_{j}'
+            theorem(guard, f'{args} : WredContract {rs} ({label}Peers {node}) {prev} {node}',
+                    'by\n  refine ⟨rfl, rfl, rfl, rfl, by decide, ?_⟩\n'
+                    f'  simp only [{node}, List.headD_cons, List.mem_cons, List.not_mem_nil, or_false]\n'
+                    '  intro tid ht\n  rcases ht with ' + ' | '.join('rfl' for _ in ins) + '\n' +
+                    '\n'.join('  · rfl' if p == 0 else
+                              f'  · rw [{reads[p]}, {reads[0]}]\n'
+                              f'    exact ({shape_proofs[t.tid]}).trans ({shape_proofs[ins[0].tid]}).symm'
+                              for p, t in enumerate(ins)))
+            guards.append(dict(index=i, source_index=i, execution_index=j, theorem=guard, state=f'{stem}State_{j}', input_tids=[t.tid for t in ins], operand_shapes=row['input_shapes'], output_tid=outs[0].tid, output_shape=row['output_shapes'][0]))
+            proof = (f'by\n  change wredStep {label}Graph (some {rs}) ({label}Peers {node}) {prev} {node} = _\n'
+                     f'  rw [wredStep, if_pos ⟨by decide, {guard} init hInitShapes⟩]\n  rfl')
         elif op in ('ChunkPrim', 'AllGatherPrim', 'ReduceScatterPrim', 'AllReducePrim'):
             rs = list(scope.ranks)
             proof = (f'by\n  change GroupScopedEval.step {label}Graph (.group (some {rs})) {prev} {node} = _\n'
@@ -666,7 +693,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
         else:
             proof = 'by\n  change some (applyNode _ _ _) = _\n  rfl'
         definition(f'def {stem}State_{j+1} (init : Store) : Store := {update}')
-        condition = op == 'AllToAllPrim'
+        condition = op in ('AllToAllPrim', 'CROSS_DP_WRED')
         theorem(f'{stem}Step_{j}', f'{args if condition else "(init : Store)"} : stepWithInputs {label}Graph ({label}Scope {node}) ({label}Peers {node}) {prev} {node} {feed} = some {nxt}', proof)
         steps.append(f'{stem}Step_{j} init'+(' hInitShapes' if condition else ''))
         wrappers = (f'  dsimp only [{node}_feed]\n' if op == 'DATALOADER' else
@@ -688,7 +715,7 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
             shape_start = f'by\n  unfold {vn}\n'
             if op in ('FW_view', 'FW_reshape', 'BW_view', 'FW_sum'):
                 shape_proof = '  rfl'
-            elif op == 'BW_multiref':
+            elif op in ('BW_multiref', 'CROSS_DP_WRED'):
                 shape_proof = ('  rw [tensorSum_shape]\n'
                                f'  exact {input_shapes[0]}')
             elif op == 'BW_add':
