@@ -20,7 +20,7 @@ class PrefixProofDAGTests(unittest.TestCase):
             chunks = sorted(n for n in fed.supporting_sources if n not in (WORLD_DATA_FILE, prefix.SUPPORT_FILE))
             self.assertGreater(len(chunks), 1)
             sources = [*fed.supporting_sources.values(), fed.lean]
-            text = '\n'.join(sources)
+            text = '\n'.join(prefix.expand_names(s) for s in sources)
             n = fed.receipt['scoped_prefix']['pm']['prefix_length']
             self.assertEqual(text.count(' : GraphDecl :='), 2)
             for j in range(n):

@@ -47,7 +47,8 @@ class BundleTests(unittest.TestCase):
                         self.assertLess(positions[dependency], i)
                 text = (out.parent/member['file']).read_text()
                 self.assertEqual(member['imports'], re.findall(r'^import (\S+)$', text, re.M))
-                self.assertEqual(member['theorems'], re.findall(r'^theorem (\S+)', text, re.M))
+                from Verdict.runtime_prefix import expand_names
+                self.assertEqual(member['theorems'], re.findall(r'^theorem (\S+)', expand_names(text), re.M))
                 self.assertFalse(member['kernel_checked'])
 
     def test_rejects_tampered_members_and_preserves_previous_destination(self):

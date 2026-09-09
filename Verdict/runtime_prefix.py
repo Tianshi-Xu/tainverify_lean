@@ -18,6 +18,67 @@ SUPPORT_MODULE = PREFIX_MODULE + 'Support'
 SUPPORT_FILE = SUPPORT_MODULE + '.lean'
 
 
+# These aliases are syntax only: Lean restores the original identifiers before
+# elaborating each command. Public names, types, proof terms and opacity agree.
+_NAME_CODES: dict[str, str] = dict(zip(
+    ('State', 'Value', 'Read', 'Written', 'Shape', 'Skip', 'Step', 'NoWrite',
+     'Guard', 'InitialShape', 'InitialRead', 'Requests', 'Run'),
+    ('s', 'v', 'r', 'w', 'h', 'k', 't', 'n', 'g', 'i', 'e', 'q', 'u')))
+
+
+def compact_names(text):
+    import re
+    # The generated prefix subset has no quoted identifiers, strings or block
+    # comments. Keep other Lean source forms unchanged rather than lex them badly.
+    if any(token in text for token in ('"', '«', '`', '/-', 'prefix_names ')):
+        return text
+    tokens = re.compile(r"--[^\n]*|[^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*")
+    pattern = re.compile(r'([A-Za-z][A-Za-z_0-9]*Prefix)(' +
+                         '|'.join(_NAME_CODES) + r')_([0-9]+(?:_[0-9]+)*)\Z')
+    short = re.compile(r'[' + ''.join(_NAME_CODES.values()) + r']_[0-9]+(?:_[0-9]+)*\Z')
+    identifiers = [m[0] for m in tokens.finditer(text) if not m[0].startswith('--')]
+    names = {name: pattern.fullmatch(name) for name in identifiers}
+    stems = {m[1] for m in names.values() if m is not None}
+    if len(stems) != 1 or any(short.fullmatch(name) for name in identifiers):
+        return text
+    stem, = stems
+    def replace(m):
+        found = names.get(m[0])
+        return _NAME_CODES[found[2]] + '_' + found[3] if found else m[0]
+    rewritten = tokens.sub(replace, text)
+    imports = re.findall(r'^(?:import [^\n]+\n)*', rewritten)[0]
+    body = rewritten[len(imports):]
+    compact = imports + f'prefix_names {stem} where\n' + ''.join(
+        '  ' + line if line.strip() else line for line in body.splitlines(keepends=True))
+    return compact if len(compact.encode()) < len(text.encode()) else text
+
+
+def expand_names(text):
+    """Recover canonical source for inventories and independent byte comparisons.
+
+    This does not implement the proof: Lean independently transforms parsed
+    identifiers in runtime_prefix_support.lean. The source scanner is unchanged.
+    """
+    import re
+    header = re.search(r'^prefix_names ([A-Za-z][A-Za-z_0-9]*Prefix) where\n', text, re.M)
+    if header is None:
+        if re.search(r'^prefix_names\b', text, re.M):
+            raise ValueError('invalid compact prefix header')
+        return text
+    lines = text[header.end():].splitlines(keepends=True)
+    stop = next((i for i, line in enumerate(lines) if line.strip() and not line[0].isspace()), len(lines))
+    block, suffix = lines[:stop], ''.join(lines[stop:])
+    if any(line.strip() and not line.startswith('  ') for line in block):
+        raise ValueError('invalid compact prefix indentation')
+    body = ''.join(line[2:] if line.strip() else line for line in block)
+    families = {code: name for name, code in _NAME_CODES.items()}
+    pattern = re.compile(r'([' + ''.join(families) + r'])_([0-9]+(?:_[0-9]+)*)\Z')
+    def replace(m):
+        short = pattern.fullmatch(m[0])
+        return header[1] + families[short[1]] + '_' + short[2] if short else m[0]
+    return text[:header.start()] + re.sub(r"--[^\n]*|[^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*", replace, body) + expand_names(suffix)
+
+
 def support_source():
     from pathlib import Path
     return Path(__file__).with_name('runtime_prefix_support.lean').read_text(encoding='utf-8')
@@ -52,7 +113,7 @@ def pack_proofs(prefixes):
     if any(not fits([g]) for g in groups):
         raise ValueError('prefix atomic declaration group exceeds proof budget')
     if fits(groups):
-        return imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER, {SUPPORT_FILE: support_source()}
+        return compact_names(imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER), {SUPPORT_FILE: support_source()}
     chunks = []; current = []; finals = []
     for g in groups:
         if g.final:
@@ -71,7 +132,7 @@ def pack_proofs(prefixes):
         # Metadata is not the immediate attribute stream: preserve both exactly.
         opaque = [n for g in gs for n in g.opaque]
         record = '\nrecord_prefix_opacity ' + ' '.join(opaque) + '\n' if opaque else ''
-        return imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + record + _FOOTER
+        return compact_names(imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + record + _FOOTER)
     for index, chunk in enumerate(chunks):
         name = f'{PREFIX_MODULE}{index:04d}'
         supporting[name+'.lean'] = source(chunk)
@@ -471,10 +532,9 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
         names.append(name)
         lines.extend([f'theorem {name} {args} := {proof}', f'#print axioms {name}'])
     def writes(a, b):
-        if b == a + 1:
-            return str([t.tid for t in rows[a]['outs']])
-        middle = (a + b) // 2
-        return f'({writes(a, middle)} ++ {writes(middle, b)})'
+        # Preserve every port in execution order, including duplicate writes.
+        # A typed literal avoids hundreds of pending HAppend/OfNat instances.
+        return f'({[t.tid for row in rows[a:b] for t in row["outs"]]} : List Tid)'
     def no_write(a, b):
         return f'{stem}Skip_{a}' if b == a + 1 else f'{stem}NoWrite_{a}_{b}'
     def read_intervals(start, end):
@@ -508,11 +568,13 @@ def _render(label, rows, feeds, initial, frontier, *, structured=False, seeds=No
     goal = ' ∧ '.join(f'(init {p["tid"]}).shape = {p["shape"]}' for p in initial.values()) or 'True'
     definition(f'def {stem}InitShapes (init : Store) : Prop := {goal}')
     definition(f'def {stem}State_0 (init : Store) : Store := {initial_store}')
-    hs = [f'h{q}' for q in range(len(initial))]
-    destruct = f'  rcases hInitShapes with ⟨{", ".join(hs)}⟩\n' if len(hs)>1 else ('  have h0 := hInitShapes\n' if hs else '')
     for q, (tid, p) in enumerate(initial.items()):
         name = f'{stem}InitialShape_{q}'
-        theorem(name, f'{args} : (init {tid}).shape = {p["shape"]}', 'by\n'+destruct+f'  exact h{q}')
+        # InitShapes is the original right-associated conjunction. Project only
+        # the demanded component instead of destructing all premises each time.
+        projection = 'hInitShapes' + '.2' * q + ('.1' if q < len(initial) - 1 else '')
+        theorem(name, f'{args} : (init {tid}).shape = {p["shape"]}',
+                f'by\n  exact {projection}')
         shape_proofs[tid] = f'{name} init hInitShapes'
         if seeds is not None:
             read = f'{stem}InitialRead_{q}'

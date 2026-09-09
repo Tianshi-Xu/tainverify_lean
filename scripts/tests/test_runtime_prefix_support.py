@@ -33,7 +33,8 @@ def test_direct_skip_and_generic_no_write_preserve_inventory():
     assert 'unfold pPrefixState_1' in text
     assert 'change storeSet' not in text
     assert 'exact prefixFrame_trans' in text
-    assert '(([100] ++ [101, 201]) ++ ([102, 202] ++ [103, 203]))' in text
+    header = text.split('theorem pPrefixNoWrite_0_4 ', 1)[1].split(' := ', 1)[0]
+    assert '(h : tid ∉ ([100, 101, 201, 102, 202, 103, 203] : List Tid))' in header
     assert receipt['prefix_length'] == 16
     assert text.count('#print axioms') == len(receipt['kernel_checks'])
     assert '#print axioms prefixFrame_trans' in p.support_source()

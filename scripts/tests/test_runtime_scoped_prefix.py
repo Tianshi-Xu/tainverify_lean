@@ -7,7 +7,8 @@ from scripts.tests.test_runtime_input_schedule_kernel import mixed_world
 
 def proof_text(fed):
     """Read every canonical source; never synthesize a monolithic artifact."""
-    return '\n'.join([*fed.supporting_sources.values(), fed.lean])
+    from Verdict.runtime_prefix import expand_names
+    return '\n'.join(expand_names(s) for s in [*fed.supporting_sources.values(), fed.lean])
 
 
 def collective_world(root, k, unsupported=False, chain=False, between=False, fault=None, normalize=False, project=False, gather=False, layout=None, attention=None, tail=None, tail_fault=None, scatter=None, allreduce=None, seeded_transform=None):

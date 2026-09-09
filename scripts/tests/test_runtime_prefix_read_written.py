@@ -30,7 +30,7 @@ def seeded_kernel_fixture(root):
 
 def test_seeded_kernel_fixture_covers_read_written_boundaries(tmp_path):
     fed = seeded_kernel_fixture(tmp_path)
-    text = '\n'.join([*fed.supporting_sources.values(), fed.lean])
+    text = '\n'.join(p.expand_names(s) for s in [*fed.supporting_sources.values(), fed.lean])
     receipt = fed.receipt['scoped_prefix']['pm']
     # These nodes are inside the checked prefix, not merely present in Data.
     assert receipt['prefix_nodes'][11] == 11

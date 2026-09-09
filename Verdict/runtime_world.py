@@ -159,7 +159,7 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
     """Source consistency inventory, not a kernel or execution certificate."""
     if type(supporting_sources) is not dict or WORLD_DATA_FILE not in supporting_sources:
         raise ValueError('world bundle requires exactly one data module')
-    from Verdict.runtime_prefix import PREFIX_MODULE, SUPPORT_MODULE, SUPPORT_FILE, support_source
+    from Verdict.runtime_prefix import PREFIX_MODULE, SUPPORT_MODULE, SUPPORT_FILE, support_source, expand_names
     if supporting_sources.get(SUPPORT_FILE) != support_source():
         raise ValueError('world bundle prefix support source mismatch')
     chunks = sorted(set(supporting_sources) - {WORLD_DATA_FILE, SUPPORT_FILE})
@@ -187,7 +187,7 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
         source_bytes += len(text.encode('utf-8'))
         modules.append(dict(file=filename, module=Path(filename).stem, role=role, imports=imports,
             source_sha256=hashlib.sha256(text.encode('utf-8')).hexdigest(),
-            theorems=re.findall(r'^theorem (\S+)', text, re.M), kernel_checked=False))
+            theorems=re.findall(r'^theorem (\S+)', expand_names(text) if role in ('prefix', 'entry') else text, re.M), kernel_checked=False))
     # Unlike the generic per-file scanner, runtime-world bounds the whole bundle.
     # This shared inventory is checked by both rendering and publish, before staging.
     if source_bytes >= GENERATED_LEAN_SOURCE_LIMIT:

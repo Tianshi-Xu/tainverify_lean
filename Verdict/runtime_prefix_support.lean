@@ -21,6 +21,34 @@ elab "restore_prefix_opacity" : command => do
   markLocal (inventory.getState (← getEnv))
 end PrefixOpacity
 
+namespace PrefixNames
+private def family (s : String) : Option String :=
+  match s with
+  | "s" => some "State" | "v" => some "Value" | "r" => some "Read"
+  | "w" => some "Written" | "h" => some "Shape" | "k" => some "Skip"
+  | "t" => some "Step" | "n" => some "NoWrite" | "g" => some "Guard"
+  | "i" => some "InitialShape" | "e" => some "InitialRead"
+  | "q" => some "Requests" | "u" => some "Run" | _ => none
+private def expandName (stemPrefix : String) (n : Name) : Name := Id.run do
+  let .str .anonymous text := n | return n
+  let code :: parts := text.splitOn "_" | return n
+  let some stem := family code | return n
+  if parts.isEmpty || !parts.all (fun p => !p.isEmpty && p.toList.all Char.isDigit) then
+    return n
+  return Name.mkSimple (stemPrefix ++ stem ++ "_" ++ String.intercalate "_" parts)
+private partial def expand (stemPrefix : String) : Syntax → Syntax
+  | .ident info raw n pre =>
+      let m := expandName stemPrefix n
+      if m == n then .ident info raw n pre else mkIdentFrom (.ident info raw n pre) m
+  | .node info kind args => .node info kind (args.map (expand stemPrefix))
+  | stx => stx
+syntax (name := prefixNames) "prefix_names " ident " where" ppLine (colGt command)* : command
+@[command_elab prefixNames] def elabPrefixNames : CommandElab := fun stx => do
+  let pref := stx[1].getId.toString
+  for cmd in stx[3].getArgs do
+    elabCommand (expand pref cmd)
+end PrefixNames
+
 namespace TrainVerify.Denote
 theorem prefixFrame_trans (s0 s1 s2 : Store) (xs ys : List Tid)
     (hx : ∀ t, t ∉ xs → s1 t = s0 t)
