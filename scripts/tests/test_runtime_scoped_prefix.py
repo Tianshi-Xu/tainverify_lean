@@ -607,7 +607,11 @@ class PrefixTests(unittest.TestCase):
             with self.subTest(k=k), tempfile.TemporaryDirectory() as d:
                 legacy, fed = mixed_world(Path(d), k)
                 self.assertIn('scoped_prefix', fed.receipt)
-                self.assertEqual(fed.receipt['scoped_prefix']['pm']['reason'], 'no-state-dependent-boundary')
+                self.assertEqual(fed.receipt['scoped_prefix']['pm']['status'], 'ordinary-fold-emitted')
+                self.assertEqual(fed.receipt['scoped_prefix']['pm']['prefix_nodes'],
+                                 fed.receipt['execution_order']['pm']['execution_to_source'])
+                self.assertIn('pmWholeSuccess', fed.receipt['scoped_prefix']['pm']['kernel_checks'])
+                self.assertIn('pmWholeFrame', fed.receipt['scoped_prefix']['pm']['kernel_checks'])
                 self.assertTrue(proof_text(fed).startswith(legacy.lean))
                 self.assertFalse(fed.receipt['input_feed']['whole_world_option_success'])
 

@@ -136,7 +136,8 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
             internal_multiref={k:v.receipt() for k,v in seeds.get('internal_multiref', {}).items()},
             seed_input_adapter_emitted=True,
             kernel_checks=[n for g in adapter for n in re.findall(r'^theorem (\S+)', g.text, re.M)])
-    for label, view, raw in [('sm', sm, raw_sm), ('pm', pm, raw_pm)]:
+    # Preserve the existing PM proof chain before appending independent SM work.
+    for label, view, raw in [('pm', pm, raw_pm), ('sm', sm, raw_sm)]:
         text, detail = render_prefix(label, view, raw, world, inventory, structured=True,
             seed_inventories=seeds['inventories'] if seeds is not None else None,
             internal_multiref=seeds.get('internal_multiref', {}).get(label) if seeds is not None else None)

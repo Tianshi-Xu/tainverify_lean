@@ -124,9 +124,10 @@ class ScheduleTests(unittest.TestCase):
                 sv,pv,rs,rp=cross_rank(k)
                 world=render(sv,pv,rs,rp)
                 fed=bind(world,sv,pv,rs,rp,*authority,root)
+                data = fed.supporting_sources['TrainVerifyRuntimeWorldData.lean']
                 for label in ('sm','pm'):
-                    requests=fed.lean.split(f'def {label}InputRequests : List InputRequest := [')[1].split(']')[0]
-                    self.assertEqual([int(x) for x in re.findall(label+r'Node_(\d+),',requests)],graph_order(fed.lean,label))
+                    requests=data.split(f'def {label}InputRequests : List InputRequest := [')[1].split(']')[0]
+                    self.assertEqual([int(x) for x in re.findall(label+r'Node_(\d+),',requests)],graph_order(data,label))
                 for fault in ('omit','reverse','inverse','metadata','lean'):
                     receipt=copy.deepcopy(world.receipt); lean=world.lean
                     s=receipt['execution_order']['pm']

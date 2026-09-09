@@ -154,7 +154,9 @@ def render(label, view, raw, world, loaders, *, structured=False, seed_inventori
     order = world.receipt['execution_order'][label]['execution_to_source']
     if not any(str(view.node_opname(view.nodes()[i])).split('.')[-1]
                in ('AllToAllPrim', 'CROSS_DP_WRED') for i in order):
-        return '', dict(status='prefix-proof-unavailable', reason='no-state-dependent-boundary')
+        from Verdict.runtime_ordinary_fold import render as render_ordinary
+        return render_ordinary(label, view, world, loaders, structured=structured,
+                               seeded=seed_inventories is not None)
     from Verdict.runtime_multiref_authority import InternalEdges
     authorized_multirefs = (internal_multiref.validate(view)
         if isinstance(internal_multiref, InternalEdges) else set())

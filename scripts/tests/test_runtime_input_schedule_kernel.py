@@ -40,13 +40,14 @@ class InputScheduleKernelTests(unittest.TestCase):
         for k in (2, 3):
             with self.subTest(k=k), tempfile.TemporaryDirectory() as d:
                 legacy, fed = mixed_world(Path(d), k)
-                self.assertTrue(fed.lean.startswith(legacy.lean))
+                data = fed.supporting_sources['TrainVerifyRuntimeWorldData.lean']
+                self.assertTrue(data.startswith(legacy.lean))
                 for label in ('sm', 'pm'):
                     name = label + 'InputSchedule_valid'
-                    self.assertIn(f'theorem {name} : SourceScopedEval.InputSchedule {label}Graph.nodes {label}InputRequests', fed.lean)
-                    self.assertIn(f'theorem {label}DenoteWithInputs_entry (s : Store)', fed.lean)
+                    self.assertIn(f'theorem {name} : SourceScopedEval.InputSchedule {label}Graph.nodes {label}InputRequests', data)
+                    self.assertIn(f'theorem {label}DenoteWithInputs_entry (s : Store)', data)
                     self.assertIn(name, fed.receipt['input_feed']['kernel_checks'])
-                    self.assertIn(f'#print axioms {label}DenoteWithInputs_entry', fed.lean)
+                    self.assertIn(f'#print axioms {label}DenoteWithInputs_entry', data)
                 self.assertFalse(fed.receipt['input_feed']['whole_world_option_success'])
                 self.assertFalse(fed.receipt['input_feed']['kernel_value_proved'])
 

@@ -72,11 +72,12 @@ class FeedTests(unittest.TestCase):
             root=Path(d); source=observed(root)
             s,b,r,ref=source
             result=bind(legacy,sv,pv,a[0],a[1],s,b,r,ref,root)
-            self.assertTrue(result.lean.startswith(legacy.lean))
+            data = result.supporting_sources['TrainVerifyRuntimeWorldData.lean']
+            self.assertTrue(data.startswith(legacy.lean))
             self.assertEqual(legacy,render(sv,pv,a[0],a[1]))
-            self.assertEqual(result.lean.count(' : GraphDecl :='),2)
+            self.assertEqual(data.count(' : GraphDecl :='),2)
             for label,view in [('sm',sv),('pm',pv)]:
-                schedule=result.lean.split(f'def {label}InputRequests : List InputRequest := [',1)[1].split(']',1)[0]
+                schedule=data.split(f'def {label}InputRequests : List InputRequest := [',1)[1].split(']',1)[0]
                 import re
                 self.assertEqual([int(x) for x in re.findall(label+r'Node_(\d+),',schedule)],list(range(len(view.nodes()))))
                 self.assertEqual(schedule.count('some'),sum(str(view.node_opname(n)).endswith('DATALOADER') for n in view.nodes()))
@@ -140,7 +141,8 @@ class FeedTests(unittest.TestCase):
             self.assertEqual(result['slots'],{'sm':2,'pm':18})
             self.assertEqual(len(result['loaders']),10)
             self.assertEqual(sum(len(l['ports']) for l in result['loaders']),20)
-            self.assertIn('denoteWithInputs',(root/'world'/'World.lean').read_text())
+            self.assertIn('denoteWithInputs',(root/'world'/'TrainVerifyRuntimeWorldData.lean').read_text())
+            self.assertIn('import TrainVerifyRuntimeWorldData', (root/'world'/'World.lean').read_text())
             self.assertFalse((root/'public').exists())
 
     def test_explicit_entry_flag_and_renderer_exist(self):
