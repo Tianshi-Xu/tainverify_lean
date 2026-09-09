@@ -94,7 +94,7 @@ def load_bundle(config, sm, pm, raw_sm, raw_pm, handoff_root):
         raise ValueError('explicit SM/PM capture and run directories required')
     if Path(config['pm_run']).resolve() != Path(handoff_root).resolve():
         raise ValueError('seed run must equal current input handoff run')
-    inventories = {}; runs = {}; pins = {}; actuals = {}; internal = {}
+    inventories = {}; runs = {}; pins = {}; actuals = {}; internal = {}; source_texts = {}
     for label, world_type, view, raw in [('sm','s',sm,raw_sm), ('pm','p',pm,raw_pm)]:
         root, run = Path(config[label+'_capture']), Path(config[label+'_run'])
         authority, _ = load_seed_capture(root, world_type)
@@ -125,6 +125,13 @@ def load_bundle(config, sm, pm, raw_sm, raw_pm, handoff_root):
             actual = torch.load(pt_file, weights_only=True, map_location='cpu')
             validate_seed_event(authority, json.loads(event_file.read_text()), actual, manifest, rank)
             actuals[label].append(actual); files += [event_file, pt_file]
+        source_texts[label] = {}
+        for rank in range(world.runtime_ndevs):
+            source_path, = [Path(p) for p in authority['pins'] if Path(p).name == f'gencode{rank}.py']
+            data = source_path.read_bytes()
+            if hashlib.sha256(data).hexdigest() != authority['pins'][str(source_path)]:
+                raise ValueError('parameter source changed after capture validation')
+            source_texts[label][rank] = data.decode('utf-8')
         inventories[label] = map_requests(view, raw, authority['requests'])
         runs[label] = manifest['run_id']; pins.update(authority['pins'])
         pins.update({str(p.resolve()):hashlib.sha256(p.read_bytes()).hexdigest() for p in files})
@@ -139,7 +146,16 @@ def load_bundle(config, sm, pm, raw_sm, raw_pm, handoff_root):
     tids = [row['tid'] for rows in inventories.values() for row in rows]
     if len(set(tids)) != len(tids):
         raise ValueError('cross-world seed ID collision')
+    from Verdict.runtime_parameter_inputs import validate as validate_parameters
+    # Seed-only observations remain usable, but partial parameter payloads fail.
+    observed = [a for rows in actuals.values() for a in rows]
+    if any('metadata' in a or 'initialized' in a for a in observed):
+        parameters = validate_parameters(sm, pm, raw_sm, raw_pm, actuals, reference, source_texts)
+    else:
+        parameters = dict(status='parameter-inputs-unavailable', reason='missing-observations',
+                          kernel_value_proved=False, proof_admissible=False)
     return dict(inventories=inventories, runs=runs, pins=pins, internal_multiref=internal,
+                parameter_inputs=parameters,
                 seed_input_adapter_emitted=False, kernel_value_proved=False,
                 proof_admissible=False, torch_refinement=False)
 
