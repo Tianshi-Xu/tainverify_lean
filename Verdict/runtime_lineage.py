@@ -259,7 +259,53 @@ def trace(sm, pm, sm_cells, pm_cells, snapshot, batch, receipt, reference):
                 raise ValueError('unsupported ordinary embedding offset')
         lineages.append(relation(sc.inputs[1],{r:pc.inputs[1] for r,pc in candidates.items()},Role.PARAMETER))
         lineages.append(relation(sc.outputs[0],{r:pc.outputs[0] for r,pc in candidates.items()},Role.ACTIVATION))
+    # Initial parameters come from the same original raw input ports as
+    # runtime_parameter_inputs, never from an observation/receipt or a shape.
+    def parameters(index, cells, world, ranks):
+        refs={}; parents={}; names={}
+        for cell in cells:
+            if op(cell) not in ('FW_embedding', 'FW_layernorm', 'FW_linear'):
+                continue
+            for ref, ir in zip(cell.inputs, cell._input_irs, strict=True):
+                ref=tuple(ref)
+                if not ir.is_param() or ir.is_grad() or ref in index.writers:
+                    continue
+                if (ref[0]!=world or ref[1]!=cell.rank or ref[1] not in ranks
+                        or ref[2]!=-1 or ref[4]!=0):
+                    raise ValueError('initial parameter fullref owner/phase mismatch')
+                if ref in parents and parents[ref]!=ir.parent.tid:
+                    raise ValueError('ambiguous raw parameter parent')
+                parents[ref]=ir.parent.tid
+                index.endpoint(ref,'initial')
+                meta=index.meta[ref]
+                if meta[3]!=(0,1):
+                    raise ValueError('unsupported initial parameter value partition')
+                key=(meta[0],ref[1])
+                if key in names and names[key]!=ref:
+                    raise ValueError('ambiguous initial parameter logical name/rank')
+                names[key]=ref
+                refs[ref]=meta
+        return refs
+    ranks={rank for u in units for rank in u['ranks']}
+    global_parameters=parameters(si,sm_cells,'s',{0})
+    local_parameters=parameters(pi,pm_cells,'p',ranks)
+    globals_by_name={meta[0]:ref for ref,meta in global_parameters.items()}
+    locals_by_name={}
+    for ref,meta in local_parameters.items():
+        if meta[0] not in globals_by_name:
+            raise ValueError('missing original global parameter identity')
+        locals_by_name.setdefault(meta[0],{})[ref[1]]=ref
     covered={l.target.ref for l in lineages}
+    for sr,smeta in global_parameters.items():
+        prs=locals_by_name.get(smeta[0],{})
+        if set(prs)!=ranks:
+            raise ValueError('incomplete initial parameter rank inventory')
+        # Validate already-covered embedding parameters too, without changing
+        # their original relation or the existing loader/embedding order.
+        candidate=relation(sr,prs,Role.PARAMETER)
+        if sr not in covered:
+            lineages.append(candidate)
+            covered.add(sr)
     gaps=[dict(ref=list(t),role='unsupported-target',op=str(sm.node_opname(n))) for n in sm.nodes()
           for low in sm.node_outputs(n) for t in [sm.source_tensor(low)] if tuple(t) not in covered]
     return tuple(lineages),gaps,_TraceValidation(validation, (sm_cells,pm_cells,snapshot,batch,receipt,reference))

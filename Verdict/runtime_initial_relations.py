@@ -133,46 +133,38 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
     result['initial_relations'] = dict(bound, contract_emitted=bool(goals))
     if not goals:
         return WorldDefinitions(world.lean, result, world.supporting_sources)
-    premises = []; conclusions = []; calls = []
-    for i, goal in enumerate(goals):
-        sm_tid = goal['sm_tid']; tids = goal['pm_tids']; shape = goal['sm_shape']
-        full = f'(initSM {sm_tid})'
-        shape_eq = f'{full}.shape = {shape}'
-        # Right-associated conjunction projection; do not destruct all premises.
-        h = 'h' + '.2' * i + ('.1' if i < len(goals) - 1 else '')
+    specs = []
+    for goal in goals:
+        ts = goal['sm_tid']; tids = goal['pm_tids']; shape = goal['sm_shape']
         if goal['kind'] == 'replicated':
-            values = f'∀ tid ∈ ({tids} : List Tid), initPM tid = {full}'
-            conclusions.append(f'(RelationFact.replicated {sm_tid} {tids} {shape}).Holds initSM initPM')
-            calls.append(f'SourceInitialParameters.replicated_of_exact_values initSM initPM {sm_tid} {tids} {shape} (by decide) {h}.1 {h}.2')
+            specs.append(f'.replicated {ts} {tids} {shape}')
         else:
-            dim = goal['dim']; k = len(tids); shard = goal['pm_shape']
-            values = f'({tids} : List Tid).map initPM = List.ofFn (fun r : Fin {k} => chunkPrimDimN {dim} {k} r.val {full})'
-            conclusions.append(f'(RelationFact.sharded {sm_tid} {tids} {dim} {shape} {shard}).Holds initSM initPM')
-            calls.append(f'SourceInitialParameters.sharded_of_exact_slices initSM initPM {sm_tid} {tids} {dim} {k} {shape} {shard} (by decide) (by decide) {h}.1 (by decide) {h}.2')
-        premises.append(f'({shape_eq} ∧ {values})')
-    proof = calls[0] if len(calls) == 1 else '⟨' + ',\n    '.join(calls) + '⟩'
+            specs.append(f".sharded {ts} {tids} {goal['dim']} {shape} {goal['pm_shape']}")
     text = '\n'.join([
         'namespace TrainVerify.Denote.RuntimeWorld', 'noncomputable section',
-        'open RelationCompiler', 'set_option maxHeartbeats 500000',
+        'open SourceInitialParameterSpecs', 'set_option maxHeartbeats 500000',
+        'private def initialParameterSpecs : List Spec := [',
+        ',\n'.join(specs) + ']',
+        'private theorem initialParameterSpecs_valid : All Spec.valid initialParameterSpecs := by decide',
         'def InitialParameterValues (initSM initPM : Store) : Prop :=',
-        '  ' + ' ∧\n  '.join(premises),
+        '  All (fun spec => spec.values initSM initPM) initialParameterSpecs',
         'def InitialParameterRelations (initSM initPM : Store) : Prop :=',
-        '  ' + ' ∧\n  '.join(conclusions),
+        '  All (fun spec => spec.fact.Holds initSM initPM) initialParameterSpecs',
         'theorem initialParameterRelations_of_values (initSM initPM : Store)',
-        '    (h : InitialParameterValues initSM initPM) : InitialParameterRelations initSM initPM := by',
-        '  exact ' + proof,
+        '    (h : InitialParameterValues initSM initPM) : InitialParameterRelations initSM initPM :=',
+        '  all_of_values initialParameterSpecs initSM initPM initialParameterSpecs_valid h',
         '#print axioms initialParameterRelations_of_values',
         'end', 'end TrainVerify.Denote.RuntimeWorld', ''])
     marker = 'import denote.SourceScopedPrefix\n'
     if world.lean.count(marker) != 1:
         raise ValueError('initial relation attachment requires canonical prefix entry')
-    entry = world.lean.replace(marker, marker + 'import denote.SourceInitialParameters\n', 1) + '\n' + text
+    entry = world.lean.replace(marker, marker + 'import denote.SourceInitialParameterSpecs\n', 1) + '\n' + text
     if 'input_feed' in world.receipt:
         from Verdict.runtime_input_relations import render as render_input_relations
         input_text, input_detail = render_input_relations(
             world.receipt['input_feed'], lineages, world.receipt['execution_order'])
-        entry = entry.replace('import denote.SourceInitialParameters\n',
-            'import denote.SourceInitialParameters\nimport denote.SourceInitialInputEncoding\nimport denote.SourceInitialInputRead\n', 1)
+        entry = entry.replace('import denote.SourceInitialParameterSpecs\n',
+            'import denote.SourceInitialParameterSpecs\nimport denote.SourceInitialInputEncoding\nimport denote.SourceInitialInputRead\n', 1)
         entry += '\n' + input_text
         result['input_relations'] = input_detail
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)

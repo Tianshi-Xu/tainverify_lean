@@ -18,10 +18,10 @@ def test_bound_initial_relations_are_emitted_in_same_world_entry():
     result = initial.attach(original, sm, pm, parameters, lineages, validation)
     assert result.supporting_sources == original.supporting_sources
     assert 'theorem existing : True' in result.lean
-    assert 'import denote.SourceInitialParameters\n' in result.lean
+    assert 'import denote.SourceInitialParameterSpecs\n' in result.lean
     assert 'def InitialParameterValues (initSM initPM : Store) : Prop' in result.lean
     assert 'theorem initialParameterRelations_of_values' in result.lean
-    assert result.lean.count('SourceInitialParameters.sharded_of_exact_slices') == 2
+    assert result.lean.count('\n.sharded ') == 2
     assert 'SourceInitialParameters.embedding_unit' not in result.lean
     assert result.receipt['initial_relations']['contract_emitted'] is True
     assert result.receipt['initial_relations']['kernel_value_proved'] is False
@@ -34,7 +34,7 @@ def test_replicated_parameters_emit_copy_not_gather_contract():
     sm, pm, parameters, lineages, validation = setup(copies=True)
     assert hasattr(initial, 'attach'), 'canonical initial relation Lean attachment missing'
     result = initial.attach(world(), sm, pm, parameters, lineages, validation)
-    assert result.lean.count('SourceInitialParameters.replicated_of_exact_values') == 2
+    assert result.lean.count('\n.replicated ') == 2
     assert 'sharded_of_exact_slices' not in result.lean
 
 
