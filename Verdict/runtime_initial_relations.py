@@ -167,5 +167,13 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
             'import denote.SourceInitialParameterSpecs\nimport denote.SourceInitialInputEncoding\nimport denote.SourceInitialInputRead\n', 1)
         entry += '\n' + input_text
         result['input_relations'] = input_detail
+        from Verdict.runtime_embedding_values import render as render_embedding_values
+        embedding_text, embedding_detail = render_embedding_values(
+            sm, pm, lineages, world.receipt['execution_order'])
+        if embedding_detail['reads']:
+            entry = entry.replace('import denote.SourceInitialInputRead\n',
+                                  'import denote.SourceEmbeddingRead\n', 1)
+            entry += '\n' + embedding_text
+        result['embedding_values'] = embedding_detail
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
     return WorldDefinitions(entry, result, world.supporting_sources)
