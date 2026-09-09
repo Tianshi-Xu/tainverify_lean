@@ -184,6 +184,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
             expected.insert(2, 'denote.SourceInitialParameters')
             if 'denote.SourceInitialInputEncoding' in imports:
                 expected.insert(3, 'denote.SourceInitialInputEncoding')
+                if 'denote.SourceInitialInputRead' in imports:
+                    expected.insert(4, 'denote.SourceInitialInputRead')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
         if imports != expected:

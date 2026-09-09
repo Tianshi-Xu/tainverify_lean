@@ -28,7 +28,11 @@ def api():
 @pytest.mark.parametrize('units,tp', [(1,1),(2,2),(3,2)])
 def test_original_feeds_emit_one_checked_slice_per_rank_port(tmp_path,units,tp):
     world, lineages = fed(tmp_path,units,tp)
-    text, detail = api()(world.receipt['input_feed'],lineages)
+    text, detail = api()(world.receipt['input_feed'],lineages,world.receipt['execution_order'])
+    assert len(detail['store_reads']) == (units*tp+1)*2
+    assert len(detail['store_relations']) == tp*2
+    assert 'theorem inputStoreRelations_of_success' in text
+    assert 'SourceInitialInputRead.input_value_of_split' in text
     assert len(detail['slices']) == units*tp*2
     assert text.count('SourceInitialInputEncoding.emitted_ordered_slice_eq_chunk') == units*tp*2
     assert '(hSlices' not in text

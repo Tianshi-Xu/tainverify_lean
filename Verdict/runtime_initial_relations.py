@@ -169,9 +169,10 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
     entry = world.lean.replace(marker, marker + 'import denote.SourceInitialParameters\n', 1) + '\n' + text
     if 'input_feed' in world.receipt:
         from Verdict.runtime_input_relations import render as render_input_relations
-        input_text, input_detail = render_input_relations(world.receipt['input_feed'], lineages)
+        input_text, input_detail = render_input_relations(
+            world.receipt['input_feed'], lineages, world.receipt['execution_order'])
         entry = entry.replace('import denote.SourceInitialParameters\n',
-            'import denote.SourceInitialParameters\nimport denote.SourceInitialInputEncoding\n', 1)
+            'import denote.SourceInitialParameters\nimport denote.SourceInitialInputEncoding\nimport denote.SourceInitialInputRead\n', 1)
         entry += '\n' + input_text
         result['input_relations'] = input_detail
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
