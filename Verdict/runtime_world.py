@@ -226,6 +226,9 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                             matmul_imports = ['denote.SourceMatmulRead', 'denote.SourceMatmulUnit']
                                                             if all(name in imports for name in matmul_imports):
                                                                 expected[22:22] = matmul_imports
+                                                                div_imports = ['denote.SourceDivRead', 'denote.SourceDivUnit']
+                                                                if all(name in imports for name in div_imports):
+                                                                    expected[24:24] = div_imports
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
