@@ -25,15 +25,15 @@ class IR:
     def is_grad(self): return False
 
 class Graph:
-    def __init__(self, world, units, tp):
+    def __init__(self, world, units, tp, seqlen=2):
         self.W = NS(num_dp=units if world=='p' else 1, num_mb=1, num_tp=tp, plan_ndevs=tp, runtime_ndevs=units*tp)
         self.cells=[]; self.shapes={}
         for r in range(units*tp if world=='p' else 1):
             b=1 if world=='p' else units
             k=r%tp if world=='p' else 0
-            x=IR(10,'input_ids',(b,2)); pos=IR(11,'position_ids',(b,2))
+            x=IR(10,'input_ids',(b,seqlen)); pos=IR(11,'position_ids',(b,seqlen))
             w=IR(20,'weight',(32,tp*3),((0,32),(k*3,(k+1)*3)) if world=='p' else None,True)
-            y=IR(30,'embedding',(b,2,tp*3),((0,b),(0,2),(k*3,(k+1)*3)) if world=='p' else None)
+            y=IR(30,'embedding',(b,seqlen,tp*3),((0,b),(0,seqlen),(k*3,(k+1)*3)) if world=='p' else None)
             refs={i.tid:T(world,r,-1 if i.param else 0,i.tid,0 if i.param else 1) for i in (x,pos,w,y)}
             for cid,op,ins,outs in [(5,'DATALOADER',[],[x,pos]),(9,'FW_embedding',[x,w],[y])]:
                 n=N(world,r,0,cid,op)
@@ -55,8 +55,8 @@ class Graph:
     def tensor_shape(self,t): return self.shapes[t]
     def is_initialized(self,t): return t.v==0
 
-def fixture(units=2,tp=2):
-    sm,pm=Graph('s',units,tp),Graph('p',units,tp)
+def fixture(units=2,tp=2,seqlen=2):
+    sm,pm=Graph('s',units,tp,seqlen),Graph('p',units,tp,seqlen)
     fields=('world','runtime_rank','microbatch','source_tid','version')
     writers=[dict(ref=dict(world='p',runtime_rank=x.rank,microbatch=0,source_cid=x.node.cid,call_instance=0,op=x.opname,origin='fixture'),inputs=[dict(zip(fields,t)) for t in x.inputs],outputs=[dict(zip(fields,t)) for t in x.outputs]) for x in pm.cells]
     snapshot=build_snapshot(writers)
@@ -65,11 +65,11 @@ def fixture(units=2,tp=2):
     from trainverify.runtime_source_authority import bind_reducers
     for writer in snapshot["writers"]: writer["parameter_grad_tids"]=[]
     bind_reducers(snapshot)
-    model=dict(seqlen=2,num_embeddings=32)
+    model=dict(seqlen=seqlen,num_embeddings=32)
     receipt=dict(model=model,batch_size=1,compute=dict(plan_ngpus=tp,runtime_ngpus=units*tp))
     reference=dict(model=model,batch_size=units)
     cfg=dict(num_pp=1,num_mb=1,gbs=units,normalizer=1,objective='sum',units=[dict(unit=u,ranks=list(range(u*tp,(u+1)*tp)),positions=[u]) for u in range(units)])
-    payloads=[dict(input_ids=[[u, u+1]],position_ids=[[0,1]]) for u in range(units)]
+    payloads=[dict(input_ids=[[u+j for j in range(seqlen)]],position_ids=[list(range(seqlen))]) for u in range(units)]
     global_inputs={k:sum([p[k] for p in payloads],[]) for k in payloads[0]}
     record=build_batch_record(cfg,payloads,global_inputs,snapshot)
     snapshot['adapter_source']=copy.deepcopy(writers)

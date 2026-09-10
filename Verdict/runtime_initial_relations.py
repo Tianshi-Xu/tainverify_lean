@@ -214,5 +214,13 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                                   'import denote.SourceEmbeddingRead\nimport denote.SourcePrimitiveRead\n', 1)
             entry += '\n' + route_text
         result['embedding_route_values'] = route_detail
+        if route_detail['routes']:
+            from Verdict.runtime_embedding_position_units import render as render_position_units
+            position_text, position_detail = render_position_units(sm, pm, lineages, validation, bound)
+            if position_detail['units']:
+                entry = entry.replace('import denote.SourcePrimitiveRead\n',
+                    'import denote.SourcePrimitiveRead\nimport denote.SourceEmbeddingPositionUnit\n', 1)
+                entry += '\n' + position_text
+            result['embedding_position_units'] = position_detail
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
     return WorldDefinitions(entry, result, world.supporting_sources)

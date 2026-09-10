@@ -20,10 +20,10 @@ def discover(sm, pm, authority):
     return sv, pv, ls, validation, census
 
 
-def adapter_fixture(units=2, tp=2):
+def adapter_fixture(units=2, tp=2, seqlen=2):
     from trainverify.runtime_source_authority import build_snapshot, bind_adapters, bind_reducers
     from scripts.tests.test_graph_to_lean_collective_scope import tref
-    sm, pm, old = fixture(units, tp)
+    sm, pm, old = fixture(units, tp, seqlen)
     sm.W.runtime_ndevs = 1
     width = tp * 3
     for world, graph in [('s', sm), ('p', pm)]:
@@ -33,10 +33,10 @@ def adapter_fixture(units=2, tp=2):
             loader = next(x for x in graph.cells if x.rank == rank and x.opname == 'DATALOADER')
             pos = loader._output_irs[1]
             weight = IR(40, 'position.weight', (32, width), param=True)
-            sliced = IR(51, 'position_ids', (b, 2), ((0, b), (k*(2//tp), (k+1)*(2//tp))))
-            y = IR(50, 'position.embedding', (b, 2, width),
+            sliced = IR(51, 'position_ids', (b, seqlen), ((0, b), (k*(seqlen//tp), (k+1)*(seqlen//tp))))
+            y = IR(50, 'position.embedding', (b, seqlen, width),
                    (*sliced.indmap, (0, width)) if world == 'p' else None)
-            out = IR(52, 'position.embedding', (b, 2, width), ((0, b), (0, 2), (k*3, (k+1)*3)))
+            out = IR(52, 'position.embedding', (b, seqlen, width), ((0, b), (0, seqlen), (k*3, (k+1)*3)))
             refs = lambda ir: T(world, rank, -1 if ir.param else 0, ir.tid, 0 if ir.param else 1)
             def add(cid, operation, inputs, outputs, kw, kind=None, inrefs=None):
                 cell = NS(node=N(world, rank, 0, cid, kind or operation), rank=rank,
