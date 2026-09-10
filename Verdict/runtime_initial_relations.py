@@ -316,6 +316,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceMatmulUnit\nimport denote.SourceDivRead\nimport denote.SourceDivUnit\n', 1)
             entry += '\n' + div_text
         result['div_values'] = div_detail
+        from Verdict.runtime_div_exchange_values import render as render_div_exchanges
+        div_exchange_text, div_exchange_detail = render_div_exchanges(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if div_exchange_detail['reads']:
+            entry += '\n' + div_exchange_text
+        result['div_exchange_values'] = div_exchange_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
