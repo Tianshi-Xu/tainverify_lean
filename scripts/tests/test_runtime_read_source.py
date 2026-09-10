@@ -1,4 +1,5 @@
 import importlib
+from hashlib import sha256
 import importlib.util
 import pytest
 import re
@@ -324,3 +325,162 @@ def test_expansion_rejects_damaged_scopes_and_helpers():
     p=api().compact(source())
     with pytest.raises(ValueError):api().expand(p.replace('end RuntimeReadSource\n',''))
     with pytest.raises(ValueError):api().expand(p.replace('=> SourcePrimitiveRead.', '=> Unknown.'))
+
+
+EXTENDED_HELPERS = (
+    'SourceAllGatherRead.allGather_value_of_split',
+    'SourceLayernormRead.layernorm_value_of_split',
+    'SourceLayoutRead.transposeAxes_value_of_split',
+    'SourceLayoutRead.view_value_of_split',
+    'SourceLinearRead.linear_value_of_split',
+)
+VERSION = '-- RuntimeReadSource v2\n'
+
+
+def extended_source(helper, world='pm', aliased=False):
+    spelling = 'r1' if aliased else helper
+    prefix = (f'{spelling} {world}Graph {world}Scope {world}Peers {world}Graph.nodes\n'
+              f'    {world}InputRequests')
+    text = source(prefix).replace(' xs\n', ' xs θ₁\n')
+    if aliased:
+        text = (f'section RuntimeRelationSource\nlocal notation "r1" => {helper}\n' +
+                text + 'end RuntimeRelationSource\n')
+    return text
+
+
+@pytest.mark.parametrize('helper', EXTENDED_HELPERS)
+@pytest.mark.parametrize('world', ['sm', 'pm'])
+@pytest.mark.parametrize('aliased', [False, True])
+def test_extended_prefix_alias_exact_utf8_inverse(helper, world, aliased):
+    m = api(); text = extended_source(helper, world, aliased); packed = m.compact(text)
+    rhs = f'{helper} {world}Graph {world}Scope {world}Peers {world}Graph.nodes {world}InputRequests'
+    assert f'local notation "vP0" => {rhs}' in packed
+    assert m._START + VERSION in packed
+    assert packed.count(VERSION) == 1
+    assert len(packed.encode('utf-8')) < len(text.encode('utf-8'))
+    assert packed.count(' xs θ₁\n') == 12
+    assert m.expand(packed).encode('utf-8') == text.encode('utf-8')
+    assert m.compact(packed) == packed
+
+
+def legacy_source():
+    prefix = 'r1 pmGraph pmScope pmPeers pmGraph.nodes\n    pmInputRequests'
+    return ('section RuntimeRelationSource\n'
+            'local notation "r1" => SourceLinearRead.linear_value_of_split\n' +
+            ''.join(f'def p{i} := {prefix} θ₁\n' for i in range(12)) +
+            'end RuntimeRelationSource\n')
+
+
+# Frozen output generated with the baseline (84272743) algorithm, not the new encoder.
+_LEGACY_PACKED = ('section RuntimeReadSource\n'
+ 'open TrainVerify.Denote TrainVerify.Denote.RuntimeWorld\n'
+ 'local notation "c0" => pmInputRequests\n'
+ 'section RuntimeRelationSource\n'
+ 'local notation "r1" => SourceLinearRead.linear_value_of_split\n'
+ 'def p0 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p1 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p2 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p3 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p4 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p5 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p6 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p7 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p8 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p9 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p10 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'def p11 := r1 pmGraph pmScope pmPeers pmGraph.nodes\n'
+ '    c0 θ₁\n'
+ 'end RuntimeRelationSource\n'
+ 'end RuntimeReadSource\n')
+
+
+def test_legacy_packed_extended_calls_still_decode_canonically():
+    m = api(); text = legacy_source()
+    assert m.expand(_LEGACY_PACKED) == text
+    assert VERSION not in _LEGACY_PACKED
+    assert m.compact(text) != _LEGACY_PACKED
+    assert m.expand(m.compact(text)) == text
+    with pytest.raises(ValueError):
+        m.expand(_LEGACY_PACKED.replace('def p0', 'def pmGraph', 1))
+    with pytest.raises(ValueError):
+        m.expand(_LEGACY_PACKED.replace(m._START, m._START + VERSION, 1))
+
+
+@pytest.mark.parametrize('damage', [
+    lambda p: p.replace(VERSION, '', 1),
+    lambda p: p.replace(VERSION, '-- RuntimeReadSource v3\n', 1),
+    lambda p: p.replace(VERSION, VERSION * 2, 1),
+    lambda p: p.replace(VERSION, '', 1).replace('end RuntimeReadSource\n', VERSION + 'end RuntimeReadSource\n'),
+    lambda p: p.replace('"vP0"', '"vP1"', 1),
+    lambda p: p.replace('=> SourceLinearRead.', '=> Unknown.'),
+    lambda p: p.replace('pmScope pmPeers', 'smScope pmPeers', 1),
+    lambda p: p.replace('pmGraph.nodes pmInputRequests', 'pmGraph.nodes smInputRequests', 1),
+    lambda p: p.replace(' -- r1\n', ' -- r2\n', 1),
+    lambda p: p.replace('def p0', 'def linear_value_of_split', 1),
+])
+def test_extended_inverse_rejects_corrupt_version_or_metadata(damage):
+    packed = api().compact(legacy_source())
+    assert VERSION in packed
+    damaged = damage(packed)
+    assert damaged != packed
+    with pytest.raises(ValueError):
+        api().expand(damaged)
+
+
+@pytest.mark.parametrize('name', sorted({p for h in EXTENDED_HELPERS for p in (h, *h.split('.'))}))
+@pytest.mark.parametrize('binding', [
+    'variable ({name} : Type)', 'def Other.{name} := other',
+    'def f := fun\n  {name} => other', 'def f := by\n  intro {name}',
+    'def f := by\n  delta\n    {name}', '#print {name}',
+])
+def test_extended_protected_shadow_and_name_context_fallback(name, binding):
+    text = binding.format(name=name) + '\n' + extended_source(EXTENDED_HELPERS[-1])
+    assert api().compact(text) == text
+
+
+@pytest.mark.parametrize('helper', EXTENDED_HELPERS)
+def test_extended_exact_tokens_comments_and_alias_scope(helper):
+    text = extended_source(helper)
+    untouched = ''.join(f'def extra{i} := {name} pmGraph pmScope pmPeers pmGraph.nodes\n    pmInputRequests xs\n'
+        for i, name in enumerate([helper + s for s in ["'", '!', '?', 'Extra', '.field', '₁']] + ['Other.' + helper]))
+    comments = ('-- ' + helper + ' pmGraph pmScope pmPeers pmGraph.nodes\n--     pmInputRequests\n') * 12
+    text += untouched + comments
+    packed = api().compact(text)
+    assert api()._START + VERSION in packed
+    # Entry-term shortening is independent; expand must retain every exact byte.
+    assert all(name in packed for name in [helper + "'", 'Other.' + helper, helper + '₁'])
+    assert comments in packed
+    assert api().expand(packed) == text
+    aliased = extended_source(helper, aliased=True)
+    outside = 'def outside := r1 pmGraph pmScope pmPeers pmGraph.nodes\n    pmInputRequests xs\n'
+    packed = api().compact(aliased + outside)
+    assert 'local notation "vP' not in packed
+    assert api().expand(packed) == aliased + outside
+
+
+@pytest.mark.parametrize('prefix', ['namespace Other\n', 'open Other\n', '/- block -/\n',
+    'def x := "quoted"\n', 'def f := by\n  rcases pair with ⟨SourceLinearRead, h⟩\n'])
+def test_extended_unsupported_guards_preserve_whole_input(prefix):
+    text = prefix + extended_source(EXTENDED_HELPERS[-1])
+    assert api().compact(text) == text
+
+
+@pytest.mark.parametrize('text', [source(), entry_source(('pmInputRequests',)), 'def x := SourceLinearRead.linear_value_of_split\n'])
+def test_no_added_profitable_prefix_preserves_legacy_bytes(text):
+    assert sha256(api().compact(text).encode()).hexdigest() == LEGACY_OUTPUTS[sha256(text.encode()).hexdigest()]
+
+
+LEGACY_OUTPUTS = {'6581088cc941809b3e6634d1a8db8085c600eacee310785aef7c8a79fb41b825': '8d996505d102aa2fbb19f4665593eea4d0f12d0c36249af9bfb87f955d86ca81',
+ '9defb9dfe9b1f1d85a86078a181aa687574ff405750b942b4d7320fd942dfd44': '4288b38a78fc258a36a1e921b9dd6768f240c441b6ea91fa58f624c2b4019d3b',
+ 'de74babaa0b729c099f046abba06b9339460415e56ac3b98255988c6bd71461d': 'de74babaa0b729c099f046abba06b9339460415e56ac3b98255988c6bd71461d'}

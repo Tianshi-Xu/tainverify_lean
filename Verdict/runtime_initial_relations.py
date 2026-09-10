@@ -270,6 +270,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceViewUnit\nimport denote.SourceRank4Exchange\n', 1)
             entry += '\n' + exchange_text
         result['projection_exchange_values'] = exchange_detail
+        from Verdict.runtime_transpose_values import render as render_transposes
+        transpose_text, transpose_detail = render_transposes(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if transpose_detail['reads']:
+            entry = entry.replace('import denote.SourceRank4Exchange\n',
+                'import denote.SourceRank4Exchange\nimport denote.SourceTransposeUnit\n', 1)
+            entry += '\n' + transpose_text
+        result['transpose_values'] = transpose_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)

@@ -8,10 +8,18 @@ from Verdict.runtime_relation_source import _token
 
 _START = 'section RuntimeReadSource\nopen TrainVerify.Denote TrainVerify.Denote.RuntimeWorld\n'
 _END = 'end RuntimeReadSource\n'
-_HELPERS = ('SourceInitialInputRead.input_value_of_split',
+_VERSION = '-- RuntimeReadSource v2\n'
+_LEGACY_HELPERS = ('SourceInitialInputRead.input_value_of_split',
     'SourceEmbeddingRead.embedding_value_of_split', 'SourceAddRead.add_value_of_split',
     'SourcePrimitiveRead.chunk_value_of_split', 'SourcePrimitiveRead.allToAll_value_of_split',
     'SourceMultirefRead.multiref_value_of_split')
+_HELPERS = _LEGACY_HELPERS + (
+    'SourceAllGatherRead.allGather_value_of_split',
+    'SourceLayernormRead.layernorm_value_of_split',
+    'SourceLayoutRead.transposeAxes_value_of_split',
+    'SourceLayoutRead.view_value_of_split',
+    'SourceLinearRead.linear_value_of_split',
+)
 _ENTRY_TERMS = (
     'pmInputRequests.drop', 'pmInputRequests.take', 'pmInputRequests',
     'chunkPrimDimN', 'List.take_append_drop', 'AllToAllSourceFaithful.tensor',
@@ -73,11 +81,15 @@ def _balanced(text):
 
 
 def compact(text):
+    return _compact(text, _HELPERS)
+
+
+def _compact(text, helpers):
     if (any(x in text for x in ('RuntimeReadSource', '/-', '-/', '`', '«', '\r'))
             or re.search(r'\b(?:vP|c)\d+\b', text)
             or text.count('section RuntimeRelationSource\n') > 1):
         return text
-    protected = {p for h in _HELPERS + _ENTRY_TERMS
+    protected = {p for h in helpers + _ENTRY_TERMS
                  for p in (h, *h.split('.'))}
     protected.update(w+s for w in ('sm','pm') for s in ('Graph','Scope','Peers','InputRequests'))
     lines = [line.split('--', 1)[0] for line in text.splitlines()]
@@ -147,7 +159,8 @@ def compact(text):
         return text
     imports = re.match(r'(?:import [^\n]+\n)*', text)[0]
     body, definitions = text[len(imports):], []
-    for helper in _HELPERS:
+    extended = False
+    for helper in helpers:
         for world in ('sm','pm'):
             for spelling in [helper]+[a for a,h in old if h==helper]:
                 original = _prefix(spelling, world)
@@ -166,6 +179,7 @@ def compact(text):
                     continue
                 body = replaced
                 definitions.append(definition)
+                extended |= helper not in _LEGACY_HELPERS
     terms = []
     for original in _ENTRY_TERMS:
         alias = f'c{len(terms)}'
@@ -175,7 +189,9 @@ def compact(text):
             continue
         body = replaced
         terms.append(definition)
-    result = imports+_START+''.join(definitions+terms)+body+_END
+    # Only profitable added prefixes opt into the extended canonical whitelist.
+    version = _VERSION if extended else ''
+    result = imports+_START+version+''.join(definitions+terms)+body+_END
     return result if len(result.encode())<len(text.encode()) else text
 
 
@@ -188,6 +204,10 @@ def expand(text):
     before,_,rest = text.partition(_START)
     if not re.fullmatch(r'(?:import [^\n]+\n)*', before) or not rest.endswith(_END):
         raise ValueError('invalid source-read scope')
+    extended = rest.startswith(_VERSION)
+    helpers = _HELPERS if extended else _LEGACY_HELPERS
+    if extended:
+        rest = rest[len(_VERSION):]
     replacements = []
     seen = set()
     while rest.startswith('local notation "vP'):
@@ -195,7 +215,7 @@ def expand(text):
         match = re.fullmatch(r'local notation "(vP\d+)" => (.+?)(?: -- (r\d+))?',line)
         if not match or not sep or match[1] != f'vP{len(replacements)}':
             raise ValueError('invalid source-read notation')
-        candidates = [(h,w) for h in _HELPERS for w in ('sm','pm') if _prefix(h,w).replace('\n    ',' ')==match[2]]
+        candidates = [(h,w) for h in helpers for w in ('sm','pm') if _prefix(h,w).replace('\n    ',' ')==match[2]]
         key = (match[2], match[3])
         if len(candidates)!=1 or key in seen:
             raise ValueError('unsupported source-read notation')
@@ -221,8 +241,8 @@ def expand(text):
     result = before+body
     if re.search(r'\b(?:vP|c)\d+\b', _code(result)) or 'RuntimeReadSource' in result:
         raise ValueError('invalid source-read alias use')
-    # New-format metadata must describe exactly what this bounded pass emits.
+    # Validate each format against its own canonical helper whitelist.
     # Old vP-only entries predate the term whitelist and remain decodable.
-    if terms and compact(result) != text:
+    if (terms or extended) and _compact(result, helpers) != text:
         raise ValueError('noncanonical entry-term source')
     return result
