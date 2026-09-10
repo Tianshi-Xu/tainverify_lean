@@ -211,6 +211,9 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                     projection_imports = ['denote.SourceLinearRead', 'denote.SourceAllGatherRead', 'denote.SourceLinearUnit']
                                     if all(name in imports for name in projection_imports):
                                         expected[12:12] = projection_imports
+                                        view_imports = ['denote.SourceLayoutRead', 'denote.SourceViewUnit']
+                                        if all(name in imports for name in view_imports):
+                                            expected[15:15] = view_imports
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':

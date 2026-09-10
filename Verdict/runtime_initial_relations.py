@@ -254,6 +254,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceLayernormUnit\nimport denote.SourceLinearRead\nimport denote.SourceAllGatherRead\nimport denote.SourceLinearUnit\n', 1)
             entry += '\n' + projection_text
         result['projection_values'] = projection_detail
+        from Verdict.runtime_view_values import render as render_views
+        view_text, view_detail = render_views(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if view_detail['reads']:
+            entry = entry.replace('import denote.SourceLinearUnit\n',
+                'import denote.SourceLinearUnit\nimport denote.SourceLayoutRead\nimport denote.SourceViewUnit\n', 1)
+            entry += '\n' + view_text
+        result['view_values'] = view_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
