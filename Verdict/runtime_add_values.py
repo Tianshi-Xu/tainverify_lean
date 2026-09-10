@@ -123,76 +123,7 @@ def _read(view, label, step, order):
         source_step=asdict(step))
 
 
-def _shapes(prefix, route, record, lineages, specs):
-    """Derive full/local predecessor shapes solely from existing input contracts."""
-    ids = _one((l for l in lineages if l.target.ref == route.batch_key), 'add input lineage missing')
-    row, bu = specs[record['spec_index']]
-    goal = bu['initial_goal']
-    ws = _list(f'q {tid}' for tid in record['pm_weight_tids'])
-    relation = (f'RelationCompiler.ReplicatedRel (t {record["sm_weight_tid"]}) {ws} {goal["sm_shape"]}'
-        if goal['kind'] == 'replicated' else
-        f'RelationCompiler.ShardedRel (t {record["sm_weight_tid"]}) {ws} 1 {goal["sm_shape"]} {goal["pm_shape"]}')
-    projection = 'hrels' + '.2' * record['spec_index'] + ('.1' if record['spec_index'] < len(specs)-1 else '')
-    u, T = route.unit, len(route.ranks)
-    full = route.global_embedding.outputs[0].endpoint
-    sm_ids, sm_weight = record['sm_input_tid'], record['sm_weight_tid']
-    direct = route.ranks[0].chunk is None
-    global_read = f'embeddingRead_{full.tid}' if direct else f'embeddingRouteRead_sm_{full.tid}'
-    proof = [f'  have {prefix}Weights : {relation} := {projection}',
-        f'  have {prefix}FullIds : (t {sm_ids}).shape = {list(ids.target.shape)} :=',
-        f'    (inputStoreRelation_{sm_ids}_{record["input_lanes"][0]} s p t q hs hp).full_shape',
-        f'  have {prefix}FullShape : (t {full.tid}).shape = {list(full.shape)} := by',
-        f'    have hshape := congrArg Tensor.shape ({global_read} s t hs)',
-        f'    rw [fw_embedding_shape, {prefix}FullIds, {prefix}Weights.full_shape] at hshape',
-        '    exact hshape']
-    for j, rank in enumerate(route.ranks):
-        loader = rank.loader.endpoint
-        lane = record['input_lanes'][j]
-        lane_tids = _list(f'q {unit.pieces[lane].endpoint.tid}' for unit in ids.units)
-        weight = rank.embedding.inputs[1].endpoint
-        emb = rank.embedding.outputs[0].endpoint
-        proof += [f'  have {prefix}Ids{j} : (q {loader.tid}).shape = {list(loader.shape)} :=',
-            f'    (inputStoreRelation_{sm_ids}_{lane} s p t q hs hp).shard_shapes (q {loader.tid})',
-            f'      (by change q {loader.tid} ∈ {lane_tids}; exact {_member(u)})',
-            f'  have {prefix}Weight{j} : (q {weight.tid}).shape = {list(weight.shape)} :=',
-            f'    {prefix}Weights.{"shard_shapes" if direct else "replica_shapes"} (q {weight.tid}) {_member(j)}']
-        input_tid = loader.tid
-        ids_shape = f'{prefix}Ids{j}'
-        if not direct:
-            chunk = rank.chunk.outputs[0].endpoint
-            proof += [f'  have {prefix}Chunk{j} : (q {chunk.tid}).shape = {list(chunk.shape)} := by',
-                f'    rw [embeddingRouteRead_pm_{chunk.tid} p q hp]',
-                f'    exact chunkPrimDimN_shape 1 {T} {j} (q {loader.tid}) {list(loader.shape)} {prefix}Ids{j} (by decide)']
-            input_tid, ids_shape = chunk.tid, f'{prefix}Chunk{j}'
-        read = f'embeddingRead_{emb.tid}' if direct else f'embeddingRouteRead_pm_{emb.tid}'
-        proof += [f'  have {prefix}Embedding{j} : (q {emb.tid}).shape = {list(emb.shape)} := by',
-            f'    have hshape := congrArg Tensor.shape ({read} p q hp)',
-            f'    rw [fw_embedding_shape, {ids_shape}, {prefix}Weight{j}] at hshape',
-            '    exact hshape']
-    for j, rank in enumerate(route.ranks):
-        output = rank.output.endpoint
-        proof += [f'  have {prefix}Local{j} : (q {output.tid}).shape = {list(output.shape)} := by']
-        if direct:
-            proof += [f'    exact {prefix}Embedding{j}']
-        else:
-            senders = [r.embedding.outputs[0].endpoint.tid for r in route.ranks]
-            proof += [f'    have hshape := AllToAllSourceFaithful.tensor_shape {T} {j} 1 2',
-                f'      (q {senders[0]}) {_list(f"q {tid}" for tid in senders[1:])} (by decide)',
-                f'    rw [{prefix}Embedding0] at hshape',
-                f'    exact (congrArg Tensor.shape (embeddingRouteRead_pm_{output.tid} p q hp)).trans hshape']
-    terms = _list(f'q {r.output.endpoint.tid}' for r in route.ranks)
-    shape = list(route.ranks[0].output.endpoint.shape)
-    proof += [f'  have {prefix}Shapes : ∀ x ∈ {terms}, x.shape = {shape} := by',
-        '    intro x hx', '    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx',
-        '    rcases hx with ' + ' | '.join('rfl' for _ in route.ranks)]
-    proof += [f'    · exact {prefix}Local{j}' for j in range(T)]
-    proof += [f'  have {prefix}Indexed : ∀ r (hr : r < ({terms}).length),',
-        f'      (({terms}).get ⟨r, hr⟩).shape = {shape} := by',
-        '    intro r hr', f'    exact {prefix}Shapes _ (List.get_mem _ _)']
-    return proof
-
-
-def _unit(step, locals_, pair, records, lineages, specs):
+def _unit(step, locals_, pair, records, lineages):
     left, right = pair
     D = len(_one((l for l in lineages if l.target.ref == left.batch_key), 'add input missing').units)
     T, u = len(left.ranks), left.unit
@@ -203,26 +134,32 @@ def _unit(step, locals_, pair, records, lineages, specs):
     outs = [s.outputs[0].endpoint.tid for s in locals_]
     terms = _list(f'q {tid}' for tid in outs)
     name = f'addUnit_{out}_{u}'
-    proof = [f'theorem {name} (s p t q : Store)',
+    facts = f'addUnitFacts_{out}_{u}'
+    header = ['(s p t q : Store)',
         '    (hs : smDenoteWithInputs s = some t) (hp : pmDenoteWithInputs p = some q)',
-        '    (h : InitialParameterValues s p) :',
-        f'    chunkPrimDimN 0 {D} {u} (t {out}) =',
-        f'    allGatherPrimDimN 2 {T} 0 {terms} := by',
-        '  have hrels := initialParameterRelations_of_values t q (initialParameterValues_final s p t q hs hp h)']
-    for prefix, route, record in zip(('a', 'b'), pair, records, strict=True):
-        proof += _shapes(prefix, route, record, lineages, specs)
+        '    (h : InitialParameterValues s p) :']
+    value = [f'    chunkPrimDimN 0 {D} {u} (t {out}) =',
+        f'    allGatherPrimDimN 2 {T} 0 {terms}']
+    proof = [f'theorem {facts} ' + header[0], *header[1:],
+        f'    (t {out}).shape = {[B * D, S, H * T]} ∧',
+        f'    (∀ x ∈ {terms}, x.shape = {[B, S, H]}) ∧',
+        *value[:-1], value[-1] + ' := by',
+        f'  have a := {records[0]["facts_theorem"]} s p t q hs hp h',
+        f'  have b := {records[1]["facts_theorem"]} s p t q hs hp h']
     add_terms = _list(f'elemwiseAdd (q {a.output.endpoint.tid}) (q {b.output.endpoint.tid})'
                       for a, b in zip(left.ranks, right.ranks, strict=True))
     proof += [f'  have localAdds : {terms} = List.zipWith elemwiseAdd {local_lists[0]} {local_lists[1]} := by',
         f'    change {terms} = {add_terms}',
         '    exact ' + _cons_equal([f'addRead_pm_{tid} p q hp' for tid in outs]),
-        f'  exact TrainVerify.Denote.source_add_unit_output_reconstruct {D} {T} {B} {S} {H} {u}',
+        f'  exact TrainVerify.Denote.source_add_unit_output_facts {D} {T} {B} {S} {H} {u}',
         f'    (t {fulls[0]}) (t {fulls[1]}) (t {out}) {local_lists[0]} {local_lists[1]} {terms}',
         '    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)',
-        '    aFullShape bFullShape rfl rfl aIndexed bIndexed',
-        f'    ({records[0]["theorem"]} s p t q hs hp h) ({records[1]["theorem"]} s p t q hs hp h)',
-        f'    (addRead_sm_{out} s t hs) localAdds', f'#print axioms {name}']
-    return proof, dict(theorem=name, unit=u, positions=list(left.positions),
+        '    a.1 b.1 rfl rfl (fun r hr => a.2.1 _ (List.get_mem _ _))',
+        '    (fun r hr => b.2.1 _ (List.get_mem _ _)) a.2.2 b.2.2',
+        f'    (addRead_sm_{out} s t hs) localAdds', f'#print axioms {facts}',
+        f'theorem {name} ' + header[0], *header[1:], *value[:-1], value[-1] + ' :=',
+        f'  ({facts} s p t q hs hp h).2.2', f'#print axioms {name}']
+    return proof, dict(theorem=name, facts_theorem=facts, unit=u, positions=list(left.positions),
         ranks=[r.rank for r in left.ranks], dimensions=dict(D=D, T=T, B=B, S=S, H=H),
         sm_output_ref=list(step.outputs[0].endpoint.ref), sm_output_tid=out,
         pm_output_refs=[list(s.outputs[0].endpoint.ref) for s in locals_], pm_output_tids=outs,
@@ -320,7 +257,7 @@ def _render(sm, pm, lineages, validation, bound, order, fresh):
                     continue
                 proof, read = _read(view, label, selected, order[label])
                 proofs += proof; reads.append(read); seen[ref] = selected
-            proof, unit = _unit(step, locals_, pair, recs, lineages, specs)
+            proof, unit = _unit(step, locals_, pair, recs, lineages)
             proofs += proof; units.append(unit)
     text = '\n'.join(['-- UNCOMPILED: parent-owned imports, integration, cost cap and kernel check required.',
         'namespace TrainVerify.Denote.RuntimeWorld', 'noncomputable section',

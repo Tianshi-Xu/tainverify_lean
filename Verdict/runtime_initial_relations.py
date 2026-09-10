@@ -227,8 +227,22 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
             sm, pm, lineages, validation, bound, world.receipt['execution_order'])
         if add_detail['units']:
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
-                'import denote.SourceEmbeddingRead\nimport denote.SourceAddRead\nimport denote.SourceAddUnit\n', 1)
+                'import denote.SourceEmbeddingRead\nimport denote.SourceAddRead\nimport denote.SourceAddUnit\nimport denote.SourceAddFacts\n', 1)
             entry += '\n' + add_text
         result['add_values'] = add_detail
+        from Verdict.runtime_post_add_values import render as render_post_add
+        post_text, post_detail = render_post_add(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if post_detail['reads']:
+            entry = entry.replace('import denote.SourceAddFacts\n',
+                'import denote.SourceAddFacts\nimport denote.SourceMultirefRead\nimport denote.SourceHiddenSequenceExchange\n', 1)
+            entry += '\n' + post_text
+        result['post_add_values'] = post_detail
+        if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
+            entry = entry.replace('import denote.SourceEmbeddingRead\n',
+                'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
+    from Verdict.runtime_binder_source import compact as compact_binders
+    from Verdict.runtime_read_source import compact as compact_reads
+    entry = compact_reads(compact_binders(entry))
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
     return WorldDefinitions(entry, result, world.supporting_sources)

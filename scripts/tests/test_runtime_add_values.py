@@ -109,16 +109,21 @@ def test_source_add_reads_and_units(D, tp, seqlen):
     assert len(detail['reads']) == 1 + D*tp
     assert len(detail['units']) == D
     assert text.count('SourceAddRead.add_value_of_split') == 1 + D*tp
-    assert text.count('TrainVerify.Denote.source_add_unit_output_reconstruct') == D
+    assert text.count('TrainVerify.Denote.source_add_unit_output_facts') == D
+    for unit in detail['units']:
+        assert f'theorem {unit["theorem"]} ' in text
+        assert f'({unit["facts_theorem"]} s p t q hs hp h).2.2' in text
     assert detail['lean_bytes'] == len(text.encode())
     assert 'UNCOMPILED' in text
     for flag in ('proof_admissible', 'kernel_value_proved', 'public_complete', 'torch_refinement'):
         assert detail[flag] is False
-    for phrase in ('embeddingUnit_', 'embeddingPositionUnit_', 'fw_embedding_shape',
-        'chunkPrimDimN_shape', 'AllToAllSourceFaithful.tensor_shape', 'List.get_mem',
-        'List.zipWith elemwiseAdd', '.shard_shapes', '.replica_shapes', '.full_shape',
-        'initialParameterValues_final s p t q hs hp h', '∀ row ∈'):
+    for phrase in ('embeddingUnitFacts_', 'embeddingPositionUnitFacts_', 'List.get_mem',
+        'List.zipWith elemwiseAdd', 'a.1 b.1', 'a.2.2 b.2.2', '∀ row ∈'):
         assert phrase in text
+    # Shapes and parameter projections remain in the shared predecessor facts,
+    # not duplicated in each consumer's proof.
+    assert 'fw_embedding_shape' not in text
+    assert 'initialParameterValues_final s p t q hs hp h' not in text
     for bad in ('sorry', 'admit', 'native_decide', '(hshape :', '(houtput :'):
         assert bad not in text
     for row in detail['reads']:
@@ -190,6 +195,16 @@ def test_pointwise_source_layout_must_match_predecessors(world, fault):
         api()(*args)
 
 
+def test_add_units_export_reusable_shape_and_value_facts():
+    text, detail = api()(*prepared())
+    for unit in detail['units']:
+        facts = unit['facts_theorem']
+        assert f'theorem {facts} ' in text
+        assert f'({facts} s p t q hs hp h).2.2' in text
+    assert 'source_add_unit_output_facts' in text
+    assert '.shape = ' in text
+
+
 def test_same_bound_flatten_order_is_the_projection_order():
     args = prepared(3, 2)
     bound = args[4]
@@ -202,7 +217,12 @@ def test_same_bound_flatten_order_is_the_projection_order():
             '    (hs : smDenoteWithInputs s = some t) (hp : pmDenoteWithInputs p = some q)\n'
             '    (h : InitialParameterValues s p) :')
         assert header in text
-    assert ':= hrels.2.2.2.2.2\n' in text
+    from Verdict import runtime_embedding_units, runtime_embedding_position_units
+    direct, _ = runtime_embedding_units.render(*args[:3], bound)
+    position, _ = runtime_embedding_position_units.render(*args[:5])
+    assert ':= hrels.2.2.2.2.2\n' in direct
+    assert ':= hrels.2.2.1\n' in position
+    assert 'embeddingUnitFacts_' in text and 'embeddingPositionUnitFacts_' in text
 
 
 @pytest.mark.parametrize('selected', [True, False])

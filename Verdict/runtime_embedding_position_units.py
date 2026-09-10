@@ -1,7 +1,7 @@
 """Source-connected Chunk/embedding/AA position-unit renderer.
 
 render(sm, pm, lineages, validation, bound) returns a static UNCOMPILED candidate.
-The parent owns imports (denote.SourceEmbeddingPositionUnit), source read theorem
+The parent owns imports (denote.SourceEmbeddingFacts), source read theorem
 emission, integration and kernel checking. A fresh census authenticates original
 ports/scopes; neither its DTO nor an old receipt is accepted as source authority.
 The bound specification order must be the SAME order used to emit the entry's
@@ -138,9 +138,12 @@ def _render(lineages, bound, fresh, raw):
         unit_ids = f'(q {pm_loaders[0]})'
         projection = 'hrels' + '.2' * spec_index + ('.1' if spec_index < len(specs) - 1 else '')
         name = f'embeddingPositionUnit_{sm_out}_{u}'
-        proofs += [f'theorem {name} (s p t q : Store)',
+        facts_name = f'embeddingPositionUnitFacts_{sm_out}_{u}'
+        proofs += [f'theorem {facts_name} (s p t q : Store)',
             '    (hs : smDenoteWithInputs s = some t) (hp : pmDenoteWithInputs p = some q)',
             '    (h : InitialParameterValues s p) :',
+            f'    (t {sm_out}).shape = {[B * D, ST, HT]} ∧',
+            f'    (∀ x ∈ {aa}, x.shape = {[B, ST, H]}) ∧',
             f'    chunkPrimDimN 0 {D} {u} (t {sm_out}) =',
             f'    allGatherPrimDimN 2 {T} 0 {aa} := by',
             '  have hrels := initialParameterRelations_of_values t q (initialParameterValues_final s p t q hs hp h)',
@@ -185,13 +188,20 @@ def _render(lineages, bound, fresh, raw):
         local = 'List.Forall₂.nil'
         for j in reversed(range(T)):
             local = f'List.Forall₂.cons local{j} ({local})'
-        proofs += [f'  exact fw_embedding_dp_tp_position_unit_of_source_eqs {D} {u} {T} {B} {S} {V} {H}',
+        proofs += [f'  exact fw_embedding_dp_tp_position_unit_facts_of_source_eqs {D} {u} {T} {B} {S} {V} {H}',
             f'    (t {sm_ids}) {unit_ids} (t {sm_weight}) {xs} (t {sm_out}) {os} {aa}',
             '    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)',
             '    fullShape weights.full_shape ids0 rfl shardShapes unitGather',
             f'    (embeddingRouteRead_sm_{sm_out} s t hs) ({local}) aaOutputs',
+            f'#print axioms {facts_name}',
+            f'theorem {name} (s p t q : Store)',
+            '    (hs : smDenoteWithInputs s = some t) (hp : pmDenoteWithInputs p = some q)',
+            '    (h : InitialParameterValues s p) :',
+            f'    chunkPrimDimN 0 {D} {u} (t {sm_out}) =',
+            f'    allGatherPrimDimN 2 {T} 0 {aa} := by',
+            f'  exact ({facts_name} s p t q hs hp h).2.2',
             f'#print axioms {name}']
-        records.append(dict(theorem=name, unit=u, spec_index=spec_index, dimensions=dict(D=D, T=T, B=B, S=S, V=V, H=H),
+        records.append(dict(theorem=name, facts_theorem=facts_name, unit=u, spec_index=spec_index, dimensions=dict(D=D, T=T, B=B, S=S, V=V, H=H),
             sm_output_ref=list(global_out.endpoint.ref), sm_output_tid=sm_out,
             sm_input_ref=list(ids.target.ref), sm_input_tid=sm_ids,
             sm_weight_ref=list(parameter.target.ref), sm_weight_tid=sm_weight,

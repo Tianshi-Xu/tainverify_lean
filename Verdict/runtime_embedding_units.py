@@ -3,7 +3,7 @@
 API: render(sm, pm, lineages, bound) -> (lean_text, metadata). Call only after
 runtime_initial_relations.bind on the original lowered views, and after emitting
 initialParameterValues_final, inputStoreRelation_* and embeddingRead_* in the
-same RuntimeWorld namespace. The parent supplies import denote.SourceEmbeddingUnit
+same RuntimeWorld namespace. The parent supplies import denote.SourceEmbeddingFacts
 and owns aggregate budgeting/builds. No saved receipt authenticates source here.
 Generated Lean is UNCOMPILED until the parent kernel-checks the assembled entry.
 """
@@ -123,9 +123,12 @@ def render(sm, pm, lineages, bound):
             os = '[' + ', '.join(f'q {t}' for t in pm_outs) + ']'
             projection = 'hrels' + '.2' * spec_index + ('.1' if spec_index < len(specs)-1 else '')
             name = f'embeddingUnit_{activation.target.tid}_{u}'
-            proofs += [f'theorem {name} (s p t q : Store)',
+            facts_name = f'embeddingUnitFacts_{activation.target.tid}_{u}'
+            proofs += [f'theorem {facts_name} (s p t q : Store)',
                 '    (hs : smDenoteWithInputs s = some t) (hp : pmDenoteWithInputs p = some q)',
                 '    (h : InitialParameterValues s p) :',
+                f'    (t {activation.target.tid}).shape = {[B * D, S, H * T]} ∧',
+                f'    (∀ x ∈ {os}, x.shape = {[B, S, H]}) ∧',
                 f'    chunkPrimDimN 0 {D} {u} (t {activation.target.tid}) =',
                 f'    allGatherPrimDimN 2 {T} 0 {os} := by',
                 '  have hrels := initialParameterRelations_of_values t q (initialParameterValues_final s p t q hs hp h)',
@@ -139,13 +142,19 @@ def render(sm, pm, lineages, bound):
                 if j:
                     equation = f'({equation}).trans (congrArg (fun x => fw_embedding x (q {pm_weights[j]})) (ids{j}.trans ids0.symm))'
                 local = f'List.Forall₂.cons ({equation}) ({local})'
-            proofs += [f'  exact fw_embedding_dp_tp_unit_of_source_eqs {D} {u} {T} {B} {S} {V} {H}',
+            proofs += [f'  exact fw_embedding_dp_tp_unit_facts_of_source_eqs {D} {u} {T} {B} {S} {V} {H}',
                 f'    (t {sm_ids}) (q {pm_ids[0]}) (t {sm_weight}) {ws} (t {activation.target.tid}) {os}',
                 '    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)',
                 f'    (inputStoreRelation_{sm_ids}_{lanes[0]} s p t q hs hp).full_shape ids0 rfl',
                 f'    weights.shard_shapes weights.full_value (embeddingRead_{activation.target.tid} s t hs)',
-                f'    ({local})', f'#print axioms {name}']
-            records.append(dict(theorem=name, unit=u, spec_index=spec_index,
+                f'    ({local})', f'#print axioms {facts_name}',
+                f'theorem {name} (s p t q : Store)',
+                '    (hs : smDenoteWithInputs s = some t) (hp : pmDenoteWithInputs p = some q)',
+                '    (h : InitialParameterValues s p) :',
+                f'    chunkPrimDimN 0 {D} {u} (t {activation.target.tid}) =',
+                f'    allGatherPrimDimN 2 {T} 0 {os} := by',
+                f'  exact ({facts_name} s p t q hs hp h).2.2', f'#print axioms {name}']
+            records.append(dict(theorem=name, facts_theorem=facts_name, unit=u, spec_index=spec_index,
                 sm_output_ref=list(activation.target.ref), sm_output_tid=activation.target.tid,
                 sm_input_ref=list(ids_ref), sm_input_tid=sm_ids, sm_weight_ref=list(weight_ref),
                 sm_weight_tid=sm_weight, pm_output_refs=[list(p.endpoint.ref) for p in unit.pieces],

@@ -24,7 +24,7 @@ def test_source_connected_two_dp_units():
     activation = next(l for l in lineages if l.role == Role.ACTIVATION)
     ids = next(l for l in lineages if l.role == Role.BATCH)
     assert len(detail['units']) == 2
-    assert text.count('fw_embedding_dp_tp_unit_of_source_eqs') == 2
+    assert text.count('fw_embedding_dp_tp_unit_facts_of_source_eqs') == 2
     for i, unit in enumerate(activation.units):
         outs = [p.endpoint.tid for p in unit.pieces]
         weights = bound['relations'][0]['units'][i]['initial_goal']['pm_tids']
@@ -125,5 +125,5 @@ def test_spec_projection_uses_bound_order_not_dp_unit_index():
     bound['relations'][0]['units'].reverse()
     text, detail = api()(sm, pm, lineages, bound)
     assert [u['spec_index'] for u in detail['units']] == [1, 0]
-    theorem0, theorem1 = text.split('theorem embeddingUnit_')[1:]
+    theorem0, theorem1 = text.split('theorem embeddingUnitFacts_')[1:]
     assert ':= hrels.2' in theorem0 and ':= hrels.1' in theorem1

@@ -43,7 +43,7 @@ def test_source_connected_position_units(D, T, seqlen):
     args = prepared(D, T, seqlen)
     text, detail = api()(*args)
     assert len(detail['units']) == D
-    assert text.count('fw_embedding_dp_tp_position_unit_of_source_eqs') == D
+    assert text.count('fw_embedding_dp_tp_position_unit_facts_of_source_eqs') == D
     assert detail['status'] == 'source-embedding-position-unit-values-emitted-uncompiled'
     assert detail['lean_bytes'] == len(text.encode())
     assert 'UNCOMPILED' in text
@@ -137,7 +137,7 @@ def test_projection_follows_bound_spec_order_not_unit_index():
     bound['relations'][0]['units'].reverse()
     text, detail = api()(sm, pm, lineages, validation, bound)
     assert [u['spec_index'] for u in detail['units']] == [2, 1, 0]
-    bodies = text.split('theorem embeddingPositionUnit_')[1:]
+    bodies = text.split('theorem embeddingPositionUnitFacts_')[1:]
     for body, projection in zip(bodies, ['hrels.2.2.1', 'hrels.2.1', 'hrels.1'], strict=True):
         assert f':= {projection}\n' in body
 

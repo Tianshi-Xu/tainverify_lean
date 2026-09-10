@@ -200,6 +200,14 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                 if read_helper == 'denote.SourceEmbeddingRead' and all(
                         name in imports for name in ('denote.SourceAddRead', 'denote.SourceAddUnit')):
                     expected[5:5] = ['denote.SourceAddRead', 'denote.SourceAddUnit']
+                    if 'denote.SourceAddFacts' in imports:
+                        expected.insert(7, 'denote.SourceAddFacts')
+                        if 'denote.SourceMultirefRead' in imports:
+                            expected.insert(8, 'denote.SourceMultirefRead')
+                            if 'denote.SourceHiddenSequenceExchange' in imports:
+                                expected.insert(9, 'denote.SourceHiddenSequenceExchange')
+                if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
+                    expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
         if imports != expected:
