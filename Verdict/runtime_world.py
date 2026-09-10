@@ -206,6 +206,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                             expected.insert(8, 'denote.SourceMultirefRead')
                             if 'denote.SourceHiddenSequenceExchange' in imports:
                                 expected.insert(9, 'denote.SourceHiddenSequenceExchange')
+                                if all(name in imports for name in ('denote.SourceLayernormRead', 'denote.SourceLayernormUnit')):
+                                    expected[10:10] = ['denote.SourceLayernormRead', 'denote.SourceLayernormUnit']
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':

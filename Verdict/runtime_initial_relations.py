@@ -238,6 +238,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceAddFacts\nimport denote.SourceMultirefRead\nimport denote.SourceHiddenSequenceExchange\n', 1)
             entry += '\n' + post_text
         result['post_add_values'] = post_detail
+        from Verdict.runtime_layernorm_values import render as render_layernorm
+        layernorm_text, layernorm_detail = render_layernorm(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if layernorm_detail['reads']:
+            entry = entry.replace('import denote.SourceHiddenSequenceExchange\n',
+                'import denote.SourceHiddenSequenceExchange\nimport denote.SourceLayernormRead\nimport denote.SourceLayernormUnit\n', 1)
+            entry += '\n' + layernorm_text
+        result['layernorm_values'] = layernorm_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
