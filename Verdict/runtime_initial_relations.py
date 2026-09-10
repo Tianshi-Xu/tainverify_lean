@@ -294,6 +294,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceRank4ReverseExchange\nimport denote.SourceRank4MiddleExchange\n', 1)
             entry += '\n' + middle_text
         result['middle_exchange_values'] = middle_detail
+        from Verdict.runtime_matmul_values import render as render_matmuls
+        matmul_text, matmul_detail = render_matmuls(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if matmul_detail['reads']:
+            entry = entry.replace('import denote.SourceRank4MiddleExchange\n',
+                'import denote.SourceRank4MiddleExchange\nimport denote.SourceMatmulRead\nimport denote.SourceMatmulUnit\n', 1)
+            entry += '\n' + matmul_text
+        result['matmul_values'] = matmul_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)

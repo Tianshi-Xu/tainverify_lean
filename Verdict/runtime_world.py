@@ -223,6 +223,9 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                         expected[19:19] = post_imports
                                                         if 'denote.SourceRank4MiddleExchange' in imports:
                                                             expected.insert(21, 'denote.SourceRank4MiddleExchange')
+                                                            matmul_imports = ['denote.SourceMatmulRead', 'denote.SourceMatmulUnit']
+                                                            if all(name in imports for name in matmul_imports):
+                                                                expected[22:22] = matmul_imports
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
