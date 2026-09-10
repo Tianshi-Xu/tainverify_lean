@@ -262,6 +262,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceLinearUnit\nimport denote.SourceLayoutRead\nimport denote.SourceViewUnit\n', 1)
             entry += '\n' + view_text
         result['view_values'] = view_detail
+        from Verdict.runtime_projection_exchange_values import render as render_projection_exchanges
+        exchange_text, exchange_detail = render_projection_exchanges(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if exchange_detail['reads']:
+            entry = entry.replace('import denote.SourceViewUnit\n',
+                'import denote.SourceViewUnit\nimport denote.SourceRank4Exchange\n', 1)
+            entry += '\n' + exchange_text
+        result['projection_exchange_values'] = exchange_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
