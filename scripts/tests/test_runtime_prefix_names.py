@@ -24,6 +24,15 @@ def test_compact_roundtrip_preserves_all_declarations_and_proofs():
     assert p.compact_names(compact) == compact
 
 
+def test_fixed_helper_is_compacted_in_declarations_and_applications():
+    source = sample() + 'def prefixRead (x : Nat) := x\n'
+    compact = p.compact_names(source)
+    assert 'def pR (x : Nat) := x' in compact
+    assert 'pR (k_0 z) (r_0_0 z)' in compact
+    assert 'prefixRead' not in compact
+    assert p.expand_names(compact) == source
+
+
 def test_one_space_wrapper_preserves_legacy_and_current_expansion():
     source = sample()
     compact = p.compact_names(source)
@@ -78,6 +87,103 @@ def test_every_family_and_index_is_restored_without_sorting():
     assert p.expand_names(p.compact_names(source)) == source
     mixed = source + '#check otherPrefixState_1\n'
     assert p.compact_names(mixed) == mixed
+
+
+def test_legacy_unmarked_helper_alias_is_not_reinterpreted():
+    for indent in (' ', '  '):
+        source = 'def tinyPrefixRead_0 (pR : Nat) := pR\n'
+        legacy = 'prefix_names tinyPrefix where\n' + indent + 'def r_0 (pR : Nat) := pR\n'
+        assert p.expand_names(legacy) == source
+
+
+def test_helper_marker_is_emitted_only_for_actual_helper_replacement():
+    source = sample()
+    compact = p.compact_names(source)
+    assert 'prefix_names pmSeededPrefix + where\n' in compact
+    assert p.expand_names(compact) == source
+    without_helper = source.replace('prefixRead ', 'otherRead ')
+    compact = p.compact_names(without_helper)
+    assert 'prefix_names pmSeededPrefix where\n' in compact
+    assert p.expand_names(compact) == without_helper
+    imports_only = without_helper.replace('import TrainVerifyRuntimePrefixSupport\n',
+                                         'import prefixRead\n') + '-- prefixRead\n'
+    assert ' + where' not in p.compact_names(imports_only)
+    assert p.expand_names(p.compact_names(imports_only)) == imports_only
+
+
+def test_fixed_helper_collision_returns_exact_original_source():
+    for extra in ('def pR := 1\n', '#check pR\n',
+                  'example (pR : Nat) := pR\n'):
+        source = sample() + extra
+        assert p.compact_names(source) == source
+
+
+def test_fixed_helper_imports_and_whole_token_comment_policy():
+    imports = 'import TrainVerifyRuntimePrefixSupport\nimport Other.prefixRead\nimport prefixRead\n'
+    tokens = ('Other.prefixRead', 'prefixRead.foo', 'prefixRead_more',
+              'prefixRead1', 'αprefixRead', 'prefixReadα', "prefixRead'",
+              'prefixRead?', 'prefixRead!', 'Other.pR', 'pR.foo',
+              'pR_more', 'pR1', 'αpR', "pR'", 'pR?', 'pR!')
+    extra = ''.join(f'#check {token}\n' for token in tokens)
+    extra += '-- prefixRead pR init z pmSeededPrefixRead_99_0 r_99_0\n'
+    source = sample().replace('import TrainVerifyRuntimePrefixSupport\n', imports) + extra
+    compact = p.compact_names(source)
+    assert compact != source
+    assert compact.startswith(imports)
+    assert all(line in compact for line in extra.splitlines())
+    assert p.expand_names(compact) == source
+    for unsupported in ('/- prefixRead pR -/\n',
+                        'def literal := "prefixRead"\n'):
+        assert p.compact_names(source + unsupported) == source + unsupported
+
+
+def test_fixed_helper_legacy_and_new_inverse():
+    original = ('import TrainVerifyRuntimePrefixSupport\n'
+                '#check tinyPrefixRead_1_0\n#check prefixRead\n'
+                '#check init\n#check hInitShapes\n')
+    for helper in ('prefixRead', 'pR'):
+        for indent in (' ', '  '):
+            compact = ('import TrainVerifyRuntimePrefixSupport\n'
+                       + ('prefix_names tinyPrefix + where\n' if helper == 'pR'
+                          else 'prefix_names tinyPrefix where\n') + ''.join(
+                           indent + line + '\n' for line in
+                           ('#check r_1_0', f'#check {helper}', '#check z', '#check z_')))
+            assert p.expand_names(compact) == original
+
+
+def helper_kernel_fixture():
+    """Portable real-helper source for the parent-owned Lean kernel check."""
+    return ('import TrainVerifyRuntimePrefixSupport\n'
+            'set_option maxHeartbeats 500000\n'
+            'namespace TrainVerify.Denote.HelperAliasFixture\n'
+            'theorem tinyPrefixRead_0 (init : Store) : init 0 = init 0 := rfl\n'
+            + ''.join(
+                f'theorem tinyPrefixRead_{i} (init : Store) : init 0 = init 0 :=\n'
+                f'  prefixRead (xs := []) (fun _ _ => rfl) (tinyPrefixRead_{i-1} init)\n'
+                for i in range(1, 4))
+            + 'end TrainVerify.Denote.HelperAliasFixture\n'
+            '#check TrainVerify.Denote.HelperAliasFixture.tinyPrefixRead_3\n')
+
+
+def test_real_helper_fixture_is_lossless_and_profitable():
+    source = helper_kernel_fixture()
+    compact = p.compact_names(source)
+    assert compact.count('pR (xs := [])') == 3
+    assert p.expand_names(compact) == source
+    legacy = compact.replace('pR (xs := [])', 'prefixRead (xs := [])')
+    assert p.expand_names(legacy) == source
+    assert len(legacy.encode()) - len(compact.encode()) == 3 * (len('prefixRead') - len('pR'))
+    assert len(compact.encode()) < len(source.encode())
+    tiny = 'def xPrefixRead_0 := prefixRead\n'
+    assert p.compact_names(tiny) == tiny
+
+
+def test_support_restores_unqualified_helper_before_sequential_elaboration():
+    support = p.support_source()
+    expansion = support.split('private def expandName', 1)[1].split('private partial def expand', 1)[0]
+    assert 'let .str .anonymous text := n | return n' in expansion
+    assert 'if helpers && text == "pR" then return Name.mkSimple "prefixRead"' in expansion
+    assert 'for cmd in stx[4].getArgs do\n    elabCommand (expand pref helpers cmd)' in support
 
 
 def test_initial_shapes_project_only_the_required_conjunct():

@@ -27,6 +27,7 @@ _NAME_CODES: dict[str, str] = dict(zip(
 
 
 _LOCAL_CODES = {'init': 'z', 'hInitShapes': 'z_'}
+_HELPER_CODES = {'prefixRead': 'pR'}
 
 def compact_names(text):
     import re
@@ -41,19 +42,23 @@ def compact_names(text):
     identifiers = [m[0] for m in tokens.finditer(text) if not m[0].startswith('--')]
     names = {name: pattern.fullmatch(name) for name in identifiers}
     stems = {m[1] for m in names.values() if m is not None}
-    if len(stems) != 1 or any(short.fullmatch(name) or name in _LOCAL_CODES.values() for name in identifiers):
+    if len(stems) != 1 or any(short.fullmatch(name) or name in _LOCAL_CODES.values()
+                              or name in _HELPER_CODES.values() for name in identifiers):
         return text
     stem, = stems
+    helpers_used = False
     def replace(m):
+        nonlocal helpers_used
+        helpers_used |= m[0] in _HELPER_CODES
         found = names.get(m[0])
-        return _NAME_CODES[found[2]] + '_' + found[3] if found else _LOCAL_CODES.get(m[0], m[0])
-    rewritten = tokens.sub(replace, text)
-    imports = re.findall(r'^(?:import [^\n]+\n)*', rewritten)[0]
-    body = rewritten[len(imports):]
+        return _NAME_CODES[found[2]] + '_' + found[3] if found else _LOCAL_CODES.get(m[0], _HELPER_CODES.get(m[0], m[0]))
+    imports = re.findall(r'^(?:import [^\n]+\n)*', text)[0]
+    body = tokens.sub(replace, text[len(imports):])
     first = next((line for line in body.splitlines() if line.strip()), '')
     if first[:1].isspace():
         return text
-    compact = imports + f'prefix_names {stem} where\n' + ''.join(
+    marker = ' +' if helpers_used else ''
+    compact = imports + f'prefix_names {stem}{marker} where\n' + ''.join(
         ' ' + line if line.strip() else line for line in body.splitlines(keepends=True))
     return compact if len(compact.encode()) < len(text.encode()) else text
 
@@ -65,7 +70,7 @@ def expand_names(text):
     identifiers in runtime_prefix_support.lean. The source scanner is unchanged.
     """
     import re
-    header = re.search(r'^prefix_names ([A-Za-z][A-Za-z_0-9]*Prefix) where\n', text, re.M)
+    header = re.search(r'^prefix_names ([A-Za-z][A-Za-z_0-9]*Prefix)( \+)? where\n', text, re.M)
     if header is None:
         if re.search(r'^prefix_names\b', text, re.M):
             raise ValueError('invalid compact prefix header')
@@ -82,10 +87,11 @@ def expand_names(text):
     body = ''.join(line[indent:] if line.strip() else line for line in block)
     families = {code: name for name, code in _NAME_CODES.items()}
     locals_ = {code: name for name, code in _LOCAL_CODES.items()}
+    helpers = {code: name for name, code in _HELPER_CODES.items()} if header[2] else {}
     pattern = re.compile(r'([' + ''.join(families) + r'])_([0-9]+(?:_[0-9]+)*)\Z')
     def replace(m):
         short = pattern.fullmatch(m[0])
-        return header[1] + families[short[1]] + '_' + short[2] if short else locals_.get(m[0], m[0])
+        return header[1] + families[short[1]] + '_' + short[2] if short else locals_.get(m[0], helpers.get(m[0], m[0]))
     return text[:header.start()] + re.sub(r"--[^\n]*|[^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*", replace, body) + expand_names(suffix)
 
 

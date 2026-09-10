@@ -246,6 +246,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceHiddenSequenceExchange\nimport denote.SourceLayernormRead\nimport denote.SourceLayernormUnit\n', 1)
             entry += '\n' + layernorm_text
         result['layernorm_values'] = layernorm_detail
+        from Verdict.runtime_projection_values import render as render_projections
+        projection_text, projection_detail = render_projections(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if projection_detail['reads']:
+            entry = entry.replace('import denote.SourceLayernormUnit\n',
+                'import denote.SourceLayernormUnit\nimport denote.SourceLinearRead\nimport denote.SourceAllGatherRead\nimport denote.SourceLinearUnit\n', 1)
+            entry += '\n' + projection_text
+        result['projection_values'] = projection_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
