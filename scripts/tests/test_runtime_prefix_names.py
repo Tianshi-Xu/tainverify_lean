@@ -24,6 +24,64 @@ def test_compact_roundtrip_preserves_all_declarations_and_proofs():
     assert p.compact_names(compact) == compact
 
 
+def test_axiom_query_compaction_is_exact_ordered_and_bounded():
+    import re
+    source = sample() + '#print axioms Other.fact\n#print axioms pmSeededPrefixRead_1_0  \n'
+    compact = p.compact_names(source)
+    assert 'prefix_names pmSeededPrefix + ! where\n' in compact
+    assert '#print axioms ' not in compact
+    assert compact.count('#a ') == source.count('#print axioms ')
+    assert '#a Other.fact\n' in compact
+    assert p.expand_names(compact) == source
+    assert re.findall(r'^#print axioms (\S+)', p.expand_names(compact), re.M) == re.findall(
+        r'^#print axioms (\S+)', source, re.M)
+    suffix = '#print axioms Outside.fact\n'
+    assert p.expand_names(compact + suffix) == source + suffix
+    for replacement in ('#print axioms pmSeededPrefixRead_1_0\t\n',
+                        '  #print axioms pmSeededPrefixRead_1_0\n',
+                        "#print axioms Other.fact'\n"):
+        extended = sample() + replacement
+        assert p.expand_names(p.compact_names(extended)) == extended
+
+
+def test_axiom_query_unsupported_forms_fall_back_whole_source():
+    for extra in ('#a pmSeededPrefixRead_1_0\n', '-- #a collision\n',
+                  'def literal := "#a collision"\n',
+                  '#print  axioms pmSeededPrefixRead_1_0\n',
+                  '#print\taxioms pmSeededPrefixRead_1_0\n',
+                  '#print axioms\tpmSeededPrefixRead_1_0\n',
+                  '#print axioms pmSeededPrefixRead_1_0 -- comment\n',
+                  '-- #print axioms pmSeededPrefixRead_1_0\n',
+                  '#print axioms (pmSeededPrefixRead_1_0)\n',
+                  '#print axioms pmSeededPrefixRead_1_0 Other.fact\n',
+                  '#print axioms «quoted»\n', '/- #print axioms x -/\n',
+                  '#print axioms\npmSeededPrefixRead_1_0\n'):
+        source = sample() + extra
+        assert p.compact_names(source) == source, extra
+
+
+def test_axiom_query_markers_preserve_legacy_bindings_and_queries():
+    for indent in (' ', '  '):
+        for helper in ('', ' +'):
+            for query in ('', ' !'):
+                packed = ('prefix_names tinyPrefix' + helper + query + ' where\n'
+                          + indent + 'def r_0 (pR : Nat) := pR\n'
+                          + indent + ('#a' if query else '#print axioms') + ' r_0\n')
+                name = 'prefixRead' if helper else 'pR'
+                expected = f'def tinyPrefixRead_0 ({name} : Nat) := {name}\n#print axioms tinyPrefixRead_0\n'
+                assert p.expand_names(packed) == expected
+            legacy = 'prefix_names tinyPrefix' + helper + ' where\n' + indent + '#a r_0\n'
+            assert p.expand_names(legacy) == '#a tinyPrefixRead_0\n'
+    no_queries = sample().replace('#print axioms ', '#check ')
+    assert ' ! where' not in p.compact_names(no_queries)
+
+
+def test_axiom_alias_is_exact_native_macro_after_name_restoration():
+    support = p.support_source()
+    assert 'macro "#a " id:ident : command => `(#print axioms $id)' in support
+    assert 'elabCommand (expand pref helpers cmd)' in support
+
+
 def test_fixed_helper_is_compacted_in_declarations_and_applications():
     source = sample() + 'def prefixRead (x : Nat) := x\n'
     compact = p.compact_names(source)
@@ -99,15 +157,15 @@ def test_legacy_unmarked_helper_alias_is_not_reinterpreted():
 def test_helper_marker_is_emitted_only_for_actual_helper_replacement():
     source = sample()
     compact = p.compact_names(source)
-    assert 'prefix_names pmSeededPrefix + where\n' in compact
+    assert 'prefix_names pmSeededPrefix + ! where\n' in compact
     assert p.expand_names(compact) == source
     without_helper = source.replace('prefixRead ', 'otherRead ')
     compact = p.compact_names(without_helper)
-    assert 'prefix_names pmSeededPrefix where\n' in compact
+    assert 'prefix_names pmSeededPrefix ! where\n' in compact
     assert p.expand_names(compact) == without_helper
     imports_only = without_helper.replace('import TrainVerifyRuntimePrefixSupport\n',
                                          'import prefixRead\n') + '-- prefixRead\n'
-    assert ' + where' not in p.compact_names(imports_only)
+    assert ' + ! where' not in p.compact_names(imports_only)
     assert p.expand_names(p.compact_names(imports_only)) == imports_only
 
 
@@ -183,7 +241,7 @@ def test_support_restores_unqualified_helper_before_sequential_elaboration():
     expansion = support.split('private def expandName', 1)[1].split('private partial def expand', 1)[0]
     assert 'let .str .anonymous text := n | return n' in expansion
     assert 'if helpers && text == "pR" then return Name.mkSimple "prefixRead"' in expansion
-    assert 'for cmd in stx[4].getArgs do\n    elabCommand (expand pref helpers cmd)' in support
+    assert 'for cmd in stx[5].getArgs do\n    elabCommand (expand pref helpers cmd)' in support
 
 
 def test_initial_shapes_project_only_the_required_conjunct():

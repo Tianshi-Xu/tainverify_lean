@@ -218,6 +218,9 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                 expected.insert(17, 'denote.SourceRank4Exchange')
                                                 if 'denote.SourceTransposeUnit' in imports:
                                                     expected.insert(18, 'denote.SourceTransposeUnit')
+                                                    post_imports = ['denote.SourceTranspose23Unit', 'denote.SourceRank4ReverseExchange']
+                                                    if all(name in imports for name in post_imports):
+                                                        expected[19:19] = post_imports
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':

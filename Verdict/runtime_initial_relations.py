@@ -278,6 +278,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceRank4Exchange\nimport denote.SourceTransposeUnit\n', 1)
             entry += '\n' + transpose_text
         result['transpose_values'] = transpose_detail
+        from Verdict.runtime_post_transpose_values import render as render_post_transposes
+        post_text, post_detail = render_post_transposes(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if post_detail['reads']:
+            entry = entry.replace('import denote.SourceTransposeUnit\n',
+                'import denote.SourceTransposeUnit\nimport denote.SourceTranspose23Unit\nimport denote.SourceRank4ReverseExchange\n', 1)
+            entry += '\n' + post_text
+        result['post_transpose_values'] = post_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)

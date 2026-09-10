@@ -45,11 +45,13 @@ private partial def expand (stemPrefix : String) (helpers : Bool) : Syntax → S
       if m == n then .ident info raw n pre else mkIdentFrom (.ident info raw n pre) m
   | .node info kind args => .node info kind (args.map (expand stemPrefix helpers))
   | stx => stx
-syntax (name := prefixNames) "prefix_names " ident (" +")? " where" ppLine (colGt command)* : command
+-- This command is syntax only; the wrapper restores names before macro expansion.
+macro "#a " id:ident : command => `(#print axioms $id)
+syntax (name := prefixNames) "prefix_names " ident (" +")? (" !")? " where" ppLine (colGt command)* : command
 @[command_elab prefixNames] def elabPrefixNames : CommandElab := fun stx => do
   let pref := stx[1].getId.toString
   let helpers := !stx[2].isNone
-  for cmd in stx[4].getArgs do
+  for cmd in stx[5].getArgs do
     elabCommand (expand pref helpers cmd)
 end PrefixNames
 

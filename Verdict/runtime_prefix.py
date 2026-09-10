@@ -33,7 +33,14 @@ def compact_names(text):
     import re
     # The generated prefix subset has no quoted identifiers, strings or block
     # comments. Keep other Lean source forms unchanged rather than lex them badly.
-    if any(token in text for token in ('"', '«', '`', '/-', 'prefix_names ')):
+    if any(token in text for token in ('"', '«', '`', '/-', 'prefix_names ', '#a')):
+        return text
+    # Only the exact native query spelling is reversible without a side table.
+    # Preserve indentation, trailing whitespace, qualified names and line endings;
+    # any other #print form (including one in a comment) rejects the whole source.
+    queries = re.compile(r"^([ \t]*)#print axioms ([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)([ \t]*\r?$)", re.M)
+    query_count = len(queries.findall(text))
+    if text.count('#print') != query_count:
         return text
     tokens = re.compile(r"--[^\n]*|[^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*")
     pattern = re.compile(r'([A-Za-z][A-Za-z_0-9]*Prefix)(' +
@@ -54,10 +61,13 @@ def compact_names(text):
         return _NAME_CODES[found[2]] + '_' + found[3] if found else _LOCAL_CODES.get(m[0], _HELPER_CODES.get(m[0], m[0]))
     imports = re.findall(r'^(?:import [^\n]+\n)*', text)[0]
     body = tokens.sub(replace, text[len(imports):])
+    body = queries.sub(lambda m: m[1] + '#a ' + m[2] + m[3], body)
     first = next((line for line in body.splitlines() if line.strip()), '')
     if first[:1].isspace():
         return text
     marker = ' +' if helpers_used else ''
+    if query_count:
+        marker += ' !'
     compact = imports + f'prefix_names {stem}{marker} where\n' + ''.join(
         ' ' + line if line.strip() else line for line in body.splitlines(keepends=True))
     return compact if len(compact.encode()) < len(text.encode()) else text
@@ -70,7 +80,7 @@ def expand_names(text):
     identifiers in runtime_prefix_support.lean. The source scanner is unchanged.
     """
     import re
-    header = re.search(r'^prefix_names ([A-Za-z][A-Za-z_0-9]*Prefix)( \+)? where\n', text, re.M)
+    header = re.search(r'^prefix_names ([A-Za-z][A-Za-z_0-9]*Prefix)( \+)?( !)? where\n', text, re.M)
     if header is None:
         if re.search(r'^prefix_names\b', text, re.M):
             raise ValueError('invalid compact prefix header')
@@ -85,6 +95,8 @@ def expand_names(text):
     if indent not in (1, 2) or any(line.strip() and not line.startswith(' ' * indent) for line in block):
         raise ValueError('invalid compact prefix indentation')
     body = ''.join(line[indent:] if line.strip() else line for line in block)
+    if header[3]:
+        body = re.sub(r'^([ \t]*)#a ', r'\1#print axioms ', body, flags=re.M)
     families = {code: name for name, code in _NAME_CODES.items()}
     locals_ = {code: name for name, code in _LOCAL_CODES.items()}
     helpers = {code: name for name, code in _HELPER_CODES.items()} if header[2] else {}
