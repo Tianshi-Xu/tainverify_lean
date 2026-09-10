@@ -302,6 +302,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceRank4MiddleExchange\nimport denote.SourceMatmulRead\nimport denote.SourceMatmulUnit\n', 1)
             entry += '\n' + matmul_text
         result['matmul_values'] = matmul_detail
+        from Verdict.runtime_matmul_exchange_values import render as render_matmul_exchanges
+        matmul_exchange_text, matmul_exchange_detail = render_matmul_exchanges(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if matmul_exchange_detail['reads']:
+            entry += '\n' + matmul_exchange_text
+        result['matmul_exchange_values'] = matmul_exchange_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
