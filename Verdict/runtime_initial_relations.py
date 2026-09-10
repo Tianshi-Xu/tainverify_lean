@@ -322,6 +322,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if div_exchange_detail['reads']:
             entry += '\n' + div_exchange_text
         result['div_exchange_values'] = div_exchange_detail
+        from Verdict.runtime_softmax_values import render as render_softmaxes
+        softmax_text, softmax_detail = render_softmaxes(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if softmax_detail['reads']:
+            entry = entry.replace('import denote.SourceDivUnit\n',
+                'import denote.SourceDivUnit\nimport denote.SourceSoftmaxRead\nimport denote.SourceSoftmaxUnit\n', 1)
+            entry += '\n' + softmax_text
+        result['softmax_values'] = softmax_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)

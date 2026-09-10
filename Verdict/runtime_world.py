@@ -229,6 +229,9 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                                 div_imports = ['denote.SourceDivRead', 'denote.SourceDivUnit']
                                                                 if all(name in imports for name in div_imports):
                                                                     expected[24:24] = div_imports
+                                                                    softmax_imports = ['denote.SourceSoftmaxRead', 'denote.SourceSoftmaxUnit']
+                                                                    if all(name in imports for name in softmax_imports):
+                                                                        expected[26:26] = softmax_imports
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
