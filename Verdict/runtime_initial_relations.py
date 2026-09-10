@@ -222,5 +222,13 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                     'import denote.SourcePrimitiveRead\nimport denote.SourceEmbeddingPositionUnit\n', 1)
                 entry += '\n' + position_text
             result['embedding_position_units'] = position_detail
+        from Verdict.runtime_add_values import render as render_add_values
+        add_text, add_detail = render_add_values(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if add_detail['units']:
+            entry = entry.replace('import denote.SourceEmbeddingRead\n',
+                'import denote.SourceEmbeddingRead\nimport denote.SourceAddRead\nimport denote.SourceAddUnit\n', 1)
+            entry += '\n' + add_text
+        result['add_values'] = add_detail
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
     return WorldDefinitions(entry, result, world.supporting_sources)
