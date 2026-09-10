@@ -50,8 +50,11 @@ def compact_names(text):
     rewritten = tokens.sub(replace, text)
     imports = re.findall(r'^(?:import [^\n]+\n)*', rewritten)[0]
     body = rewritten[len(imports):]
+    first = next((line for line in body.splitlines() if line.strip()), '')
+    if first[:1].isspace():
+        return text
     compact = imports + f'prefix_names {stem} where\n' + ''.join(
-        '  ' + line if line.strip() else line for line in body.splitlines(keepends=True))
+        ' ' + line if line.strip() else line for line in body.splitlines(keepends=True))
     return compact if len(compact.encode()) < len(text.encode()) else text
 
 
@@ -70,9 +73,13 @@ def expand_names(text):
     lines = text[header.end():].splitlines(keepends=True)
     stop = next((i for i, line in enumerate(lines) if line.strip() and not line[0].isspace()), len(lines))
     block, suffix = lines[:stop], ''.join(lines[stop:])
-    if any(line.strip() and not line.startswith('  ') for line in block):
+    # Keep the historical two-space wrapper readable; only the outer offset
+    # changes. All original relative indentation and source bytes are restored.
+    first = next((line for line in block if line.strip()), '')
+    indent = len(first) - len(first.lstrip(' '))
+    if indent not in (1, 2) or any(line.strip() and not line.startswith(' ' * indent) for line in block):
         raise ValueError('invalid compact prefix indentation')
-    body = ''.join(line[2:] if line.strip() else line for line in block)
+    body = ''.join(line[indent:] if line.strip() else line for line in block)
     families = {code: name for name, code in _NAME_CODES.items()}
     locals_ = {code: name for name, code in _LOCAL_CODES.items()}
     pattern = re.compile(r'([' + ''.join(families) + r'])_([0-9]+(?:_[0-9]+)*)\Z')

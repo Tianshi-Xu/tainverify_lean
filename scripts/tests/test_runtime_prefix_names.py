@@ -24,6 +24,23 @@ def test_compact_roundtrip_preserves_all_declarations_and_proofs():
     assert p.compact_names(compact) == compact
 
 
+def test_one_space_wrapper_preserves_legacy_and_current_expansion():
+    source = sample()
+    compact = p.compact_names(source)
+    header, marker, body = compact.partition(' where\n')
+    assert marker and body.startswith(' namespace ')
+    assert p.expand_names(compact) == source
+    legacy = header + marker + ''.join(' ' + line if line.strip() else line
+                                       for line in body.splitlines(keepends=True))
+    assert p.expand_names(legacy) == source
+    assert len(legacy) - len(compact) == sum(bool(line.strip()) for line in body.splitlines())
+
+
+def test_indented_source_is_not_mistaken_for_wrapper_offset():
+    source = sample().replace(p._HEADER, '  ' + p._HEADER.replace('\n', '\n  '))
+    assert p.compact_names(source) == source
+
+
 def test_frequent_binders_are_losslessly_compacted():
     source = sample().replace('(init : Store)', '(init : Store) (hInitShapes : True)')
     compact = p.compact_names(source)

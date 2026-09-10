@@ -204,5 +204,15 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
             assert boundary
             entry = prefix + compact(text + suffix)
         result['embedding_units'] = unit_detail
+        from Verdict.runtime_embedding_route_values import render as render_route_values
+        route_text, route_detail = render_route_values(
+            sm, pm, lineages, validation, world.receipt['execution_order'])
+        if route_detail['reads']:
+            entry = entry.replace('import denote.SourceInitialInputRead\n',
+                                  'import denote.SourceEmbeddingRead\n', 1)
+            entry = entry.replace('import denote.SourceEmbeddingRead\n',
+                                  'import denote.SourceEmbeddingRead\nimport denote.SourcePrimitiveRead\n', 1)
+            entry += '\n' + route_text
+        result['embedding_route_values'] = route_detail
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
     return WorldDefinitions(entry, result, world.supporting_sources)
