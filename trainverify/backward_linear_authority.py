@@ -45,6 +45,10 @@ def bind(cells, source_index):
                 or kwargs.get('__consts', []) != []):
             raise ValueError('bw-linear unsupported bias/kwargs')
     from Verdict.runtime_lineage import _same_typed
+    for original, name in ((cell, 'BW.' + cell.ir.mirror.name), (fw, cell.ir.mirror.name)):
+        if not _same_typed(tuple(original.node),
+                           (original.wtype.value, original.rank, original.mb, original.ir.cid, name)):
+            raise ValueError('bw-linear original typed node/IR identity mismatch')
     if not _same_typed([tuple(r) for r in cell.inputs[1:]], [tuple(r) for r in fw.inputs]):
         raise ValueError('bw-linear saved primal fullref/version identity mismatch')
     for refs, irs in ((cell.inputs, cell._input_irs), (cell.outputs, cell._output_irs)):
@@ -68,7 +72,9 @@ def bind(cells, source_index):
         if not _same_typed([_ir_identity(t) for t in actual], [_ir_identity(t) for t in expected]):
             raise ValueError('bw-linear original mirror saved/gradient metadata identity mismatch')
     # Fullref versions are source reads, not merely same-shaped tid aliases.
-    for ref in cell.inputs:
+    for ref, ir in zip(cell.inputs, cell._input_irs, strict=True):
+        if ref.v == 0 and not (ir.is_attr() is True and ir.is_grad() is False):
+            raise ValueError('bw-linear external activation/cotangent identity lacks source writer authority')
         writers = [(i, c) for i, c in enumerate(cells[:source_index])
                    if any(_same_typed(tuple(r), tuple(ref)) for r in c.outputs)]
         if ref.v != 0 and len(writers) != 1:

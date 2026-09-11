@@ -60,7 +60,7 @@ def test_actual_first_bw_linear_binds_saved_primal_and_gradient_roles(captured):
         assert all(contract[k] is False for k in ('proof_admissible', 'kernel_value_proved', 'public_complete', 'torch_refinement'))
 
 
-@pytest.mark.parametrize('fault', ['saved-version', 'saved-owner', 'saved-order', 'cotangent-tid', 'output-order', 'bool-version'])
+@pytest.mark.parametrize('fault', ['saved-version', 'saved-owner', 'saved-order', 'cotangent-tid', 'output-order', 'bool-version', 'cotangent-initial', 'source-cid', 'source-name'])
 def test_actual_source_role_identity_rejected_at_new_boundary(captured, fault):
     bind = api()
     for original, index in captured:
@@ -79,6 +79,9 @@ def test_actual_source_role_identity_rejected_at_new_boundary(captured, fault):
         elif fault == 'saved-order': cell.inputs[1:] = reversed(cell.inputs[1:])
         elif fault == 'cotangent-tid': cell.inputs[0] = cell.inputs[0]._replace(tid=cell.inputs[0].tid+1)
         elif fault == 'output-order': cell.outputs.reverse()
+        elif fault == 'cotangent-initial': cell.inputs[0] = cell.inputs[0]._replace(v=0)
+        elif fault == 'source-cid': cell.node = cell.node._replace(cid=cell.node.cid+1)
+        elif fault == 'source-name': cell.node = cell.node._replace(irname='BW.matmul')
         else: cell.inputs[1] = cell.inputs[1]._replace(v=True)
         with pytest.raises(ValueError, match='bw-linear .*identity'):
             bind(cells, index)
