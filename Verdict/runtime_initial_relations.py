@@ -362,6 +362,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceQueryTransposeUnit\nimport denote.SourceContiguousRead\n', 1)
             entry += '\n' + contiguous_text
         result['contiguous_values'] = contiguous_detail
+        from Verdict.runtime_contiguous_exchange_values import render as render_contiguous_exchange
+        contiguous_exchange_text, contiguous_exchange_detail = render_contiguous_exchange(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if contiguous_exchange_detail['reads']:
+            entry += '\n' + contiguous_exchange_text
+        result['contiguous_exchange_values'] = contiguous_exchange_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
