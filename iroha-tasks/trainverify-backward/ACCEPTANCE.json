@@ -769,5 +769,104 @@
       "full suffix frame inventory"
     ],
     "scope": "PM same-final-Store cotangent/saved-primal/dX shapes under existing initial parameter shape contract; concrete original-run satisfiability witness. No SM shapes, gradient relation, public or Torch refinement claim."
+  },
+  "dx_unit_adapter_checkpoint": {
+    "parent_commit": "987e280795ea5ec15a86d93f185387b4d44eb3c3",
+    "kernel": {
+      "SourceBWLinearDxUnit": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/trainverify/denote/SourceBWLinearDxUnit.lean",
+        "source_sha256": "47af2b2f00310066b07eb89f84bea11c3a05c3bf27d57af4553b58d62ee5e8c9",
+        "inner_exit": 0,
+        "seconds": 2.56813907623291,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/denote/SourceBWLinearDxUnit.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/trainverify/denote/SourceBWLinearDxUnit.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/denote/SourceBWLinearDxUnit.olean",
+        "object_sha256": "9295eae057efcd5329f6f8b55c2b5b25d421d648afca71ff0f82384ca22850dd",
+        "axioms": {
+          "TrainVerify.Denote.source_bw_linear_dx_shape_only": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.source_bw_linear_dx_batch_tp_unit": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.source_bw_linear_dx_local_list_length": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "DxUnitWitness": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/iroha-tasks/trainverify-backward/DxUnitWitness.lean",
+        "source_sha256": "689d097a3c458697a687e671c0de3a41139fdd46d3d0238f5fc9ca55199fd4de",
+        "inner_exit": 0,
+        "seconds": 3.820185661315918,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/DxUnitWitness.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/iroha-tasks/trainverify-backward/DxUnitWitness.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/DxUnitWitness.olean",
+        "object_sha256": "e8aa3589beaed93e83fbbd4cdf72800a291fdec6a9fd9e10f30b5577478b7e0b",
+        "axioms": {
+          "TrainVerify.Denote.DxUnitWitness.wrong_dp_unit": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.DxUnitWitness.input_contract": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.DxUnitWitness.inputs_satisfiable": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.DxUnitWitness.independent_saved_values": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.DxUnitWitness.pairwise_saved_values": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.DxUnitWitness.adapter_result": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.DxUnitWitness.no_rank_truncation": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      }
+    },
+    "cpu_autograd_tests": 1,
+    "scope": "Generic input-conditional DP batch / TP output-channel dX reduction with independent saved-X values. K3/D2 satisfiability and wrong-DP control; not yet original SM-PM dX equality."
   }
 }
