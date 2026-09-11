@@ -408,6 +408,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if frontier_detail['reads']:
             entry += '\n' + frontier_text
         result['frontier_alias_exchange_values'] = frontier_detail
+        from Verdict.runtime_frontier_layernorm_values import render as render_frontier_layernorm
+        frontier_ln_text, frontier_ln_detail = render_frontier_layernorm(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_ln_detail['reads']:
+            entry += '\n' + frontier_ln_text
+        result['frontier_layernorm_values'] = frontier_ln_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
