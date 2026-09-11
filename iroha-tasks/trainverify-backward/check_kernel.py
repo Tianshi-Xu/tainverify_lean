@@ -38,6 +38,31 @@ if 'import TrainVerifyRuntimeWorldData' in src.read_text():
     target=A/'objects/TrainVerifyRuntimeWorldData.olean'
     if not target.exists(): target.symlink_to(data_object)
     assert sha(target)==sha(data_object)
+    if 'import TrainVerifyRuntimePrefix0000' in src.read_text():
+        modules=json.loads((root/'actual-output-projection1/world-receipt.json').read_text())['proof_bundle']['modules']
+        for module in ('TrainVerifyRuntimePrefix0000','TrainVerifyRuntimePrefixSupport'):
+            info=next(m for m in modules if m['module']==module)
+            assert sha(root/'actual-output-projection1'/info['file'])==info['source_sha256']
+            obj=root/'final-objects'/(module+'.olean')
+            check=next(r for r in json.loads((OLD/'post-transpose/actual-post-transpose1-kernel.json').read_text()) if r['key']==module)
+            assert check['inner_exit']==0 and check['source_sha256']==info['source_sha256']
+            assert sha(obj)==check['object_sha256']
+            for path,h in check['dependency_objects'].items(): assert sha(path)==h,path
+            dst=A/'objects'/(module+'.olean')
+            if not dst.exists(): dst.symlink_to(obj)
+            assert sha(dst)==sha(obj)
+if 'import denote.SourceParameterFrame' in src.read_text():
+    frame=json.loads((OLD/'initial-relations/SourceParameterFrame-kernel.json').read_text())
+    assert frame['inner_exit']==0
+    for path,h in frame['sources'].items():
+        assert sha(ROOT/'trainverify'/path.split('/trainverify/',1)[1])==h,path
+    assert sha(ROOT/'trainverify/denote/SourceParameterFrame.lean')==frame['source_sha256']
+    for path,h in {**frame['dependencies'],str(OLD/'initial-relations/objects/denote/SourceParameterFrame.olean'):frame['object_sha256']}.items():
+        assert sha(path)==h,path
+        source=Path(path);target=A/'objects'/source.relative_to(OLD/'initial-relations/objects')
+        target.parent.mkdir(parents=True,exist_ok=True)
+        if not target.exists(): target.symlink_to(source)
+        assert sha(target)==h
 out = A/'objects'/('denote' if src.parent.name == 'denote' else '')/(name+'.olean')
 out.parent.mkdir(parents=True, exist_ok=True)
 start=time.time()

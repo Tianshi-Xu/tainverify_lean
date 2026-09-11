@@ -165,5 +165,208 @@
   },
   "canonical_entry_modified": false,
   "whole_model_complete": false,
-  "torch_refinement": false
+  "torch_refinement": false,
+  "seed_checkpoint": {
+    "kernel": {
+      "SourceBWSumRead": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/trainverify/denote/SourceBWSumRead.lean",
+        "source_sha256": "515d7e3163bbeae2502b845e247748b4de236a2e72834f7935908d02ccff1817",
+        "inner_exit": 0,
+        "seconds": 2.6184048652648926,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/denote/SourceBWSumRead.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/trainverify/denote/SourceBWSumRead.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/denote/SourceBWSumRead.olean",
+        "object_sha256": "9aca4872752913d8534b744ff5c08cee2c3a9f00c66df9570cadec76387b7976",
+        "axioms": {
+          "TrainVerify.Denote.SourceBWSumRead.bw_sum_value_of_split": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "SumWitness": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/iroha-tasks/trainverify-backward/SumWitness.lean",
+        "source_sha256": "2cac9b3b8c38fa1d82e966a661d18eeaa3a7d8ad892fd27ffa2e480f95674673",
+        "inner_exit": 0,
+        "seconds": 3.11905837059021,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/SumWitness.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/iroha-tasks/trainverify-backward/SumWitness.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/SumWitness.olean",
+        "object_sha256": "38594fa2a2f85413f7d5f185f14895102f2b72df0a0c85041b1e49958cc81616",
+        "axioms": {
+          "TrainVerify.Denote.SourceBWSumReadWitness.schedule_valid": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.run_success": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.caller_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.sum_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.initial_seed_value": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.seed_preserved": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.primal_preserved": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.output_shape": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.output_value": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWSumReadWitness.caller_nonvacuous": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "ActualBWSeedRead": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWSeedRead.lean",
+        "source_sha256": "d844bf7f3ada995bb378eccfdc3952feb1a3ee6604ed15e4399280bf017a26ee",
+        "inner_exit": 0,
+        "seconds": 17.087050676345825,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWSeedRead.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWSeedRead.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWSeedRead.olean",
+        "object_sha256": "aae7823d7ac443070ccc5efa43d03bc31d34f67083d2aa0b7fc697d9f8acb449",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_sm_63_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_sm_63_seed": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_sm_63_broadcast": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_107_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_107_seed": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_107_broadcast": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_343_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_343_seed": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_343_broadcast": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_579_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_579_seed": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_579_broadcast": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_815_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_815_seed": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardSeed_pm_815_broadcast": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      }
+    },
+    "focused_tests": 36,
+    "focused_subtests": 40,
+    "unit_seed_from_fresh_runtime_authentication": true,
+    "nonunit_generic_witness": true,
+    "canonical_entry_modified": false,
+    "reverse_alltoall_not_closed": true
+  }
 }
