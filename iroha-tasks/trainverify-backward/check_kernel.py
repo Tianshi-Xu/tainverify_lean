@@ -38,9 +38,11 @@ if 'import TrainVerifyRuntimeWorldData' in src.read_text():
     target=A/'objects/TrainVerifyRuntimeWorldData.olean'
     if not target.exists(): target.symlink_to(data_object)
     assert sha(target)==sha(data_object)
-    if 'import TrainVerifyRuntimePrefix0000' in src.read_text():
+    prefix_imports=re.findall(r'^import TrainVerifyRuntimePrefix(\d+)\s*$',src.read_text(),re.M)
+    if prefix_imports:
+        maximum=max(map(int,prefix_imports))
         modules=json.loads((root/'actual-output-projection1/world-receipt.json').read_text())['proof_bundle']['modules']
-        for module in ('TrainVerifyRuntimePrefix0000','TrainVerifyRuntimePrefixSupport'):
+        for module in ['TrainVerifyRuntimePrefixSupport',*(f'TrainVerifyRuntimePrefix{i:04d}' for i in range(maximum+1))]:
             info=next(m for m in modules if m['module']==module)
             assert sha(root/'actual-output-projection1'/info['file'])==info['source_sha256']
             obj=root/'final-objects'/(module+'.olean')

@@ -654,5 +654,120 @@
       "duplicated source DP contribution ownership"
     ],
     "scope": "Original direct BW_linear dW -> source-owned DP SUM final Store equations only; not SM-PM equality, whole-model/public or Torch refinement."
+  },
+  "backward_prefix_shapes_checkpoint": {
+    "parent_commit": "f0421480e5dba2e899586a50d957ef1138a3b3fb",
+    "focused_tests": 17,
+    "kernel": {
+      "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWPrefixShapes.lean",
+      "source_sha256": "ae1099bb07bcc1472e9ab326f0caf35e249a3cfd4a43663e5467e9c190757ee8",
+      "inner_exit": 0,
+      "seconds": 8.275474309921265,
+      "command": [
+        "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+        "-j1",
+        "--tstack=65536",
+        "-DmaxHeartbeats=500000",
+        "-DmaxRecDepth=4096",
+        "-o",
+        "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWPrefixShapes.olean",
+        "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWPrefixShapes.lean"
+      ],
+      "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWPrefixShapes.olean",
+      "object_sha256": "1b15872ce5d01f105ea9456794ecce1d5f4e52eccb500d8145210773d7748f75",
+      "axioms": {
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixRun_pm": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixFinal_pm": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_109_cotangent": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_109_saved_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_109_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_345_cotangent": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_345_saved_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_345_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_581_cotangent": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_581_saved_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_581_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_817_cotangent": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_817_saved_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_817_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixWitnessInitialShapes": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixCallerNonvacuous": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ]
+      },
+      "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+    },
+    "shape_queries": 12,
+    "frame_edges": 157,
+    "source_bytes": 16260,
+    "mutations": [
+      "coverage/order",
+      "shared run inventory",
+      "shared writer/shape inventory",
+      "full suffix frame inventory"
+    ],
+    "scope": "PM same-final-Store cotangent/saved-primal/dX shapes under existing initial parameter shape contract; concrete original-run satisfiability witness. No SM shapes, gradient relation, public or Torch refinement claim."
   }
 }
