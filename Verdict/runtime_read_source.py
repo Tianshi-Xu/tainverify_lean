@@ -29,6 +29,7 @@ _ENTRY_TERMS = (
     'SourceLayernormRead.layernorm_value_of_split', 'RelationCompiler.ReplicatedRel',
     'fw_layernorm', 'smInputRequests.take', 'List.not_mem_nil', 'List.cons',
     'chunkPrimDimN_shape',
+    'TrainVerify.Denote.source_add_unit_output_facts',
 )
 _ENTRY_METHODS = {w + 'InputRequests.' + op for w in ('sm', 'pm') for op in ('take', 'drop')}
 _IDENT = r"[\w.'!?]+"

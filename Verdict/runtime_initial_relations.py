@@ -396,6 +396,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceViewFlattenUnit\nimport denote.SourceSequenceHiddenExchange\n', 1)
             entry += '\n' + output_exchange_text
         result['output_projection_exchange_values'] = output_exchange_detail
+        from Verdict.runtime_attention_residual_values import render as render_attention_residual
+        residual_text, residual_detail = render_attention_residual(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if residual_detail['reads']:
+            entry += '\n' + residual_text
+        result['attention_residual_values'] = residual_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)

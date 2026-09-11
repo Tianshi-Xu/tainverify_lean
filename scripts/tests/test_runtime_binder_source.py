@@ -176,3 +176,26 @@ def test_invalid_encoded_scope_is_not_silently_expanded():
         api().expand(result.replace('end RBS_0\n', ''))
     with pytest.raises(ValueError):
         api().expand(result.replace('#print axioms probe_0', '#check probe_0'))
+
+
+@pytest.mark.parametrize('count', [2, 7])
+def test_exact_hvalues_header_shares_without_dropping_contract(count):
+    header = FOUR + '\n    (hvalues : InitialParameterValues s p)'
+    source = family(header, count=count, prefix='full_values')
+    packed = api().compact(source)
+    assert len(packed.encode()) < len(source.encode())
+    assert 'variable' + header + '\ninclude s p t q hs hp hvalues\n' in packed
+    assert api().expand(packed) == source
+    assert api().compact(packed) == packed
+    assert re.findall(r'^theorem (\w+)', packed, re.M) == re.findall(r'^theorem (\w+)', source, re.M)
+    assert re.findall(r'^#print.*$', packed, re.M) == re.findall(r'^#print.*$', source, re.M)
+
+
+def test_hvalues_and_legacy_headers_do_not_merge_scopes():
+    header = FOUR + '\n    (hvalues : InitialParameterValues s p)'
+    source = family(WITH_H, count=2, prefix='legacy') + family(header, count=2, prefix='full_values')
+    packed = api().compact(source)
+    assert packed.count('section RBS_') == 2
+    assert 'include s p t q hs hp h\n' in packed
+    assert 'include s p t q hs hp hvalues\n' in packed
+    assert api().expand(packed) == source

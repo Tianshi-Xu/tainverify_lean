@@ -13,6 +13,7 @@ _FOUR = (' (s p t q : Store)\n'
          '    (hs : smDenoteWithInputs s = some t) (hp : pmDenoteWithInputs p = some q)')
 _HEADERS = {
     _FOUR + '\n    (h : InitialParameterValues s p)': 's p t q hs hp h',
+    _FOUR + '\n    (hvalues : InitialParameterValues s p)': 's p t q hs hp hvalues',
     _FOUR: 's p t q hs hp',
     ' (s t : Store) (h : smDenoteWithInputs s = some t)': 's t h',
     ' (s t : Store) (h : pmDenoteWithInputs s = some t)': 's t h',

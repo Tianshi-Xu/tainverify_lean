@@ -13,6 +13,7 @@ ENTRY_TERMS = (
     'SourceLayernormRead.layernorm_value_of_split', 'RelationCompiler.ReplicatedRel',
     'fw_layernorm', 'smInputRequests.take', 'List.not_mem_nil', 'List.cons',
     'chunkPrimDimN_shape',
+    'TrainVerify.Denote.source_add_unit_output_facts',
 )
 
 
