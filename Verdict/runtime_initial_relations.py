@@ -338,6 +338,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceSoftmaxUnit\nimport denote.SourceRank4InnerExchange\n', 1)
             entry += '\n' + softmax_exchange_text
         result['softmax_exchange_values'] = softmax_exchange_detail
+        from Verdict.runtime_query_matmul_values import render as render_query_matmuls
+        query_matmul_text, query_matmul_detail = render_query_matmuls(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if query_matmul_detail['reads']:
+            entry = entry.replace('import denote.SourceRank4InnerExchange\n',
+                'import denote.SourceRank4InnerExchange\nimport denote.SourceQueryMatmulUnit\n', 1)
+            entry += '\n' + query_matmul_text
+        result['query_matmul_values'] = query_matmul_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)

@@ -234,6 +234,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                                         expected[26:26] = softmax_imports
                                                                         if 'denote.SourceRank4InnerExchange' in imports:
                                                                             expected.insert(28, 'denote.SourceRank4InnerExchange')
+                                                                            if 'denote.SourceQueryMatmulUnit' in imports:
+                                                                                expected.insert(29, 'denote.SourceQueryMatmulUnit')
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
