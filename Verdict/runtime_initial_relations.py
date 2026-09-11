@@ -429,6 +429,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if frontier_gelu_detail['units']:
             entry = entry.replace('import denote.SourceSequenceHiddenExchange\n',
                 'import denote.SourceSequenceHiddenExchange\nimport denote.SourceGeluRead\nimport denote.SourceGeluUnit\n', 1)
+        from Verdict.runtime_frontier_next_linear_values import render as render_frontier_next_linear
+        frontier_next_linear_text, frontier_next_linear_detail = render_frontier_next_linear(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_next_linear_detail['reads']:
+            entry += '\n' + frontier_next_linear_text
+        result['frontier_next_linear_values'] = frontier_next_linear_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
