@@ -376,6 +376,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceContiguousRead\nimport denote.SourceViewFlattenUnit\n', 1)
             entry += '\n' + view_flatten_text
         result['view_flatten_values'] = view_flatten_detail
+        from Verdict.runtime_view_flatten_exchange_values import render as render_view_flatten_exchange
+        view_flatten_exchange_text, view_flatten_exchange_detail = render_view_flatten_exchange(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if view_flatten_exchange_detail['reads']:
+            entry += '\n' + view_flatten_exchange_text
+        result['view_flatten_exchange_values'] = view_flatten_exchange_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
