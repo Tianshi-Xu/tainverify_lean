@@ -995,5 +995,173 @@
     },
     "shape_queries": 16,
     "scope": "Adds four freshly authenticated BW_sum saved-primal shape projections to the same PM prefix DAG, without new shape premises; does not yet prove cotangent reconstruction."
+  },
+  "constant_cotangent_checkpoint": {
+    "scope": "generic arbitrary-scalar constant helpers and four original PM final-store cotangents; not SM-PM reconstruction or whole model",
+    "focused_tests": 19,
+    "kernel": [
+      {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/trainverify/denote/SourceConstantCotangent.lean",
+        "source_sha256": "c96ad4709842db21a19793274a8ec72aba0b84395912222cbd51a19a1fcd6093",
+        "inner_exit": 0,
+        "seconds": 2.868969440460205,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/denote/SourceConstantCotangent.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/trainverify/denote/SourceConstantCotangent.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/denote/SourceConstantCotangent.olean",
+        "object_sha256": "65a9220e5f186d3bdf787699ecf50be09ec63ad1f59f9f3b0c0d7011f542f6c5",
+        "axioms": {
+          "TrainVerify.Denote.source_constant_valAt": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.source_constant_bw_sum": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.source_constant_chunk0_rank3": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.source_constant_gather2_rank3": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.source_constant_alltoall12_rank3": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/iroha-tasks/trainverify-backward/ConstantCotangentWitness.lean",
+        "source_sha256": "c0f29aeb7b9d5e0a3f00790dec0159a3e7bf30d6471e3e6a8f7d07db9efec46b",
+        "inner_exit": 0,
+        "seconds": 2.6686346530914307,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ConstantCotangentWitness.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/iroha-tasks/trainverify-backward/ConstantCotangentWitness.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ConstantCotangentWitness.olean",
+        "object_sha256": "23d2b04401089ef4528e22d6096185eb5482a72c8c9af66915092c52ce01f022",
+        "axioms": {
+          "TrainVerify.Denote.ConstantCotangentWitness.seed_value": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.ConstantCotangentWitness.seed_nonunit": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.ConstantCotangentWitness.broadcast_value": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.ConstantCotangentWitness.chunk_value": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.ConstantCotangentWitness.gather_value": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.ConstantCotangentWitness.faithful_alltoall_value": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.ConstantCotangentWitness.actual_shapes": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.ConstantCotangentWitness.actual_values": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.ConstantCotangentWitness.actual_value_137": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWConstantCotangents.lean",
+        "source_sha256": "a789b8c86fc9333030770dc92a56f207b961e7c93a3ba0787bce4b6e627a9adc",
+        "inner_exit": 0,
+        "seconds": 2.7187013626098633,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWConstantCotangents.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWConstantCotangents.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWConstantCotangents.olean",
+        "object_sha256": "0a7a27c843b000082e4e21b2bc0779341e85bd2f760be68e7a3eec2c6e9e9de5",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardConstant_pm_108": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardConstant_pm_344": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardConstant_pm_580": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardConstant_pm_816": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardConstantCallerNonvacuous": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      }
+    ],
+    "python_command": "capture venv pytest test_runtime_backward_constant_cotangents.py test_runtime_backward_cotangent_reads.py test_runtime_backward_prefix_shapes.py -q --tb=short",
+    "proof_admissible": false,
+    "public_complete": false,
+    "torch_refinement": false
   }
 }
