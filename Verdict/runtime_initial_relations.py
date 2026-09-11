@@ -382,6 +382,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if view_flatten_exchange_detail['reads']:
             entry += '\n' + view_flatten_exchange_text
         result['view_flatten_exchange_values'] = view_flatten_exchange_detail
+        from Verdict.runtime_output_projection_values import render as render_output_projection
+        output_projection_text, output_projection_detail = render_output_projection(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if output_projection_detail['reads']:
+            entry += '\n' + output_projection_text
+        result['output_projection_values'] = output_projection_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
