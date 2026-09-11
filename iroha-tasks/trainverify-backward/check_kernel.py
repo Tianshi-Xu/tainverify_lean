@@ -51,18 +51,25 @@ if 'import TrainVerifyRuntimeWorldData' in src.read_text():
             dst=A/'objects'/(module+'.olean')
             if not dst.exists(): dst.symlink_to(obj)
             assert sha(dst)==sha(obj)
-if 'import denote.SourceParameterFrame' in src.read_text():
-    frame=json.loads((OLD/'initial-relations/SourceParameterFrame-kernel.json').read_text())
+for module in ('SourceParameterFrame','SourcePrimitiveRead'):
+    if ('import denote.'+module) not in src.read_text(): continue
+    frame=json.loads((OLD/('initial-relations/'+module+'-kernel.json')).read_text())
     assert frame['inner_exit']==0
     for path,h in frame['sources'].items():
         assert sha(ROOT/'trainverify'/path.split('/trainverify/',1)[1])==h,path
-    assert sha(ROOT/'trainverify/denote/SourceParameterFrame.lean')==frame['source_sha256']
-    for path,h in {**frame['dependencies'],str(OLD/'initial-relations/objects/denote/SourceParameterFrame.olean'):frame['object_sha256']}.items():
+    assert sha(ROOT/('trainverify/denote/'+module+'.lean'))==frame['source_sha256']
+    for path,h in {**frame['dependencies'],str(OLD/('initial-relations/objects/denote/'+module+'.olean')):frame['object_sha256']}.items():
         assert sha(path)==h,path
         source=Path(path);target=A/'objects'/source.relative_to(OLD/'initial-relations/objects')
         target.parent.mkdir(parents=True,exist_ok=True)
         if not target.exists(): target.symlink_to(source)
         assert sha(target)==h
+for module in ('ActualBWLinearRead','ActualBWSeedRead'):
+    if ('import '+module) not in src.read_text(): continue
+    receipt=json.loads((A/(module+'-kernel.json')).read_text())
+    assert receipt['inner_exit']==0
+    assert sha(receipt['source'])==receipt['source_sha256']
+    assert sha(receipt['object'])==receipt['object_sha256']
 out = A/'objects'/('denote' if src.parent.name == 'denote' else '')/(name+'.olean')
 out.parent.mkdir(parents=True, exist_ok=True)
 start=time.time()

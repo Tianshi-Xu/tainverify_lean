@@ -368,5 +368,119 @@
     "nonunit_generic_witness": true,
     "canonical_entry_modified": false,
     "reverse_alltoall_not_closed": true
+  },
+  "cotangent_checkpoint": {
+    "kernel": {
+      "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWCotangentRead.lean",
+      "source_sha256": "827531f9084a2cd11a5efcb19e9f088d564c8962ece2c3dbb10e6f5f2033ac47",
+      "inner_exit": 0,
+      "seconds": 12.230483770370483,
+      "command": [
+        "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+        "-j1",
+        "--tstack=65536",
+        "-DmaxHeartbeats=500000",
+        "-DmaxRecDepth=4096",
+        "-o",
+        "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWCotangentRead.olean",
+        "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWCotangentRead.lean"
+      ],
+      "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWCotangentRead.olean",
+      "object_sha256": "82fa788a6a39538aa711a2010043532fcf2ba85421857dcd05bd8de19c7b8bc3",
+      "axioms": {
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_108_read": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_108_seeded": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_108_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_108_dw": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_344_read": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_344_seeded": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_344_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_344_dw": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_580_read": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_580_seeded": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_580_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_580_dw": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_816_read": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_816_seeded": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_816_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardCotangent_pm_816_dw": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ]
+      },
+      "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+    },
+    "focused_tests": 27,
+    "focused_subtests": 12,
+    "derived_cpu_source_cases": 24,
+    "derived_cpu_K": [
+      1,
+      2,
+      3
+    ],
+    "actual_capture_scope": "TP2/DP2; original four backward AllToAll-to-linear paths",
+    "canonical_entry_modified": false,
+    "whole_model_complete": false
   }
 }
