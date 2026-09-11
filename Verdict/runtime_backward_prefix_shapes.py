@@ -10,10 +10,12 @@ from Verdict.runtime_lineage import _same_typed
 from Verdict.runtime_backward_linear_reads import render_read
 
 
-def render(worlds,indices,prefix,*,seed_config=None):
+def render(worlds,indices,prefix,*,seed_config=None,layernorm_indices=(),include_run=True):
     view,cells,snapshot,order,label=worlds[1];sequence=order['execution_to_source'];n=len(sequence)
-    if label!='pm' or not indices or any(type(i) is not int or not 0<=i<len(cells) for i in indices) or len(indices)!=len(set(indices)):
-        raise ValueError('bw-prefix unique original PM linear projection required')
+    selected=[*indices,*layernorm_indices]
+    if label!='pm' or not selected or any(type(i) is not int or not 0<=i<len(cells) for i in selected) or len(selected)!=len(set(selected)):
+        raise ValueError('bw-prefix unique original PM projection required')
+    if type(include_run) is not bool: raise ValueError('bw-prefix explicit shared-run emission mode required')
     if (prefix.get('status')!='conditional-prefix-emitted' or prefix.get('frontier') is not None
             or not _same_typed(prefix.get('prefix_length'),n)
             or not _same_typed(prefix.get('prefix_nodes'),sequence)):
@@ -43,7 +45,13 @@ def render(worlds,indices,prefix,*,seed_config=None):
         '    (hrun : pmSeededDenoteWithInputs s = some t) :',f'    t = {stem}State_{n} s :=',
         '  Option.some.inj (hrun.symm.trans (backwardPrefixRun_pm s hi))',
         '#print axioms backwardPrefixFinal_pm']
+    if not include_run: proof=[]
     rows=[];nodes=view.nodes();queries=[]
+    if layernorm_indices:
+        from Verdict.runtime_backward_layernorm_reads import render_read as layernorm_read
+        for index in layernorm_indices:
+            layernorm_read(view,cells,snapshot,index,order,label)
+            queries.append((index,'saved_primal',view.node_inputs(nodes[index])[1]))
     for index in indices:
         render_read(view,cells,snapshot,index,order,label)
         node=nodes[index]
