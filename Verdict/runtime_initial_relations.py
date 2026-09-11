@@ -330,6 +330,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceDivUnit\nimport denote.SourceSoftmaxRead\nimport denote.SourceSoftmaxUnit\n', 1)
             entry += '\n' + softmax_text
         result['softmax_values'] = softmax_detail
+        from Verdict.runtime_softmax_exchange_values import render as render_softmax_exchanges
+        softmax_exchange_text, softmax_exchange_detail = render_softmax_exchanges(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if softmax_exchange_detail['reads']:
+            entry = entry.replace('import denote.SourceSoftmaxUnit\n',
+                'import denote.SourceSoftmaxUnit\nimport denote.SourceRank4InnerExchange\n', 1)
+            entry += '\n' + softmax_exchange_text
+        result['softmax_exchange_values'] = softmax_exchange_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
