@@ -354,6 +354,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceQueryMatmulUnit\nimport denote.SourceQueryTransposeUnit\n', 1)
             entry += '\n' + query_transpose_text
         result['query_transpose_values'] = query_transpose_detail
+        from Verdict.runtime_contiguous_values import render as render_contiguous
+        contiguous_text, contiguous_detail = render_contiguous(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if contiguous_detail['reads']:
+            entry = entry.replace('import denote.SourceQueryTransposeUnit\n',
+                'import denote.SourceQueryTransposeUnit\nimport denote.SourceContiguousRead\n', 1)
+            entry += '\n' + contiguous_text
+        result['contiguous_values'] = contiguous_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
