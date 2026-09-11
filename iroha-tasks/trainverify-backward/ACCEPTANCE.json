@@ -868,5 +868,132 @@
     },
     "cpu_autograd_tests": 1,
     "scope": "Generic input-conditional DP batch / TP output-channel dX reduction with independent saved-X values. K3/D2 satisfiability and wrong-DP control; not yet original SM-PM dX equality."
+  },
+  "seed_primal_shapes_checkpoint": {
+    "parent_commit": "2663cb9f3f44dcf0b9345c0f277c4a1799e48d82",
+    "focused_tests": 15,
+    "kernel": {
+      "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWPrefixShapes.lean",
+      "source_sha256": "e3a685e0b877a4924bd74c2204b80356738f5432c3861a02c952b4eea7c0a1f8",
+      "inner_exit": 0,
+      "seconds": 9.827857971191406,
+      "command": [
+        "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+        "-j1",
+        "--tstack=65536",
+        "-DmaxHeartbeats=500000",
+        "-DmaxRecDepth=4096",
+        "-o",
+        "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWPrefixShapes.olean",
+        "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWPrefixShapes.lean"
+      ],
+      "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWPrefixShapes.olean",
+      "object_sha256": "4cc5f9008b779a32c6614a6076aeb4f3febb173523f92f6348df0cbda2f3ff62",
+      "axioms": {
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixRun_pm": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixFinal_pm": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_109_cotangent": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_109_saved_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_109_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_345_cotangent": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_345_saved_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_345_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_581_cotangent": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_581_saved_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_581_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_817_cotangent": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_817_saved_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_817_dx": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_107_seed_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_343_seed_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_579_seed_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixShape_pm_815_seed_primal": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixWitnessInitialShapes": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ],
+        "TrainVerify.Denote.RuntimeWorld.backwardPrefixCallerNonvacuous": [
+          "propext",
+          "Classical.choice",
+          "Quot.sound"
+        ]
+      },
+      "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+    },
+    "shape_queries": 16,
+    "scope": "Adds four freshly authenticated BW_sum saved-primal shape projections to the same PM prefix DAG, without new shape premises; does not yet prove cotangent reconstruction."
   }
 }

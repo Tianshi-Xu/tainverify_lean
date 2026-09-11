@@ -4,6 +4,7 @@ from pathlib import Path
 from scripts.tests.test_backward_linear_authority import captured
 from scripts.tests.test_runtime_backward_linear_reads import worlds
 from scripts.tests.test_runtime_backward_wred_reads import selected
+from scripts.tests.test_runtime_backward_seed_reads import config
 from Verdict.runtime_backward_prefix_shapes import render
 ROOT=Path(__file__).resolve().parents[2];A=ROOT/'.hermes/backward-kernel'
 OLD=Path('/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/output-projection/actual-output-projection1')
@@ -16,7 +17,7 @@ for view,_,_,order,label in w:
     for t in view.tensors():
         r=original[tuple(view.source_tensor(t))]
         assert r['tid']==t.tid and tuple(r['shape'])==tuple(view.tensor_shape(t))
-text,detail=render(w,selected(w),receipt['scoped_prefix']['pm'])
+text,detail=render(w,selected(w),receipt['scoped_prefix']['pm'],seed_config=config.__wrapped__())
 header='import TrainVerifyRuntimeWorldData\nimport TrainVerifyRuntimePrefix0124\nnamespace TrainVerify.Denote.RuntimeWorld\nnoncomputable section\nset_option maxHeartbeats 500000\nset_option maxRecDepth 4096\n'
 premises=receipt['scoped_prefix']['pm']['initial_premises']
 table=', '.join(f"({p['tid']}, {p['shape']})" for p in premises)

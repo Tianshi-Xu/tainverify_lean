@@ -93,6 +93,11 @@ Input reconstruction from the forward chain, seed provenance, branch accumulatio
 - `scripts/tests/test_backward_dx_shape_only_numeric.py`: **1 CPU Torch autograd test passed**, directly calling `torch.nn.functional.linear`; controls distinguish wrong DP unit, invented mean, dropped rank and wrong G/W pairing. dW differs when saved-X values differ and agrees after restoring the original saved-X values. This is a small CPU source-operator check, not distributed execution or a Torch-refinement theorem.
 - Reproduce serial checks for `KRankBWLinearDxRow.lean`, `KRankBWLinearDxSequence.lean`, `SourceBWLinearDxUnit.lean`, `DxUnitWitness.lean` with the existing checker/private overlay. `ACCEPTANCE.json.dx_unit_adapter_checkpoint` records the final exact bytes and real exits.
 
+## Seed-primal shape follow-up
+- dX adapter checkpoint: `2663cb9f3f44dcf0b9345c0f277c4a1799e48d82`.
+- Optional `seed_config` in the same prefix projection module freshly invokes the existing authenticated seed reader before selecting each BW_sum saved primal. Four additional original final-store shape conclusions `[1,8,256]` now feed the faithful reverse-AA constant-value step; no extra shape assumption is added.
+- Missing API tracer RED→GREEN; **15 focused tests** including the existing seed identity/signature/params/suffix negatives. Those seed rejections remain inherited predecessor coverage, not new guard coverage. **20 actual kernel declarations** (the prior 16 plus four seed-primal reads) passed with the kernel triple. The actual replay now requests this option; `ACCEPTANCE.json.seed_primal_shapes_checkpoint` records the newer bytes.
+
 ## Next real blocker / integration status
 - Seed → BW_sum → faithful reverse AllToAll → original dX/dW expressions are locally connected under the original successful seeded run.
 - Distributed gradient equality still needs **final LayerNorm saved-X reconstruction**, **initial weight frame/layout**, and source-derived shape relations. Forward saved-X value reconstruction remains an explicit interface obligation of the forward line; dW cannot discard it just because dX uses only X's shape.

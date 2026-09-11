@@ -8,6 +8,7 @@ import pytest
 from scripts.tests.test_backward_linear_authority import captured
 from scripts.tests.test_runtime_backward_linear_reads import worlds
 from scripts.tests.test_runtime_backward_wred_reads import selected
+from scripts.tests.test_runtime_backward_seed_reads import config
 
 @pytest.fixture(scope='module')
 def prefix():
@@ -30,6 +31,17 @@ def test_actual_bw_inputs_use_shared_shape_dag(worlds,prefix):
         assert row['frames'][0][1]==len(worlds[1][3]['execution_to_source'])
         assert row['frames'][-1][0]==row['writer_execution_index']+1
     assert all(detail[k] is False for k in ('proof_admissible','kernel_value_proved','public_complete','torch_refinement'))
+
+
+def test_authenticated_sum_primals_are_shape_conclusions(worlds,prefix,config):
+    text,detail=api().render(worlds,selected(worlds),prefix,seed_config=config)
+    rows=[r for r in detail['reads'] if r['role']=='seed_primal']
+    assert len(rows)==4
+    for row in rows:
+        assert row['shape']==[1,8,256]
+        assert worlds[1][1][row['source_index']].opname.name=='BW_sum'
+        assert row['ref']==list(worlds[1][1][row['source_index']].inputs[1])
+        assert row['theorem'] in text
 
 
 @pytest.mark.parametrize('fault',['coverage','order','run','shape','frame','duplicate'])
