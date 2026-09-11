@@ -42,21 +42,25 @@ def render_read(view, cells, snapshot, source_index, order, label):
         raise ValueError('bw-linear original source node inventory/owner mismatch')
     runtime_schedule.validate(view,order['execution_to_source'])
     node=nodes[source_index]
-    if str(view.node_opname(node)).split('.')[-1]!='BW_linear' or not _same_typed(view.node_kwargs(node),cell.kwargs):
-        raise ValueError('bw-linear original source opcode/kwargs mismatch')
-    if any(node in getattr(view,key,{}) for key in ('collective_scopes','chunk_scopes','wred_scopes')):
-        raise ValueError('bw-linear ordinary global scope required')
     from Verdict import graph_to_lean
-    params=graph_to_lean._get_node_params(view,node,num_parts=0)
-    if params is not None and not _same_typed(params,[]):
-        raise ValueError('bw-linear original empty params required')
+    for original in (cell,cells[contract['fw_source_index']]):
+        original_node=original.node
+        if (str(view.node_opname(original_node)).split('.')[-1]!=original.opname.name
+                or not _same_typed(view.node_kwargs(original_node),original.kwargs)):
+            raise ValueError('bw-linear original forward/backward source opcode/kwargs mismatch')
+        if any(original_node in getattr(view,key,{}) for key in ('collective_scopes','chunk_scopes','wred_scopes')):
+            raise ValueError('bw-linear ordinary global scope required')
+        params=graph_to_lean._get_node_params(view,original_node,num_parts=0)
+        if params is not None and not _same_typed(params,[]):
+            raise ValueError('bw-linear original empty params required')
+        for side,irs in [('inputs',original._input_irs),('outputs',original._output_irs)]:
+            tensors=getattr(view,'node_'+side)(original_node)
+            if not _same_typed([tuple(view.source_tensor(t)) for t in tensors],
+                               [tuple(t) for t in getattr(original,side)]):
+                raise ValueError('bw-linear lowered ordered fullref identity mismatch')
+            if not _same_typed([tuple(view.tensor_shape(t)) for t in tensors],[tuple(ir.shape) for ir in irs]):
+                raise ValueError('bw-linear lowered original shape mismatch')
     inputs=view.node_inputs(node); outputs=view.node_outputs(node)
-    for side,tensors,irs in [('inputs',inputs,cell._input_irs),('outputs',outputs,cell._output_irs)]:
-        if not _same_typed([tuple(view.source_tensor(t)) for t in tensors],
-                           [tuple(t) for t in getattr(cell,side)]):
-            raise ValueError('bw-linear lowered ordered fullref identity mismatch')
-        if not _same_typed([tuple(view.tensor_shape(t)) for t in tensors],[tuple(ir.shape) for ir in irs]):
-            raise ValueError('bw-linear lowered original shape mismatch')
     bw_writer=_writer(snapshot,cells,source_index)
     fw_writer=_writer(snapshot,cells,contract['fw_source_index'])
     schedule=order['execution_to_source']; k=schedule.index(source_index)

@@ -36,6 +36,8 @@ def bind(cells, source_index):
     fw_index, fw = paired[0]
     if fw.opname.name != 'FW_linear':
         raise ValueError('bw-linear original forward opcode mismatch')
+    if cell.ir.mirror.signature != 'torch.nn.functional.linear':
+        raise ValueError('bw-linear original forward function signature mismatch')
     if (len(cell.inputs) != 3 or len(cell.outputs) != 2
             or len(fw.inputs) != 2 or len(fw.outputs) != 1
             or len(cell._input_irs) != 3 or len(cell._output_irs) != 2):

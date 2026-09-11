@@ -87,3 +87,22 @@ def test_join_rejects_tampered_export_after_fresh_raw_bind(worlds,fault):
         else: execution['execution_to_source'].reverse()
         bind(cells,index)  # raw source predecessor is still good
         with pytest.raises(ValueError): render(view,cells,source,index,execution,label)
+
+
+@pytest.mark.parametrize('fault', ['source-signature','forward-lowered-op'])
+def test_source_function_and_forward_lowering_are_independent_authorities(worlds, monkeypatch, fault):
+    from verdict.operators.names import OpName
+    render=api()
+    for view,cells,snapshot,order,label in worlds:
+        index=next(i for i,c in enumerate(cells) if c.opname.name=='BW_linear')
+        _,good=render(view,cells,snapshot,index,order,label)
+        fw=cells[good['source_contract']['fw_source_index']]
+        with monkeypatch.context() as m:
+            if fault=='source-signature':
+                assert fw.ir.signature=='torch.nn.functional.linear'
+                m.setattr(fw.ir,'signature','torch.mul')
+            else:
+                m.setitem(view.source._node2opname,fw.node,OpName.FW_mul)
+            with pytest.raises(ValueError,match='bw-linear'):
+                render(view,cells,snapshot,index,order,label)
+        assert render(view,cells,snapshot,index,order,label)[1]==good
