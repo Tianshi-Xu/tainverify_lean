@@ -27,7 +27,9 @@ _NAME_CODES: dict[str, str] = dict(zip(
 
 
 _LOCAL_CODES = {'init': 'z', 'hInitShapes': 'z_'}
-_HELPER_CODES = {'prefixRead': 'pR'}
+# The single '+' vocabulary is frozen; '+ +' adds only these two enums.
+_HELPER_CODES = {'prefixRead': 'pR', 'storeSet_eq_of_not_mem_fst': 'pS',
+                 'prefixFrame_trans': 'pF'}
 
 def compact_names(text):
     import re
@@ -54,9 +56,11 @@ def compact_names(text):
         return text
     stem, = stems
     helpers_used = False
+    helpers_v2 = False
     def replace(m):
-        nonlocal helpers_used
+        nonlocal helpers_used, helpers_v2
         helpers_used |= m[0] in _HELPER_CODES
+        helpers_v2 |= m[0] in _HELPER_CODES and m[0] != 'prefixRead'
         found = names.get(m[0])
         return _NAME_CODES[found[2]] + '_' + found[3] if found else _LOCAL_CODES.get(m[0], _HELPER_CODES.get(m[0], m[0]))
     imports = re.findall(r'^(?:import [^\n]+\n)*', text)[0]
@@ -66,6 +70,8 @@ def compact_names(text):
     if first[:1].isspace():
         return text
     marker = ' +' if helpers_used else ''
+    if helpers_v2:
+        marker += ' +'
     if query_count:
         marker += ' !'
     compact = imports + f'prefix_names {stem}{marker} where\n' + ''.join(
@@ -80,7 +86,7 @@ def expand_names(text):
     identifiers in runtime_prefix_support.lean. The source scanner is unchanged.
     """
     import re
-    header = re.search(r'^prefix_names ([A-Za-z][A-Za-z_0-9]*Prefix)( \+)?( !)? where\n', text, re.M)
+    header = re.search(r'^prefix_names ([A-Za-z][A-Za-z_0-9]*Prefix)( \+( \+)?)?( !)? where\n', text, re.M)
     if header is None:
         if re.search(r'^prefix_names\b', text, re.M):
             raise ValueError('invalid compact prefix header')
@@ -95,11 +101,12 @@ def expand_names(text):
     if indent not in (1, 2) or any(line.strip() and not line.startswith(' ' * indent) for line in block):
         raise ValueError('invalid compact prefix indentation')
     body = ''.join(line[indent:] if line.strip() else line for line in block)
-    if header[3]:
+    if header[4]:
         body = re.sub(r'^([ \t]*)#a ', r'\1#print axioms ', body, flags=re.M)
     families = {code: name for name, code in _NAME_CODES.items()}
     locals_ = {code: name for name, code in _LOCAL_CODES.items()}
-    helpers = {code: name for name, code in _HELPER_CODES.items()} if header[2] else {}
+    helpers = {code: name for name, code in _HELPER_CODES.items()
+               if header[3] or name == 'prefixRead'} if header[2] else {}
     pattern = re.compile(r'([' + ''.join(families) + r'])_([0-9]+(?:_[0-9]+)*)\Z')
     def replace(m):
         short = pattern.fullmatch(m[0])

@@ -402,6 +402,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if residual_detail['reads']:
             entry += '\n' + residual_text
         result['attention_residual_values'] = residual_detail
+        from Verdict.runtime_frontier_alias_exchange_values import render as render_frontier_alias_exchange
+        frontier_text, frontier_detail = render_frontier_alias_exchange(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_detail['reads']:
+            entry += '\n' + frontier_text
+        result['frontier_alias_exchange_values'] = frontier_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)

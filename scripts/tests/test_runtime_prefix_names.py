@@ -79,7 +79,7 @@ def test_axiom_query_markers_preserve_legacy_bindings_and_queries():
 def test_axiom_alias_is_exact_native_macro_after_name_restoration():
     support = p.support_source()
     assert 'macro "#a " id:ident : command => `(#print axioms $id)' in support
-    assert 'elabCommand (expand pref helpers cmd)' in support
+    assert 'elabCommand (expand pref helpers helpersV2 cmd)' in support
 
 
 def test_fixed_helper_is_compacted_in_declarations_and_applications():
@@ -241,7 +241,7 @@ def test_support_restores_unqualified_helper_before_sequential_elaboration():
     expansion = support.split('private def expandName', 1)[1].split('private partial def expand', 1)[0]
     assert 'let .str .anonymous text := n | return n' in expansion
     assert 'if helpers && text == "pR" then return Name.mkSimple "prefixRead"' in expansion
-    assert 'for cmd in stx[5].getArgs do\n    elabCommand (expand pref helpers cmd)' in support
+    assert 'for cmd in stx[6].getArgs do\n    elabCommand (expand pref helpers helpersV2 cmd)' in support
 
 
 def test_initial_shapes_project_only_the_required_conjunct():

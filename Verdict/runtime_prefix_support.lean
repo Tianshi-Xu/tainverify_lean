@@ -29,30 +29,34 @@ private def family (s : String) : Option String :=
   | "t" => some "Step" | "n" => some "NoWrite" | "g" => some "Guard"
   | "i" => some "InitialShape" | "e" => some "InitialRead"
   | "q" => some "Requests" | "u" => some "Run" | _ => none
-private def expandName (stemPrefix : String) (helpers : Bool) (n : Name) : Name := Id.run do
+private def expandName (stemPrefix : String) (helpers helpersV2 : Bool) (n : Name) : Name := Id.run do
   let .str .anonymous text := n | return n
   if text == "z" then return Name.mkSimple "init"
   if text == "z_" then return Name.mkSimple "hInitShapes"
   if helpers && text == "pR" then return Name.mkSimple "prefixRead"
+  if helpers && helpersV2 && text == "pS" then return Name.mkSimple "storeSet_eq_of_not_mem_fst"
+  if helpers && helpersV2 && text == "pF" then return Name.mkSimple "prefixFrame_trans"
   let code :: parts := text.splitOn "_" | return n
   let some stem := family code | return n
   if parts.isEmpty || !parts.all (fun p => !p.isEmpty && p.toList.all Char.isDigit) then
     return n
   return Name.mkSimple (stemPrefix ++ stem ++ "_" ++ String.intercalate "_" parts)
-private partial def expand (stemPrefix : String) (helpers : Bool) : Syntax → Syntax
+private partial def expand (stemPrefix : String) (helpers helpersV2 : Bool) : Syntax → Syntax
   | .ident info raw n pre =>
-      let m := expandName stemPrefix helpers n
+      let m := expandName stemPrefix helpers helpersV2 n
       if m == n then .ident info raw n pre else mkIdentFrom (.ident info raw n pre) m
-  | .node info kind args => .node info kind (args.map (expand stemPrefix helpers))
+  | .node info kind args => .node info kind (args.map (expand stemPrefix helpers helpersV2))
   | stx => stx
 -- This command is syntax only; the wrapper restores names before macro expansion.
 macro "#a " id:ident : command => `(#print axioms $id)
-syntax (name := prefixNames) "prefix_names " ident (" +")? (" !")? " where" ppLine (colGt command)* : command
+syntax (name := prefixNames) "prefix_names " ident (" +")? (" +")? (" !")? " where" ppLine (colGt command)* : command
 @[command_elab prefixNames] def elabPrefixNames : CommandElab := fun stx => do
   let pref := stx[1].getId.toString
   let helpers := !stx[2].isNone
-  for cmd in stx[5].getArgs do
-    elabCommand (expand pref helpers cmd)
+  let helpersV2 := !stx[3].isNone
+  if helpersV2 && !helpers then throwError "prefix helper v2 requires +"
+  for cmd in stx[6].getArgs do
+    elabCommand (expand pref helpers helpersV2 cmd)
 end PrefixNames
 
 namespace TrainVerify.Denote
