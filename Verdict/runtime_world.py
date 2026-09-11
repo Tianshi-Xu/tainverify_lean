@@ -240,6 +240,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                                                     expected.insert(30, 'denote.SourceQueryTransposeUnit')
                                                                                     if 'denote.SourceContiguousRead' in imports:
                                                                                         expected.insert(31, 'denote.SourceContiguousRead')
+                                                                                        if 'denote.SourceViewFlattenUnit' in imports:
+                                                                                            expected.insert(32, 'denote.SourceViewFlattenUnit')
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':

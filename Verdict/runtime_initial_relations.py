@@ -368,6 +368,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if contiguous_exchange_detail['reads']:
             entry += '\n' + contiguous_exchange_text
         result['contiguous_exchange_values'] = contiguous_exchange_detail
+        from Verdict.runtime_view_flatten_values import render as render_view_flatten
+        view_flatten_text, view_flatten_detail = render_view_flatten(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if view_flatten_detail['reads']:
+            entry = entry.replace('import denote.SourceContiguousRead\n',
+                'import denote.SourceContiguousRead\nimport denote.SourceViewFlattenUnit\n', 1)
+            entry += '\n' + view_flatten_text
+        result['view_flatten_values'] = view_flatten_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
