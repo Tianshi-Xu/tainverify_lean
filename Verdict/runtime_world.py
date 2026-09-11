@@ -244,6 +244,9 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                                                             expected.insert(32, 'denote.SourceViewFlattenUnit')
                                                                                             if 'denote.SourceSequenceHiddenExchange' in imports:
                                                                                                 expected.insert(33, 'denote.SourceSequenceHiddenExchange')
+                                                                                                gelu_imports = ['denote.SourceGeluRead', 'denote.SourceGeluUnit']
+                                                                                                if all(name in imports for name in gelu_imports):
+                                                                                                    expected[34:34] = gelu_imports
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
