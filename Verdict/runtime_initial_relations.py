@@ -346,6 +346,14 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
                 'import denote.SourceRank4InnerExchange\nimport denote.SourceQueryMatmulUnit\n', 1)
             entry += '\n' + query_matmul_text
         result['query_matmul_values'] = query_matmul_detail
+        from Verdict.runtime_query_transpose_values import render as render_query_transposes
+        query_transpose_text, query_transpose_detail = render_query_transposes(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if query_transpose_detail['reads']:
+            entry = entry.replace('import denote.SourceQueryMatmulUnit\n',
+                'import denote.SourceQueryMatmulUnit\nimport denote.SourceQueryTransposeUnit\n', 1)
+            entry += '\n' + query_transpose_text
+        result['query_transpose_values'] = query_transpose_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)

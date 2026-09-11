@@ -236,6 +236,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                                             expected.insert(28, 'denote.SourceRank4InnerExchange')
                                                                             if 'denote.SourceQueryMatmulUnit' in imports:
                                                                                 expected.insert(29, 'denote.SourceQueryMatmulUnit')
+                                                                                if 'denote.SourceQueryTransposeUnit' in imports:
+                                                                                    expected.insert(30, 'denote.SourceQueryTransposeUnit')
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
