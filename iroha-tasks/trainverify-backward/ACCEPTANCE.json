@@ -4872,5 +4872,347 @@
     "kernel_value_proved": false,
     "public_complete": false,
     "torch_refinement": false
+  },
+  "residual_join_checkpoint": {
+    "base": "93889899ad12ee99c81e66b9477cc5913b883529",
+    "focused_tests": 22,
+    "focused_seconds": 261.29,
+    "focused_exit_code": 0,
+    "focused_log": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/residual-join-focused.log",
+    "source_review": {
+      "passed": true,
+      "security_concerns": [],
+      "logic_errors": [],
+      "suggestions": [
+        {
+          "priority": "release-gate",
+          "message": "本 PASS 仅适用于所列不可变源树的三文件 source review。父流程仍须比对 worker 最终三文件及依赖源码；漂移必须补审，并完成最终源码重放/生成文本对照。现有 kernel receipts 不自动证明最终 worker 源码已重放。"
+        },
+        {
+          "priority": "verification-accounting",
+          "message": "此冻结版本按 AST 展开共有 22 个 pytest cases（1+10+5+2+4），不是旧版 20 个。此次独立复核未运行 full render、pytest、Lean 或 GPU；最终报告应单独附最后版本 22 cases 的真实完成结果。"
+        },
+        {
+          "priority": "optional-test-hardening",
+          "message": "现有负测覆盖有序/缺失/重复/额外分支、port/bool-port/tid/version/writer、原始输入顺序/shape/execution、Add 两输出以及 AA dims/peer-order/missing-peer/LN port。后续可补独立 rank、microbatch、AA local_index 负测，以直接保护已有对应 guards；本次未发现这些路径的源码逻辑缺口。"
+        }
+      ],
+      "source_tree": {
+        "path": "/home/v-zhouziyu/work/trainverify-backward-residual-join-review",
+        "head": "ca236354b8481ee6900c4dc4cbbdc2add6e9488c",
+        "tree": "4918db85031e7407f8d82a2dcb0dd49c09b3d712",
+        "base": "93889899",
+        "clean_before_and_after": true,
+        "files": [
+          {
+            "path": "Verdict/runtime_backward_residual_join_consumers.py",
+            "sha256": "fe448e960d016c9f12b8a23aad4ab3b9c51e79487207826e58dbcb91278d6a9d"
+          },
+          {
+            "path": "scripts/tests/test_runtime_backward_residual_join_consumers.py",
+            "sha256": "b259f95fb10df1669df2c7e6c48d127194a92e6c6ae90d04a179d9f604f9100b"
+          },
+          {
+            "path": "iroha-tasks/trainverify-backward/render_actual_residual_join.py",
+            "sha256": "21c4abb970d95557b671cf204493cf5beda5b4322ff857cfe1ba5a6ce0f0a01a"
+          }
+        ]
+      },
+      "summary": {
+        "verdict": "未发现阻断性源码问题：完整有序残差汇合及其直接 Add 双输出没有弱化、漏支路或新增输出等式假设。",
+        "scope": "独立只读复核三处新增文件；仅为追踪合同读取同树既有 helper/authority，以及父目录现有生成物和 receipts；没有修改源码、安装、recapture、编译、写共享缓存或提交。唯一写入为本报告。",
+        "ordered_join": "residual_join_consumers.py:78-118,162-178 以原 MR 输入 fullref 顺序选择贡献，不排序 main/retained 标签、不用交换律；长度、唯一性、逐端口 fullref/tid 匹配及 source index/typed port/原 cell/原 lowered output/rank/mb/execution 前后关系均检查。每个原输入恰有一个贡献，missing/extra/duplicate/unsupported 分支 fail closed。MR 原 read 只重新绑定验证，生成的该 root 文本被丢弃，组合引用既有 theorem。",
+        "communication": "residual_join_consumers.py:38-75,138-159 使用 freshly bound scope 的 effective params、ordered ranks、local_index、完整 peer 输入与输出；collective.render_read 的原始 source/writer/backward_context/peer producer port/full suffix nonwrite 检查没有被绕过。PM AA120/356/592/828 的有效维度为 [1,2]；有序 LN peers 分别 [119,355]、[119,355]、[591,827]、[591,827]，rank groups [0,1] 与 [2,3]。保留 AA113/349/585/821 的表达式和 theorem 直接来自既有 residual_exchange.render，不由新代码解析 Lean 或复制长公式。",
+        "actual_topology": [
+          "SM: LN70.port0 + Add66.port0 -> MR71 -> Add72.dleft,dright",
+          "PM rank0: AA120.port0 + retainedAA113.port0 -> MR121 -> Add122.dleft,dright",
+          "PM rank1: AA356.port0 + retainedAA349.port0 -> MR357 -> Add358.dleft,dright",
+          "PM rank2: AA592.port0 + retainedAA585.port0 -> MR593 -> Add594.dleft,dright",
+          "PM rank3: AA828.port0 + retainedAA821.port0 -> MR829 -> Add830.dleft,dright"
+        ],
+        "direct_add": "residual_join_consumers.py:119-135 通过 fullref 的唯一原始 BW_add consumer 发现直接 Add，并重新绑定 cotangent 的 input port0、原 output_tids、mb 与执行顺序。既有 add authority 绑定 saved_left/right、FW mirror 对应梯度输出、有序 fullrefs、alpha=1 和等正形状域。新组合分别输出 bw_add2(sum, saved_left, saved_right).1/.2，未把两条结果折叠为一个输出，也未继续遍历后续消费者。",
+        "common_run_contract": "所有新 theorem 的唯一运行条件均为 (s t : Store) (h : smDenoteWithInputs s = some t) 或 PM 对应式；所有引用统一传 s t h。复用 FC1 的原 layernorm_expressions/layernorm_consumers，生成 tensorSum 的全序贡献表达式。没有新增 output equality assumption，没有 SM-PM 梯度等价、缩放闭合或 Torch refinement 声明；四个公开完成/证明 flags 保持 False。",
+        "replay": "render_actual_residual_join.py:16-24 在生成前比对原 world receipt 的 execution_to_source 及所有 tensor fullref/tid/shape；39-42 使用既有 FC1、retained residual、MR roots 并分开输出新 AA reads、Add reads 和组合模块。该脚本本身不是 kernel 或最终源码发布接受器。",
+        "executed_checks": [
+          "git HEAD/tree 和清洁状态核验；git diff --check 93889899 HEAD 返回 0。",
+          "三文件 AST parse 全部通过，记录实际 SHA256；AST 统计冻结版测试为 22 cases。",
+          "父目录三个现有 ActualBWResidualJoin*-kernel.json 对应 source 与 object 的 SHA256 均实际匹配；声明名集合与 receipt 完全一致，数量分别为 4、10、19，inner_exit 均为 0，axioms 全部仅 propext/Classical.choice/Quot.sound。没有重新运行 kernel，也没有独立重做完整传递依赖闭包。",
+          "从现有 ActualBWResidualJoinConsumers.json 程序化重建五个 ordered tensorSum、四个 AA expression 及十个 Add 投影 RHS，全部与现有生成 Lean 中目标表达式匹配。此核验不替代冻结/最终源码 full render。"
+        ],
+        "limitations": "未执行昂贵 full render/全 suite/Lean/GPU；22 cases 的最终运行结果及 worker 最终源码一致性留给父流程。此次 PASS 不授权接受不同源树，也不将 source/kernel 检查提升为全模型梯度等价。"
+      }
+    },
+    "review_gate_resolution": "Final worker files equal reviewed snapshot; parent final source replay and 22 tests completed. Optional additional rank/mb/local-index test matrix deferred; no source defect reported.",
+    "kernel": {
+      "ActualBWResidualJoinRead": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWResidualJoinRead.lean",
+        "source_sha256": "64b17b8d3802fc63f10c670bb232db830297e2d6247daf9b3683e27ea1149ae0",
+        "inner_exit": 0,
+        "seconds": 13.143218278884888,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWResidualJoinRead.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWResidualJoinRead.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWResidualJoinRead.olean",
+        "object_sha256": "699782994d5980725cf3454499894464394f60e4f35fd8a26a17db860355cc36",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardCollective_pm_120_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardCollective_pm_356_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardCollective_pm_592_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardCollective_pm_828_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "ActualBWResidualJoinAddRead": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWResidualJoinAddRead.lean",
+        "source_sha256": "ee0f2e5f63223fa35b870c8a9d89264a7bfd532967f315af36598583ef5f12d9",
+        "inner_exit": 0,
+        "seconds": 37.03768706321716,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWResidualJoinAddRead.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWResidualJoinAddRead.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWResidualJoinAddRead.olean",
+        "object_sha256": "12e95b4b16c01b0bca7327b77293570e33d17048d91d30fa6976ea05b93b9b10",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_sm_72_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_sm_72_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_pm_122_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_pm_122_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_pm_358_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_pm_358_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_pm_594_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_pm_594_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_pm_830_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardAddRead_pm_830_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "ActualBWResidualJoinConsumers": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWResidualJoinConsumers.lean",
+        "source_sha256": "10e6b6e53c38aa1c04756cafa08baa2ddb8ad8cae695d5b5fdff949f276bf7ab",
+        "inner_exit": 0,
+        "seconds": 5.1247875690460205,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWResidualJoinConsumers.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWResidualJoinConsumers.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWResidualJoinConsumers.olean",
+        "object_sha256": "70b0c80dd886b2aae869163218bcb015e257c95b28968dc74bbf748f3a9be74c",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardCollective_pm_120_read_contributions": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardCollective_pm_356_read_contributions": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardCollective_pm_592_read_contributions": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardCollective_pm_828_read_contributions": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoin_sm_71": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_sm_72_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_sm_72_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoin_pm_121": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_pm_122_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_pm_122_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoin_pm_357": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_pm_358_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_pm_358_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoin_pm_593": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_pm_594_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_pm_594_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoin_pm_829": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_pm_830_dleft": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardResidualJoinAdd_pm_830_dright": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      }
+    },
+    "kernel_declarations": 33,
+    "guard_mutations": [
+      {
+        "guard": "missing-retained",
+        "killed": true,
+        "failure": "DID NOT RAISE ValueError",
+        "restored": true
+      },
+      {
+        "guard": "bool-port",
+        "killed": true,
+        "failure": "DID NOT RAISE ValueError",
+        "restored": true
+      },
+      {
+        "guard": "wrong-ln-port",
+        "killed": true,
+        "failure": "DID NOT RAISE ValueError",
+        "restored": true
+      },
+      {
+        "guard": "add-cotangent",
+        "killed": true,
+        "failure": "DID NOT RAISE ValueError",
+        "restored": true
+      }
+    ],
+    "mutation_exit_code": 0,
+    "final_replay": {
+      "exact_source_equal": true,
+      "roots": [
+        "ActualBWResidualJoinRead",
+        "ActualBWResidualJoinAddRead",
+        "ActualBWResidualJoinConsumers"
+      ]
+    },
+    "scope": "original successful-run same-final-Store LN reverse-AA and full residual multiref sum through both direct Add outputs; original multiref root reused",
+    "proof_admissible": false,
+    "kernel_value_proved": false,
+    "public_complete": false,
+    "torch_refinement": false
   }
 }
