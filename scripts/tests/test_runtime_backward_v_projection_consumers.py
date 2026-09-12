@@ -40,8 +40,14 @@ def test_generator_exists():
 
 
 @pytest.fixture(scope='module')
-def rendered(worlds):
-    return generator().generate(worlds, Path(os.environ['TRAINVERIFY_CAPTURE_ROOT']))
+def rendered_output(tmp_path_factory):
+    return tmp_path_factory.mktemp('v-projection-generated')
+
+
+@pytest.fixture(scope='module')
+def rendered(worlds, rendered_output):
+    return generator().generate(worlds, Path(os.environ['TRAINVERIFY_CAPTURE_ROOT']),
+                                output=rendered_output)
 
 
 def test_real_v_projection_path_both_linear_ports(worlds, rendered):
@@ -116,21 +122,22 @@ def test_emitted_sources_and_shared_dag_are_path_only(worlds, rendered):
             assert not getattr(view, 'collective_scopes', {})
 
 
-def test_generator_writes_exact_modules_and_receipt_checked_dag(rendered):
+def test_generator_writes_exact_modules_and_receipt_checked_dag(rendered, rendered_output):
     import json
     text, detail = rendered
     gen = generator()
+    assert rendered_output != gen.OUT
     mapping = {'ActualBWVTransposeRead': 'transpose_source', 'ActualBWVViewRead': 'view_source',
                'ActualBWVCollectiveRead': 'collective_source', 'ActualBWVLinearRead': 'linear_source'}
     for module, field in mapping.items():
-        emitted = (gen.OUT / (module + '.lean')).read_text()
+        emitted = (rendered_output / (module + '.lean')).read_text()
         assert detail[field] in emitted
         assert 'import TrainVerifyRuntimeWorldData\n' in emitted
-    emitted = (gen.OUT / 'ActualBWVProjectionDAG.lean').read_text()
+    emitted = (rendered_output / 'ActualBWVProjectionDAG.lean').read_text()
     assert text in emitted
     for module in ['TrainVerifyRuntimeWorldData', 'ActualBWMatmulRead', 'ActualBWMatmulDVReduceScatter', *mapping]:
         assert f'import {module}\n' in emitted
-    receipt = json.loads((gen.OUT / 'ActualBWVProjectionDAG.json').read_text())
+    receipt = json.loads((rendered_output / 'ActualBWVProjectionDAG.json').read_text())
     assert receipt['paths'] == detail['paths']
     assert len(receipt['linear_reads']) == 5
 
@@ -207,20 +214,20 @@ def test_collective_dag_rejects_tampered_parent_certificates(rendered, fault):
         api()._collective_parents(raw, values)
 
 
-def test_receipt_failure_preserves_existing_generated_artifact(worlds, rendered, monkeypatch):
+def test_receipt_failure_preserves_existing_generated_artifact(worlds, rendered, rendered_output, monkeypatch):
     import json
     gen = generator()
     base = Path(os.environ['TRAINVERIFY_CAPTURE_ROOT'])
     receipt = json.loads((base / gen.RECEIPT).read_text())
     receipt['execution_order']['sm']['source_to_execution'].reverse()
-    target = gen.OUT / 'ActualBWVProjectionDAG.lean'
+    target = rendered_output / 'ActualBWVProjectionDAG.lean'
     before = target.read_bytes()
     monkeypatch.setattr(gen.json, 'loads', lambda _: receipt)
     def forbidden_render(*args):
         pytest.fail('render reached before runtime receipt validation')
     monkeypatch.setattr(gen, 'render', forbidden_render)
     with pytest.raises(ValueError, match='runtime receipt'):
-        gen.generate(worlds, base)
+        gen.generate(worlds, base, output=rendered_output)
     assert target.read_bytes() == before
 
 
