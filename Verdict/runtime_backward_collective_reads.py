@@ -94,7 +94,7 @@ def _fresh(view, cells, snapshot):
 
 
 def render_read(view, cells, snapshot, source_index, order, label, producer_reader, output_port):
-    """Authenticate ordered original peers and emit one bare AG/AA equality."""
+    """Authenticate ordered original peers and emit one bare AG/AA/RS equality."""
     _require(label in ('sm', 'pm') and type(source_index) is int
              and 0 <= source_index < len(cells), 'invalid world/source index')
     _require(type(output_port) is int and output_port >= 0, 'invalid producer output port')
@@ -106,7 +106,8 @@ def render_read(view, cells, snapshot, source_index, order, label, producer_read
              'certified producer renderer required, not a supplied row/equation')
     cell = cells[source_index]
     _require(cell.node.wtype == {'sm': 's', 'pm': 'p'}[label], 'source owner/world mismatch')
-    _require(cell.opname.name in ('AllGatherPrim', 'AllToAllPrim'), 'unsupported original backward collective')
+    _require(cell.opname.name in ('AllGatherPrim', 'AllToAllPrim', 'ReduceScatterPrim'),
+             'unsupported original backward collective')
     fresh, checked = _fresh(view, cells, snapshot)
     validated = runtime_schedule.validate(view, order['execution_to_source'])
     _require(_same_typed(order.get('source_to_execution'), validated['source_to_execution']),
@@ -119,6 +120,26 @@ def render_read(view, cells, snapshot, source_index, order, label, producer_read
     inputs = view.node_inputs(cell.node); output, = view.node_outputs(cell.node)
     refs = [list(view.source_tensor(t)) for t in inputs]
     ids = [t.tid for t in inputs]
+    if cell.opname.name == 'ReduceScatterPrim':
+        # Runtime SUM of each sender's destination chunk equals chunk(SUM)
+        # only on this equal, positive, divisible source-shape domain.
+        dim, = scope.params
+        shape = tuple(scope.input_shape)
+        outshape = tuple(view.tensor_shape(output))
+        _require(ranks and len(set(ranks)) == len(ranks) and len(inputs) == len(ranks)
+                 and all(type(r) is int and 0 <= r < view.W.runtime_ndevs for r in ranks)
+                 and _same_typed(tuple(t.rank for t in inputs), scope.ranks)
+                 and _same_typed(tuple(ids), scope.input_tids)
+                 and _same_typed(output.tid, scope.output_tid)
+                 and _same_typed(scope.local_index, ranks.index(cell.rank)),
+                 'ordered reduce-scatter peers/output/local index mismatch')
+        _require(shape and type(dim) is int and 0 <= dim < len(shape)
+                 and all(type(d) is int and d > 0 for d in (*shape, *outshape))
+                 and all(_same_typed(tuple(view.tensor_shape(t)), shape) for t in inputs)
+                 and shape[dim] % len(ranks) == 0,
+                 'positive divisible same reduce-scatter peer shapes required')
+        expected = list(shape); expected[dim] //= len(ranks)
+        _require(_same_typed(list(outshape), expected), 'reduce-scatter output shape mismatch')
     predecessors = []
     for tensor, ref in zip(inputs, refs, strict=True):
         j, producer = _one(((j, c) for j, c in enumerate(cells)
@@ -145,7 +166,7 @@ def render_read(view, cells, snapshot, source_index, order, label, producer_read
         _require(row['output_tids'][output_port] == tensor.tid, 'producer lowered output mismatch')
         predecessors.append(row)
     _require(len(peers) == len(ranks), 'incomplete ordered peer writers')
-    fields = ('dim',) if cell.opname.name == 'AllGatherPrim' else ('idim', 'odim')
+    fields = ('idim', 'odim') if cell.opname.name == 'AllToAllPrim' else ('dim',)
     for rank, wid, predecessor in zip(ranks, peers, predecessors, strict=True):
         original = _one((w for w in fresh['writers'] if w['export_id'] == wid), 'fresh peer writer missing/ambiguous')
         ref = original['ref']
@@ -186,17 +207,23 @@ def render_read(view, cells, snapshot, source_index, order, label, producer_read
     _require(not any(output.tid in {t.tid for t in view.node_outputs(nodes[j])} for j in seq[k+1:]),
              'output overwritten in complete execution suffix')
     name = f'backwardCollective_{label}_{source_index}_read'; req = f'{label}InputRequests'
+    operands = f'(({ids} : List Tid).map t)'
     if cell.opname.name == 'AllGatherPrim':
         dim, = scope.params
         value = f'allGatherPrimDimN {dim} {len(ranks)} {scope.local_index}'
         law = 'SourceAllGatherRead.allGather_value_of_split'
-    else:
+    elif cell.opname.name == 'AllToAllPrim':
         idim, odim = scope.params
         value = f'AllToAllSourceFaithful.tensor {len(ranks)} {scope.local_index} {idim} {odim}'
         law = 'SourcePrimitiveRead.allToAll_value_of_split'
+    else:
+        dim, = scope.params
+        value = f'chunkPrimDimN {dim} {len(ranks)} {scope.local_index}'
+        operands = f'(tensorSum {operands})'
+        law = 'SourceReduceScatterRead.reduceScatter_value_of_split'
     args = f'{cell.rank} {ranks} {ids} {output.tid} ' + ' '.join(map(str, scope.params))
     proof = [f'theorem {name} (s t : Store) (h : {label}DenoteWithInputs s = some t) :',
-             f'    t {output.tid} = {value} (({ids} : List Tid).map t) := by',
+             f'    t {output.tid} = {value} {operands} := by',
              f'  apply {law} {label}Graph {label}Scope {label}Peers {label}Graph.nodes',
              f'    {req} ({req}.take {k}) ({req}.drop {k+1}) {label}Node_{source_index}',
              f'    {args} s t rfl ?_ rfl ?_ h', '  · calc',
