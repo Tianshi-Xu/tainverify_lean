@@ -435,6 +435,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if frontier_next_linear_detail['reads']:
             entry += '\n' + frontier_next_linear_text
         result['frontier_next_linear_values'] = frontier_next_linear_detail
+        from Verdict.runtime_frontier_sequence_hidden_values import render as render_frontier_sequence_hidden
+        sequence_hidden_text, sequence_hidden_detail = render_frontier_sequence_hidden(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if sequence_hidden_detail['reads']:
+            entry += '\n' + sequence_hidden_text
+        result['frontier_sequence_hidden_values'] = sequence_hidden_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
