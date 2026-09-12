@@ -4825,5 +4825,52 @@
     "kernel_value_proved": false,
     "public_complete": false,
     "torch_refinement": false
+  },
+  "expression_handoff_checkpoint": {
+    "base": "8e26e7861cc16180200e7281b8282c7c121867bd",
+    "source_review": {
+      "passed": true,
+      "security_concerns": [],
+      "logic_errors": [],
+      "suggestions": [],
+      "source_tree": "d38dd7a18b5cf7f2aeab285fa0b09aeecac85d89",
+      "summary": "独立只读复核通过：HEAD b19651ccb9ec74d49e73668ec6788a09d5986594 相对 base 8e26e7861cc16180200e7281b8282c7c121867bd 仅4文件差异，工作树审查前后干净且未漂移。FC1 linear_expressions 在原证明循环中直接保存 rhs，端口依次 dx/.1、dw/.2；layernorm_expressions 保存原 base+'.'+proj，依次 dx/.1、dgamma/.2.1、dbeta/.2.2，与同一循环的 output_tids 和证明目标严格对应。retainedAA expression 仅提取原 value + ' [' + ', '.join(contributions) + ']'，保持按已认证 inputs/predecessors 排列的 bw_add2 左分支及原通信参数，定理字符串的空格、括号和换行不变。工具验证：去除新增导出字段并还原局部表达式提取后，两个生产模块的完整 AST 均与 base 相同；新增行安全扫描及 git diff --check 无发现。未修改算子、目标、假设、证明步骤或四个 False 状态标志，无新增反向解析、eval/exec、shell 或 pickle 调用。两项新增测试核对导出值与原目标 RHS 的对应关系；本次按授权仅做静态复核，未重跑昂贵 render、pytest 或 Lean，不独立声称父任务所报8个root字节重放或新kernel验收。metadata 仅为表达式交接，不构成值语义证据；接受依据仍为原source绑定与既有checked目标等式。唯一创建或覆盖文件为本JSON，未修改源码、capture或Lean。"
+    },
+    "red": [
+      "FC1 KeyError: linear_expressions",
+      "retained AA KeyError: expression"
+    ],
+    "focused_runs": [
+      {
+        "tests": 1,
+        "seconds": 79.09,
+        "exit_code": 0,
+        "scope": "new FC1 expression export"
+      },
+      {
+        "tests": 8,
+        "seconds": 35.09,
+        "exit_code": 0,
+        "scope": "complete retained exchange tests"
+      }
+    ],
+    "replay": {
+      "byte_identical": [
+        "ActualBWFC1LinearRead",
+        "ActualBWFC1LayernormRead",
+        "ActualBWFC1WRED",
+        "ActualBWFC1LayernormWRED",
+        "ActualBWFC1CollectiveRead",
+        "ActualBWFC1Consumers",
+        "ActualBWResidualExchange",
+        "ActualBWMultirefRead"
+      ],
+      "new_kernel_compilations": 0
+    },
+    "scope": "Return already-generated RHS with its original output port/theorem; metadata is not a semantic authority",
+    "proof_admissible": false,
+    "kernel_value_proved": false,
+    "public_complete": false,
+    "torch_refinement": false
   }
 }

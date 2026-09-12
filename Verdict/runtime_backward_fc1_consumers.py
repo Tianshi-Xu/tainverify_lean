@@ -129,9 +129,11 @@ def render(worlds, capture, rank_code):
         expression, grad_name = gradients[key]
         linear_expression = f'(bw_linear ({expression}) (t {lr["input_tids"][1]}) (t {lr["input_tids"][2]}))'
         names = []
+        r['linear_expressions'] = []
         for port, role in enumerate(('dx', 'dw')):
             name = f'backwardFC1_{label}_{lr["source_index"]}_{role}'
             rhs = linear_expression + f'.{port+1}'
+            r['linear_expressions'].append(rhs)
             proofs += _equation(name, label, lr['output_tids'][port], rhs, [lr['theorems'][port], grad_name])
             names.append(name)
             if port == 0: dxs[key], dx_names[key] = rhs, name
@@ -145,10 +147,12 @@ def render(worlds, capture, rank_code):
         expr, name = exchanges[(label, r['linear']['source_index'])]
         base = f'(bw_layernorm ({expr}) ' + ' '.join(f'(t {i})' for i in nr['input_tids'][1:]) + ')'
         r['layernorm_consumers'] = []
+        r['layernorm_expressions'] = []
         for port, (role, proj) in enumerate(zip(('dx','dgamma','dbeta'), ('1','2.1','2.2'), strict=True)):
             target = f'backwardFC1Layernorm_{label}_{nr["source_index"]}_{role}'
             proofs += _equation(target, label, nr['output_tids'][port], base+'.'+proj, [nr['theorems'][port], name])
             r['layernorm_consumers'].append(target)
+            r['layernorm_expressions'].append(base+'.'+proj)
     return '\n'.join(proofs) + '\n', dict(reads=rows, collective_reads=collective_rows,
         collective_source=''.join(source_proofs), proof_admissible=False, kernel_value_proved=False,
         public_complete=False, torch_refinement=False)

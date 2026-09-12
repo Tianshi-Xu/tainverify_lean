@@ -14,6 +14,13 @@ def api():
     return importlib.import_module('Verdict.runtime_backward_residual_exchange_reads')
 
 
+def test_retained_exchange_exports_its_generated_expression(worlds, config, rank_code):
+    text, detail = api().render(worlds, str(Path(config['pm_capture'])/'capture.pkl'), rank_code)
+    for row in detail['reads']:
+        assert f't {row["output_tid"]} = {row["expression"]} := by' in text
+        assert row['expression'].startswith('AllToAllSourceFaithful.tensor ')
+
+
 def test_original_add_left_branch_faithful_exchange(worlds, config, rank_code):
     text, detail = api().render(worlds, str(Path(config['pm_capture'])/'capture.pkl'), rank_code)
     assert [r['source_index'] for r in detail['reads']] == [113, 349, 585, 821]

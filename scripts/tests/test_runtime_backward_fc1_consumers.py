@@ -46,6 +46,18 @@ def test_fc1_follows_original_fullref_not_adjacent_index(worlds, monkeypatch):
     with pytest.raises(ValueError): api().discover(worlds)
 
 
+def test_fc1_exports_same_generated_expressions_for_next_stage(worlds, paths):
+    text, detail = api().render(worlds, *paths)
+    for row in detail['reads']:
+        for key in ('linear', 'layernorm'):
+            values = row[key + '_expressions']
+            assert len(values) == len(row[key]['output_tids'])
+            for tid, value in zip(row[key]['output_tids'], values, strict=True):
+                assert f't {tid} = {value} := by' in text
+    # The consumer can reuse expressions without reverse-parsing proof text.
+    assert len(detail['reads'][0]['layernorm_expressions']) == 3
+
+
 def test_actual_fc1_chain_and_all_parameter_branches(worlds, paths):
     text, detail = api().render(worlds, *paths)
     assert len(detail['reads']) == 5

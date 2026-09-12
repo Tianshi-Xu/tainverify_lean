@@ -68,6 +68,7 @@ def _read(view, cells, snapshot, order, prior, add_row):
     name = f'backwardResidualExchange_pm_{i}'
     value = f'AllToAllSourceFaithful.tensor {len(rs)} {scope.local_index} {idim} {odim}'
     contributions = ['(bw_add2 ' + ' '.join(f'(t {tid})' for tid in p['input_tids']) + ').1' for p in predecessors]
+    expression = value + ' [' + ', '.join(contributions) + ']'
     proof = [f'theorem {name}_read (s t : Store) (h : pmDenoteWithInputs s = some t) :',
              f'    t {output.tid} = {value} ({ids}.map t) := by',
              '  apply SourcePrimitiveRead.allToAll_value_of_split pmGraph pmScope pmPeers pmGraph.nodes',
@@ -78,14 +79,14 @@ def _read(view, cells, snapshot, order, prior, add_row):
              f'  · change ∀ tid ∈ ({ids} : List Tid), ∀ row ∈ pmInputRequests.drop {k}, tid ∉ row.1.outs',
              '    decide', f'#print axioms {name}_read',
              f'theorem {name}_contributions (s t : Store) (h : pmDenoteWithInputs s = some t) :',
-             f'    t {output.tid} = {value} [' + ', '.join(contributions) + '] := by',
+             f'    t {output.tid} = {expression} := by',
              f'  rw [{name}_read s t h]', '  simp only [List.map_cons, List.map_nil]',
              '  rw [' + ', '.join(p['theorems'][0] + ' s t h' for p in predecessors) + ']',
              f'#print axioms {name}_contributions']
     return '\n'.join(proof) + '\n', dict(source_index=i, execution_index=k, ranks=rs,
         input_tids=ids, output_tid=output.tid, output_ref=list(view.source_tensor(output)),
         params=list(scope.params), raw_params=[consumer.kwargs['idim'], consumer.kwargs['odim']],
-        predecessors=[p['theorems'][0] for p in predecessors],
+        predecessors=[p['theorems'][0] for p in predecessors], expression=expression,
         theorems=[name+'_read', name+'_contributions'], backward_context_status=ctx['status'])
 
 
