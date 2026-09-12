@@ -3549,5 +3549,467 @@
     "kernel_value_proved": false,
     "public_complete": false,
     "torch_refinement": false
+  },
+  "ffn_source_checkpoint": {
+    "base": "c8bbe52b54e2b4de35c44da739c52f7bd038d3a5",
+    "focused_tests": 64,
+    "focused_seconds": 210.45,
+    "focused_exit_code": 0,
+    "focused_log": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ffn-focused.log",
+    "source_review": {
+      "passed": true,
+      "security_concerns": [],
+      "logic_errors": [],
+      "suggestions": [],
+      "source_tree": "/home/v-zhouziyu/work/trainverify-backward-ffn-review; HEAD=fe5e3d06e38e8b450273d87582d7c2c8819e40ef; tree=bb034bf1a0b7291b6f19bd7657e02994b4e260c3; base=c8bbe52b54e2b4de35c44da739c52f7bd038d3a5; 13 files",
+      "summary": "独立只读PASS，前后树一致且干净。GELU认证原始mirror/signature、approximate=none、顺序[G,savedX]及writer/version；真实PyTorch exact-erf梯度测试区分saved output/tanh。Lean从同一成功原始run导出final Store读取，不假设结果等式。5条真实FFN链核对Add.right→fc2.dx→GELU及FW反向对应。共享helper严格整数坐标逐rank匹配captured World.plan_ndevs，独立出处Verdict/nnscaler_backend/runtime_source_authority.py:235-236；完整参数slice身份保留，scope.ranks保序，不补矩形组。独立58 tests通过；额外错位/布尔/非矩形保序探针通过。4份新Lean内存重渲染与父产物字节一致；旧lmhead两组(0,2)/(1,3)与LN Lean对基线字节不变。父6根/46声明exit0、axioms限空或kernel triple，source/object哈希读回一致；未重编译或独立重跑kernel。新增危险扫描仅测试字符串断言。仅创建本JSON，未改项目/recapture/sharedcache。结论仅source读取与接线，不是SM-PM梯度等价或浮点refinement。"
+    },
+    "kernel": {
+      "SourceBWGeluRead": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/trainverify/denote/SourceBWGeluRead.lean",
+        "source_sha256": "5fe9eb84e0e540819b1a87211ca7f49524ef47db56205995d00bfbabedad3424",
+        "inner_exit": 0,
+        "seconds": 2.92055344581604,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/denote/SourceBWGeluRead.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/trainverify/denote/SourceBWGeluRead.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/denote/SourceBWGeluRead.olean",
+        "object_sha256": "805ed75c724ee73ad6c8d95540761619cda209280b420a4f4f655c4affa5e81b",
+        "axioms": {
+          "TrainVerify.Denote.SourceBWGeluRead.bw_gelu_value_of_split": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "GeluReadWitness": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/iroha-tasks/trainverify-backward/GeluReadWitness.lean",
+        "source_sha256": "c14a2df8cf6fc66484a4b932dd23d0fe2283f24cf42996db98face23b28e7e47",
+        "inner_exit": 0,
+        "seconds": 3.5726318359375,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/GeluReadWitness.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/iroha-tasks/trainverify-backward/GeluReadWitness.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/GeluReadWitness.olean",
+        "object_sha256": "4d4f4a0a3d4fd8403899bee9bbaafbf7224767ce0bb773086f85ed6d0d20d7be",
+        "axioms": {
+          "TrainVerify.Denote.SourceBWGeluReadWitness.schedule_valid": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.run_success": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.caller_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.seed_nonzero": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.saved_nonzero": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.seed_nonconstant": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.saved_nonconstant": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.seed_preserved": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.saved_preserved": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.concrete_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.pointwise_derivative": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.SourceBWGeluReadWitness.caller_nonvacuous": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "ActualBWFFNLinearRead": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWFFNLinearRead.lean",
+        "source_sha256": "d14c8d35aa0a15e8c93df636135a8a81f9a981a14049d8233d68fc482fb0d749",
+        "inner_exit": 0,
+        "seconds": 38.643699169158936,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWFFNLinearRead.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWFFNLinearRead.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWFFNLinearRead.olean",
+        "object_sha256": "27c324e8a25fc82242bf1f3788b746f022d7b44ea953640f0c642188365f7c91",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_sm_67_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_sm_67_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_pm_114_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_pm_114_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_pm_350_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_pm_350_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_pm_586_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_pm_586_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_pm_822_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardLinearRead_pm_822_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "ActualBWGeluRead": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWGeluRead.lean",
+        "source_sha256": "c3bdc391ada1baf0786a1c4b698105bddbbe6193e22ef38310565cff5927278a",
+        "inner_exit": 0,
+        "seconds": 15.246070623397827,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWGeluRead.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWGeluRead.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWGeluRead.olean",
+        "object_sha256": "84ae8e2c261b94be42f3c6af22035aa0f1584f9ea962971575f66ba2017d4388",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardGeluRead_sm_68_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardGeluRead_pm_115_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardGeluRead_pm_351_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardGeluRead_pm_587_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardGeluRead_pm_823_dx": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "ActualBWFFNConsumers": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWFFNConsumers.lean",
+        "source_sha256": "36a95b8728b24599d1520852261f7d45636ee004625759f4947ffbf58deefd2a",
+        "inner_exit": 0,
+        "seconds": 3.0717391967773438,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWFFNConsumers.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWFFNConsumers.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWFFNConsumers.olean",
+        "object_sha256": "9f70b43663e8170c600c612922aa42b5629e3c398c369a515b6e2f35781b55d1",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnLinearConsumer_sm_67": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnGeluConsumer_sm_68": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnLinearConsumer_pm_114": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnGeluConsumer_pm_115": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnLinearConsumer_pm_350": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnGeluConsumer_pm_351": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnLinearConsumer_pm_586": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnGeluConsumer_pm_587": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnLinearConsumer_pm_822": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardFfnGeluConsumer_pm_823": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      },
+      "ActualBWFC2WRED": {
+        "source": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWFC2WRED.lean",
+        "source_sha256": "72f28b30f0403e63cf3203ed06911dffcdd4d4f8eec7c63f2d3d0346bed8014f",
+        "inner_exit": 0,
+        "seconds": 12.489766597747803,
+        "command": [
+          "/home/v-zhouziyu/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+          "-j1",
+          "--tstack=65536",
+          "-DmaxHeartbeats=500000",
+          "-DmaxRecDepth=4096",
+          "-o",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWFC2WRED.olean",
+          "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/ActualBWFC2WRED.lean"
+        ],
+        "object": "/home/v-zhouziyu/work/trainverify-backward/.hermes/backward-kernel/objects/ActualBWFC2WRED.olean",
+        "object_sha256": "63be9e0a4bbf93c13854b4f5ba86bb7c4b7d7b1fc1e4ca830ddbe8cdd1fe25a8",
+        "axioms": {
+          "TrainVerify.Denote.RuntimeWorld.backwardWRED_pm_217_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardWRED_pm_217_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardWRED_pm_453_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardWRED_pm_453_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardWRED_pm_689_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardWRED_pm_689_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardWRED_pm_925_read": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ],
+          "TrainVerify.Denote.RuntimeWorld.backwardWRED_pm_925_dw": [
+            "propext",
+            "Classical.choice",
+            "Quot.sound"
+          ]
+        },
+        "dependency_receipt": "/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/dp-prefix-cost-closure/initial-relations/SourceValueRead-kernel.json"
+      }
+    },
+    "kernel_declarations": 46,
+    "guard_mutations": [
+      {
+        "guard": "gelu-signature",
+        "killed": true,
+        "message": "DID NOT RAISE ValueError"
+      },
+      {
+        "guard": "gelu-exact-approximation",
+        "killed": true,
+        "message": "DID NOT RAISE ValueError"
+      },
+      {
+        "guard": "gelu-gradient-metadata",
+        "killed": true,
+        "message": "DID NOT RAISE ValueError"
+      },
+      {
+        "guard": "fc2-coordinate-binding",
+        "killed": true,
+        "message": "DID NOT RAISE ValueError"
+      },
+      {
+        "guard": "layernorm-coordinate-binding",
+        "killed": true,
+        "message": "DID NOT RAISE ValueError"
+      }
+    ],
+    "unchanged_accepted_proof_roots": [
+      "ActualBWWREDRead",
+      "ActualBWLayernormRead",
+      "ActualBWLayernormContext",
+      "ActualBWLayernormWRED"
+    ],
+    "new_replay_byte_equal": true,
+    "raw_fc2_reducer": {
+      "parameter_parent": 167,
+      "parameter_source_tid": 270,
+      "parameter_name": "layers.1.ffn.fc2.weight",
+      "weight_shape": [
+        64,
+        256
+      ],
+      "ranks": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "coordinates": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "contributions": [
+        66,
+        369,
+        672,
+        975
+      ],
+      "outputs": [
+        67,
+        370,
+        673,
+        976
+      ],
+      "reduce_op": "sum",
+      "zero": 0,
+      "nreplicas": 1
+    },
+    "coordinate_authority": "captured World plan/runtime sizes and original export_expanded_cells rank convention; shared by linear and affine LN callers",
+    "scope": "original SAME-final-Store source reads and FFN expression composition; not SM-PM gradient equivalence",
+    "proof_admissible": false,
+    "kernel_value_proved": false,
+    "public_complete": false,
+    "torch_refinement": false
   }
 }

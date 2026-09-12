@@ -9,6 +9,7 @@ from Verdict import runtime_backward_layernorm_reads as layernorm
 from Verdict.runtime_backward_wred_reads import _reducer
 from Verdict.runtime_lineage import _same_typed
 from trainverify.runtime_source_authority import writer_export_id
+from trainverify.backward_parameter_ownership import validate_source_reducer_coordinates
 
 
 def _one(rows,reason):
@@ -56,8 +57,7 @@ def _read(view,cells,snapshot,order,index,selected,role):
         contributions.append(dict(source_index=j,gradient_ref=list(ref),parameter_ref=list(producer.inputs[ip]),
                                   parameter_placement=pr['placement'],theorem=read['theorems'][op]))
         values.append('(bw_layernorm '+' '.join(f'(t {tid})' for tid in read['input_tids'])+f').2.{np}')
-    if any(type(c) is not int or c<0 for pair in coordinates for c in pair) or len({tuple(p) for p in coordinates})!=len(coordinates):
-        raise ValueError('bw-layernorm-wred distinct strict original DP/TP coordinates required')
+    validate_source_reducer_coordinates(view.W, scope.ranks, coordinates)
     runtime_schedule.validate(view,order['execution_to_source']); seq=order['execution_to_source']; k=seq.index(i)
     ids=[t.tid for t in inputs]
     if any(set(ids)&{t.tid for t in view.node_outputs(nodes[j])} for j in seq[k:]):

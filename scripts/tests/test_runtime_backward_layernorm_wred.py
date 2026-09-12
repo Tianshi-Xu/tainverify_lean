@@ -36,7 +36,7 @@ def admitted(worlds,paths):
     c.attach_wred_scopes(worlds[1][0],source,source.raw_writers,source.raw_rank_sources)
     return source
 
-@pytest.mark.parametrize('fault',['mean','replicas','bool-coordinate','duplicate-coordinate','peer-order','parameter-role','parameter-parent','missing-contribution'])
+@pytest.mark.parametrize('fault',['mean','replicas','bool-coordinate','duplicate-coordinate','distinct-wrong-coordinate','peer-order','parameter-role','parameter-parent','missing-contribution'])
 def test_affine_reducer_rejects_after_original_positive(worlds,admitted,monkeypatch,fault):
     from dataclasses import replace
     v,c,_,o,_=worlds[1]; selected=indices(worlds); i=selected[0]
@@ -51,6 +51,7 @@ def test_affine_reducer_rejects_after_original_positive(worlds,admitted,monkeypa
         elif fault=='duplicate-coordinate':
             second=api()._reducer(c,c[selected[1]].outputs[2])
             m.setitem(admitted.raw_writers[second.node]['placement'],'plan_rank',raw['placement']['plan_rank'])
+        elif fault=='distinct-wrong-coordinate': m.setitem(raw['placement'],'plan_rank',9)
         elif fault=='peer-order': m.setitem(v.wred_scopes,node,replace(scope,input_tids=tuple(reversed(scope.input_tids))))
         elif fault=='parameter-role': m.setitem(v.wred_scopes,node,replace(scope,parameter=tuple(c[i].inputs[2])))
         elif fault=='parameter-parent': m.setitem(raw['placement'],'parent_tid',raw['placement']['parent_tid']+1)

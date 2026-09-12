@@ -10,6 +10,7 @@ from Verdict.runtime_backward_cotangent_reads import _one
 from Verdict.runtime_lineage import _same_typed
 from Verdict import runtime_schedule
 from trainverify.runtime_source_authority import writer_export_id
+from trainverify.backward_parameter_ownership import validate_source_reducer_coordinates
 
 
 def _reducer(cells,grad):
@@ -41,9 +42,9 @@ def _read(view,cells,snapshot,order,index,selected):
     params=compiler._get_node_params(view,node,num_parts=0)
     if params is not None and not _same_typed(params,[]):
         raise ValueError('bw-wred empty original params required')
-    contributions=[];names=[];values=[];units=[]
+    contributions=[];names=[];values=[];coordinates=[]
     fields=('world','runtime_rank','microbatch','source_tid','version')
-    identity_fields=('parent_tid','name','full_shape','indmap','valmap','is_attr','is_grad','is_param','plan_rank')
+    identity_fields=('parent_tid','name','full_shape','indmap','valmap','is_attr','is_grad','is_param')
     for t in inputs:
         fullref=view.source_tensor(t)
         pi,producer=_one(((j,c) for j,c in enumerate(cells) if fullref in c.outputs),
@@ -58,15 +59,14 @@ def _read(view,cells,snapshot,order,index,selected):
                 or not _same_typed(peer_raw['parameter'],dict(zip(fields,producer.inputs[2],strict=True)))
                 or not _same_typed([peer_raw['placement'][f] for f in identity_fields],[placement[f] for f in identity_fields])):
             raise ValueError('bw-wred independent peer parameter placement/contribution mismatch')
-        units.append(peer_raw['placement']['scale_unit'])
+        coordinates.append((peer_raw['placement']['scale_unit'], peer_raw['placement']['plan_rank']))
         g,x,w=proof['input_tids'];values.append(f'(bw_linear (t {g}) (t {x}) (t {w})).2')
         names.append(proof['theorems'][1])
         contributions.append(dict(source_index=pi,gradient_ref=list(fullref),parameter_ref=list(producer.inputs[2]),
                                   parameter_placement=peer_raw['placement'],theorem=proof['theorems'][1]))
-    if any(type(u) is not int or u<0 for u in units):
-        raise ValueError('bw-wred strict source DP ownership coordinate required')
-    if len(units)!=len(set(units)):
-        raise ValueError('bw-wred duplicated source DP contribution ownership')
+    # Replicated weights may receive distinct TP sequence contributions in the
+    # same DP unit. Identity is the full parameter slice; ownership is the pair.
+    validate_source_reducer_coordinates(view.W, scope.ranks, coordinates)
     runtime_schedule.validate(view,order['execution_to_source'])
     sequence=order['execution_to_source'];k=sequence.index(i);ids=[t.tid for t in inputs]
     for j in sequence[k:]:
