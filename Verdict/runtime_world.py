@@ -159,10 +159,18 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
     """Source consistency inventory, not a kernel or execution certificate."""
     if type(supporting_sources) is not dict or WORLD_DATA_FILE not in supporting_sources:
         raise ValueError('world bundle requires exactly one data module')
-    from Verdict.runtime_prefix import PREFIX_MODULE, SUPPORT_MODULE, SUPPORT_FILE, support_source, expand_names
+    from Verdict.runtime_prefix import (PREFIX_MODULE, SUPPORT_MODULE, SUPPORT_FILE, support_source,
+        expand_names, NAMES_V3_MODULE, NAMES_V3_FILE, names_v3_source)
     if supporting_sources.get(SUPPORT_FILE) != support_source():
         raise ValueError('world bundle prefix support source mismatch')
-    chunks = sorted(set(supporting_sources) - {WORLD_DATA_FILE, SUPPORT_FILE})
+    names_v3 = NAMES_V3_FILE in supporting_sources
+    uses_v3 = lambda text: type(text) is str and re.search(r'^prefix_names_v3\b', text, re.M) is not None
+    if names_v3 != any(uses_v3(text) for text in [lean, *supporting_sources.values()]):
+        raise ValueError('world bundle optional names support usage mismatch')
+    if names_v3 and supporting_sources[NAMES_V3_FILE] != names_v3_source():
+        raise ValueError('world bundle names support source mismatch')
+    extra_support = [NAMES_V3_FILE] if names_v3 else []
+    chunks = sorted(set(supporting_sources) - {WORLD_DATA_FILE, SUPPORT_FILE, *extra_support})
     if chunks != [f'{PREFIX_MODULE}{i:04d}.lean' for i in range(len(chunks))]:
         raise ValueError('world bundle prefix module identity mismatch')
     if not lean.startswith(f'import {WORLD_DATA_MODULE}\nimport denote.SourceScopedPrefix\n'):
@@ -172,12 +180,14 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
     modules = []
     for filename, text, role in [(WORLD_DATA_FILE, supporting_sources[WORLD_DATA_FILE], 'data'),
                                   (SUPPORT_FILE, supporting_sources[SUPPORT_FILE], 'support'),
+                                  *((name, supporting_sources[name], 'support') for name in extra_support),
                                   *((name, supporting_sources[name], 'prefix') for name in chunks),
                                   (entry, lean, 'entry')]:
         if type(text) is not str:
             raise ValueError('world bundle source must be text')
         imports = [name for line in re.findall(r'^\s*import\s+([^\n]+)', text, re.M) for name in line.split()]
         expected = (['denote.SourceScopedEval'] if role == 'data' else
+                    [SUPPORT_MODULE] if filename == NAMES_V3_FILE else
                     ['Lean', 'denote.Denote'] if role == 'support' else
                     [WORLD_DATA_MODULE, 'denote.SourceScopedPrefix', SUPPORT_MODULE])
         parameter_helper = ('denote.SourceParameterFrame' if 'denote.SourceParameterFrame' in imports else
@@ -251,6 +261,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
+        if role in ('prefix', 'entry') and uses_v3(text):
+            expected.append(NAMES_V3_MODULE)
         if imports != expected:
             raise ValueError('world bundle import membership mismatch')
         source_bytes += len(text.encode('utf-8'))
@@ -262,7 +274,7 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
     if source_bytes >= GENERATED_LEAN_SOURCE_LIMIT:
         raise ValueError(f'world bundle generated Lean source exceeds {GENERATED_LEAN_SOURCE_LIMIT} byte limit: '
                          f'{source_bytes} bytes total')
-    return dict(modules=modules, dependency_order=[WORLD_DATA_FILE, SUPPORT_FILE, *chunks, entry], kernel_checked=False)
+    return dict(modules=modules, dependency_order=[WORLD_DATA_FILE, SUPPORT_FILE, *extra_support, *chunks, entry], kernel_checked=False)
 
 
 def render(sm, pm, raw_sm, raw_pm):

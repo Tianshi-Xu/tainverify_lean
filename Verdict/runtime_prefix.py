@@ -16,6 +16,10 @@ RUN_STEP_BUDGET = 16
 PREFIX_MODULE = 'TrainVerifyRuntimePrefix'
 SUPPORT_MODULE = PREFIX_MODULE + 'Support'
 SUPPORT_FILE = SUPPORT_MODULE + '.lean'
+NAMES_V3_MODULE = 'TrainVerifyRuntimePrefixNamesV3'
+NAMES_V3_FILE = NAMES_V3_MODULE + '.lean'
+_NAMES_V3_IMPORT = f'import {NAMES_V3_MODULE}\n'
+_QUALIFIED_HELPER = 'AllToAllSourceFaithful.localStep'
 
 
 # These aliases are syntax only: Lean restores the original identifiers before
@@ -31,11 +35,13 @@ _LOCAL_CODES = {'init': 'z', 'hInitShapes': 'z_'}
 _HELPER_CODES = {'prefixRead': 'pR', 'storeSet_eq_of_not_mem_fst': 'pS',
                  'prefixFrame_trans': 'pF'}
 
-def compact_names(text):
+def compact_names(text, *, names_v3=True):
     import re
     # The generated prefix subset has no quoted identifiers, strings or block
     # comments. Keep other Lean source forms unchanged rather than lex them badly.
     if any(token in text for token in ('"', '«', '`', '/-', 'prefix_names ', '#a')):
+        return text
+    if 'prefix_names_v' in text or NAMES_V3_MODULE in text:
         return text
     # Only the exact native query spelling is reversible without a side table.
     # Preserve indentation, trailing whitespace, qualified names and line endings;
@@ -57,13 +63,18 @@ def compact_names(text):
     stem, = stems
     helpers_used = False
     helpers_v2 = False
+    imports = re.findall(r'^(?:import [^\n]+\n)*', text)[0]
+    qualified = names_v3 and any(m[0] == _QUALIFIED_HELPER for m in tokens.finditer(text[len(imports):]))
+    if qualified and 'pL' in identifiers:
+        return text
     def replace(m):
         nonlocal helpers_used, helpers_v2
         helpers_used |= m[0] in _HELPER_CODES
         helpers_v2 |= m[0] in _HELPER_CODES and m[0] != 'prefixRead'
+        if qualified and m[0] == _QUALIFIED_HELPER:
+            return 'pL'
         found = names.get(m[0])
         return _NAME_CODES[found[2]] + '_' + found[3] if found else _LOCAL_CODES.get(m[0], _HELPER_CODES.get(m[0], m[0]))
-    imports = re.findall(r'^(?:import [^\n]+\n)*', text)[0]
     body = tokens.sub(replace, text[len(imports):])
     body = queries.sub(lambda m: m[1] + '#a ' + m[2] + m[3], body)
     first = next((line for line in body.splitlines() if line.strip()), '')
@@ -74,7 +85,8 @@ def compact_names(text):
         marker += ' +'
     if query_count:
         marker += ' !'
-    compact = imports + f'prefix_names {stem}{marker} where\n' + ''.join(
+    wrapper = 'prefix_names_v3' if qualified else 'prefix_names'
+    compact = imports + (_NAMES_V3_IMPORT if qualified else '') + f'{wrapper} {stem}{marker} where\n' + ''.join(
         ' ' + line if line.strip() else line for line in body.splitlines(keepends=True))
     return compact if len(compact.encode()) < len(text.encode()) else text
 
@@ -86,11 +98,20 @@ def expand_names(text):
     identifiers in runtime_prefix_support.lean. The source scanner is unchanged.
     """
     import re
-    header = re.search(r'^prefix_names ([A-Za-z][A-Za-z_0-9]*Prefix)( \+( \+)?)?( !)? where\n', text, re.M)
+    header = re.search(r'^prefix_names(?:_v3)? ([A-Za-z][A-Za-z_0-9]*)( \+( \+)?)?( !)? where\n', text, re.M)
+    first_marker = re.search(r'^prefix_names(?:_v\w*)?\b', text, re.M)
+    if first_marker and (header is None or first_marker.start() != header.start()):
+        raise ValueError('invalid compact prefix header')
     if header is None:
-        if re.search(r'^prefix_names\b', text, re.M):
-            raise ValueError('invalid compact prefix header')
         return text
+    qualified = header[0].startswith('prefix_names_v3 ')
+    preamble = text[:header.start()]
+    if qualified:
+        # The encoder appends exactly one owned import immediately before the
+        # wrapper. Never remove a caller import from any other source shape.
+        if not preamble.endswith(_NAMES_V3_IMPORT) or preamble.count(_NAMES_V3_IMPORT) != 1:
+            raise ValueError('invalid compact prefix v3 import')
+        preamble = preamble[:-len(_NAMES_V3_IMPORT)]
     lines = text[header.end():].splitlines(keepends=True)
     stop = next((i for i, line in enumerate(lines) if line.strip() and not line[0].isspace()), len(lines))
     block, suffix = lines[:stop], ''.join(lines[stop:])
@@ -109,14 +130,21 @@ def expand_names(text):
                if header[3] or name == 'prefixRead'} if header[2] else {}
     pattern = re.compile(r'([' + ''.join(families) + r'])_([0-9]+(?:_[0-9]+)*)\Z')
     def replace(m):
+        if qualified and m[0] == 'pL':
+            return _QUALIFIED_HELPER
         short = pattern.fullmatch(m[0])
         return header[1] + families[short[1]] + '_' + short[2] if short else locals_.get(m[0], helpers.get(m[0], m[0]))
-    return text[:header.start()] + re.sub(r"--[^\n]*|[^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*", replace, body) + expand_names(suffix)
+    return preamble + re.sub(r"--[^\n]*|[^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*", replace, body) + expand_names(suffix)
 
 
 def support_source():
     from pathlib import Path
     return Path(__file__).with_name('runtime_prefix_support.lean').read_text(encoding='utf-8')
+
+def names_v3_source():
+    from pathlib import Path
+    return Path(__file__).with_name('runtime_prefix_names_v3.lean').read_text(encoding='utf-8')
+
 
 _HEADER = '\n'.join(['namespace TrainVerify.Denote.RuntimeWorld',
     'noncomputable section', 'open SourceScopedEval',
@@ -133,9 +161,11 @@ class ProofGroup:
     final: bool = False
 
 
-def pack_proofs(prefixes):
+def pack_proofs(prefixes, *, names_v3=False):
     """Maximal sequential packing; every edge imports the actual prior chain.
 
+    V3 is opt-in: legacy/default bundles also contain localStep and must retain
+    their exact bytes. The caller chooses whether to enable the new vocabulary.
     Budgets cover declaration bodies (import/local-attribute scaffolding is not
     a declaration). A single oversized group is an error, never split by syntax.
     """
@@ -147,8 +177,14 @@ def pack_proofs(prefixes):
                 and sum(g.declarations for g in gs) <= PROOF_DECLARATION_BUDGET)
     if any(not fits([g]) for g in groups):
         raise ValueError('prefix atomic declaration group exceeds proof budget')
+    supporting = {SUPPORT_FILE: support_source()}
+    def compact(text):
+        encoded = compact_names(text, names_v3=names_v3)
+        if encoded != text and _NAMES_V3_IMPORT in encoded:
+            supporting[NAMES_V3_FILE] = names_v3_source()
+        return encoded
     if fits(groups):
-        return compact_names(imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER), {SUPPORT_FILE: support_source()}
+        return compact(imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER), supporting
     chunks = []; current = []; finals = []
     for g in groups:
         if g.final:
@@ -160,14 +196,14 @@ def pack_proofs(prefixes):
     if current: chunks.append(current)
     if not fits(finals):
         raise ValueError('prefix final assembly exceeds proof budget')
-    supporting = {SUPPORT_FILE: support_source()}; previous = None
+    previous = None
     def source(gs):
         edge = f'import {previous}\n' if previous else ''
         attrs = 'restore_prefix_opacity\n' if previous else ''
         # Metadata is not the immediate attribute stream: preserve both exactly.
         opaque = [n for g in gs for n in g.opaque]
         record = '\nrecord_prefix_opacity ' + ' '.join(opaque) + '\n' if opaque else ''
-        return compact_names(imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + record + _FOOTER)
+        return compact(imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + record + _FOOTER)
     for index, chunk in enumerate(chunks):
         name = f'{PREFIX_MODULE}{index:04d}'
         supporting[name+'.lean'] = source(chunk)
