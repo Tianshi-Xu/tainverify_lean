@@ -1,5 +1,7 @@
 # Backward / DP work line
 
+**Current execution policy:** the user removed global Lean serialization. Independent modules may compile concurrently when resources suffice, with dependency ordering and unique output ownership. `check_kernel.py` no longer rejects unrelated Lean/lake processes; its32GiB available-memory admission check is not a reservation. Historical serial/one-Lean paragraphs below are superseded.
+
 Latest: see **LayerNorm source and dβ kernel checkpoint** below and `ACCEPTANCE.json.layernorm_dbeta_checkpoint`. Earlier sections are chronological checkpoints, not current TODOs.
 
 ## Ownership and baseline
@@ -160,3 +162,15 @@ Input reconstruction from the forward chain, seed provenance, branch accumulatio
 - Public/canonical/whole-model/Torch flags remain false; no push, publication, recapture or shared cache mutation. This is an actual GPT backward slice, not completion of GPT-2/YOCO 3B/YOCO MoE 0.4B as a whole.
 
 Final code gate for this checkpoint: **63 focused tests passed / 310.34s**, five killed guards, all86 local kernel declarations passed. Final19-file source review `ed44925c2a2433a808fa75fb9fcebdf29c819bae` has a parsed persisted PASS; no source changed afterward. The earlier300s outer test timeout was superseded by this complete successful run.
+
+## Residual source reads and value adapters checkpoint (after 7b01c533)
+- Parent final focused suite: **85 passed /67.14s**; nine in-memory guard deletions killed. Two numerical tests exercise correct DP/TP partitions and reject wrong saved-X, wrong DP ownership, mean, missing contributions and row-shard permutation. These are CPU operator checks, not distributed Torch refinement.
+- Original BW_add at SM66 and PM112/348/584/820: three inputs, two ordered derivatives, original alpha1 mirror, complete selected/execution suffix. `SourceBWAddRead` keeps general broadcast mathematics; the Python source domain intentionally admits positive equal-shape residual inputs only. Both source outputs and their original LN dX expressions are read from the SAME successful-run final Store. Actual AddRead/Consumers each10 declarations; witness includes broadcast negative control.
+- Retained PM residual branch AA113/349/585/821: effective backward params **[1,2]**, not raw paired-forward [2,1]. Fresh autograd context and each ordered Add-left producer are authenticated. Original output302/605/908/1211 equations and contribution expansions are8 declarations. No second residual branch is discarded.
+- Original BW_multiref: raw FW output.grad list exactly matches all ordered BW inputs; no saved primal. SM [1402,1403] and PM [300,302]/[603,605]/[906,908]/[1209,1211] reconstruct the complete tensorSum. Actual reads5 declarations; generic source helper and a three-contribution nonempty-suffix witness pass kernel. Deleting the middle contribution is observably wrong.
+- `SourceBWLayernormDxUnit`: real G **and** X input reconstruction, gamma/beta shared full tensors; arbitrary DP batch chunk then TP sequence-local dX. Reuses existing row locality, exposed by deleting `private` on exactly that theorem. D2/T3/B2/S3/H5 witness covers every DP unit/TP rank, nonconstant G/X and nonzero gamma.
+- `SourceBWLayernormDgammaUnit`: arbitrary DP batch reduction, separately preserves G/X flat-row reads and true mean/variance, reuses existing sequence summation; D3/B2/S3/H5 witness. No dβ-style saved-X relaxation.
+- `SourceBWLinearDwUnit`: arbitrary DP batch dW reduction via shape-correct value-preserving row views and existing `KRankBWLinearDwSequenceGeneral`; real G/X gather0 premises, W[O,I]. K3/B2/S3/I4/O5 witness includes distinct rank values and wrong same-shape X rejection. Output-O TP gather remains a separate existing theorem for caller composition.
+- All16 kernel roots succeeded after real elaboration repairs; **117 printed named declarations**, only kernel triple. The two existing math dependency roots with no#print are NOT counted in117. Final26-file source review tree `0c63f3371afc7a7a14db892a2de9e57dacd46a64` PASS; parent read back all current source/object receipts. Full details in `ACCEPTANCE.json.residual_and_value_adapters_checkpoint`.
+- Existing raw captures/Data and shared prefix objects were reused; four actual local proof roots replay byte-identically. Replay scripts: `render_actual_add.py`, `render_actual_residual.py`. No prefix rebuild, public entry mutation, recapture or shared cache write.
+- Latest observed forward accepted commit629f259c is ADD+names-v3; next-alias-exchange remains active and uncommitted, still not final-LN X1317 /lm-head X1318. Generic dX/dgamma/dW input contracts above are **not** those original forward value proofs. All proof/public/whole-model/Torch flags remain false. No push/publication.

@@ -25,7 +25,12 @@ assert (ROOT/'trainverify/lean-toolchain').read_text().strip() == 'leanprover/le
 assert '4.32.2' in subprocess.check_output([lean, '--version'], text=True)
 paths = [str(A/'objects'), str(OLD/'initial-relations/objects')]
 paths += [p for p in json.loads((OLD/'dependency-pins.json').read_text())['LEAN_PATH'].split(':') if '/.lake/packages/' in p or p.endswith('/lib/lean')]
-assert not [x for x in subprocess.check_output(['ps','-eo','comm='],text=True).splitlines() if x.strip() in ('lean','lake')], 'global one-Lean queue busy'
+# Independent modules may compile concurrently; callers order dependencies and
+# give each source a distinct output. Resource availability, not other jobs'
+# process names, determines admission.
+available_kib = int(next(line.split()[1] for line in Path('/proc/meminfo').read_text().splitlines()
+                         if line.startswith('MemAvailable:')))
+assert available_kib >= 32 * 1024 * 1024, 'kernel admission: less than 32 GiB memory available'
 src = Path(sys.argv[1]); name = src.stem
 if 'import TrainVerifyRuntimeWorldData' in src.read_text():
     root=OLD/'output-projection'

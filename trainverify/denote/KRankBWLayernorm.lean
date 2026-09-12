@@ -4,7 +4,7 @@ namespace TrainVerify.Denote
 noncomputable section
 
 -- Row-locality is the semantic reason a sequence-axis gather commutes with dX.
-private theorem bw_layernorm_dx_row_congr
+theorem bw_layernorm_dx_row_congr
     (g x g' x' gamma beta : Tensor) (b s b' s' d row row' j : Nat)
     (hx : x.shape = [b, s, d]) (hx' : x'.shape = [b', s', d])
     (hd : 0 < d) (hr : row < b * s) (hr' : row' < b' * s') (hj : j < d)
