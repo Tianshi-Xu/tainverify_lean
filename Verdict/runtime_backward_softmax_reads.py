@@ -67,6 +67,7 @@ def render_read(view, cells, snapshot, source_index, order, label):
     return '\n'.join(proofs)+'\n', dict(theorems=[name], world=label,
         source_index=source_index, execution_index=k, node=list(node),
         input_tids=ids, output_tid=dx, input_refs=contract['inputs'], output_ref=contract['outputs'][0],
+        output_tids=[dx], output_refs=contract['outputs'],
         source_contract=contract, bw_writer=_writer(snapshot, cells, source_index),
         fw_writer=_writer(snapshot, cells, contract['fw_source_index']), params=params, request='global',
         operand_nonwrite_source_indices=schedule[k:], proof_admissible=False,
