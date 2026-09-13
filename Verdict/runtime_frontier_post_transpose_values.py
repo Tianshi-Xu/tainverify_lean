@@ -23,6 +23,43 @@ def render(sm, pm, lineages, validation, bound, execution_order):
         raise ValueError(f'malformed frontier post-transpose original source: {exc}') from exc
 
 
+def _retained_facts(si, pi, row, g, ps, owners):
+    """Bind full facts AFTER the independent raw carry inventory has passed.
+
+    The alias constructor owns both the theorem spelling and its full
+    global-shape/every-local-shape/value contract. Never seed it with candidate
+    fact names. Original fullrefs select ports; their lowered TIDs name facts.
+    """
+    owner = _one((u for u in owners if _same_typed(u['unit'], row['unit'])),
+                 'post-transpose retained original DP owner missing/ambiguous')
+    fork, slot = _view._alias_producer(si, g, owner['ranks'])
+    local_forks = [_view._alias_producer(pi, p, owner['ranks']) for p in ps]
+    if any(j != slot for _, j in local_forks):
+        raise ValueError('post-transpose retained original alias slot mismatch')
+    locals_ = [step for step, _ in local_forks]
+    # This stage retains the next-alias adapter's ADD output, not an arbitrary
+    # earlier alias. The complete ancestry/port comparison above binds that fork.
+    # Recover its predecessor through the raw input fullref, not raw ref.tid.
+    original = si.raw[fork.node]
+    producer = _view.gathered._producer(si, original.inputs[0])
+    if (op(si.raw[producer.endpoint.writer]) != 'FW_add'
+            or not _same_typed(fork.inputs, (producer,))):
+        raise ValueError('post-transpose retained original ADD provenance mismatch')
+    prior = dict(unit=owner['unit'], ranks=owner['ranks'], positions=owner['positions'],
+        dimensions=dict(D=len(owners)),
+        facts_theorem=f'frontierAddUnitFacts_{producer.endpoint.tid}_{owner["unit"]}')
+    names = {step.node: f'frontierMultirefRead_{label}_{step.outputs[0].endpoint.tid}'
+             for label, step in [('sm', fork), *(('pm', s) for s in locals_)]}
+    _, expected = _view.source._alias_unit(prior, fork, locals_, slot, names)
+    expected.update(sm_consumers=[list(c.node) for c in _view.source._consumers(si, [g])],
+                    pm_consumers=[list(c.node) for c in _view.source._consumers(pi, ps)])
+    # frontier_index is historical placement, not the alias fact's contract.
+    # Preserve the original row object, but authenticate every constructor field
+    # independently, including both names, predecessor provenance and consumers.
+    if any(key not in row or not _same_typed(row[key], value) for key, value in expected.items()):
+        raise ValueError('post-transpose retained canonical complete facts/provenance mismatch')
+
+
 def _frontiers(sm, pm, si, pi, lineages, validation, bound, order, closed):
     # Peel candidate history only; regenerate its authority from original source.
     # A transpose output is NOT a HEAD-AA input record. The view gate also
@@ -47,6 +84,7 @@ def _frontiers(sm, pm, si, pi, lineages, validation, bound, order, closed):
         if op(si.raw[tuple(row['source_step']['node'])]) == 'FW_multiref':
             g = _view.frontier._output(si, row['source_step'], row['sm_output_ref'])
             ps = [_view.frontier._output(pi, s, ref) for s,ref in zip(row['local_steps'],row['pm_output_refs'],strict=True)]
+            _retained_facts(si, pi, row, g, ps, validation._inputs[3]['config']['units'])
         else:
             g = predecessor._producer(si,row['sm_output_ref'])
             ps = [predecessor._producer(pi,ref) for ref in row['pm_output_refs']]

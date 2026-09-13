@@ -154,6 +154,43 @@ def selected(args,world='pm',slot=1,rank=3,alias=271003):
         if c.node.cid==alias+16000+slot and (world=='sm' or c.rank==rank))
 
 
+@pytest.mark.parametrize('indices', [(3,), (7,), (3,7)])
+@pytest.mark.parametrize('fault', ['missing', 'rewritten'])
+def test_retained_complete_fact_identity(baseline, indices, fault):
+    args,closed=copy.deepcopy(baseline)
+    for i in indices:
+        row=closed['frontier_units'][i]
+        assert any(row is r for r in closed['retained_units'])
+        for key in ('theorem','facts_theorem'):
+            if fault=='missing': row.pop(key)
+            else: row[key]='value_only'
+    with pytest.raises(ValueError): transport(args,closed)
+
+
+@pytest.mark.parametrize('index', [3,7])
+@pytest.mark.parametrize('key', ['theorem','facts_theorem','predecessor_facts'])
+@pytest.mark.parametrize('fault', ['missing','rewritten','namespace','other-unit','wrong-slot','other-full-facts'])
+def test_retained_single_fact_identity(baseline,index,key,fault):
+    args,closed=copy.deepcopy(baseline); row=closed['frontier_units'][index]
+    if fault=='missing': row.pop(key)
+    elif fault=='rewritten': row[key]='value_only'
+    elif fault=='namespace': row[key]='WrongNamespace.'+row[key]
+    elif fault=='other-unit': row[key]=closed['frontier_units'][7 if index==3 else 3][key]
+    elif fault=='other-full-facts': row[key]=closed['frontier_units'][index-1]['facts_theorem']
+    else:
+        # A genuine full fact for the other original output is still not this carry.
+        tid=row['source_step']['outputs'][0]['endpoint']['tid']
+        row[key]=f'frontierAliasFacts_{tid}_{row["unit"]}'
+    with pytest.raises(ValueError): transport(args,closed)
+
+
+@pytest.mark.parametrize('key', ['sm_consumers','pm_consumers','slot'])
+def test_retained_operational_provenance(baseline,key):
+    args,closed=copy.deepcopy(baseline); row=closed['frontier_units'][3]
+    row.pop(key)
+    with pytest.raises(ValueError): transport(args,closed)
+
+
 def test_read_rejects_remote_peer_descriptor_forgery(baseline):
     from dataclasses import replace
     from Verdict.runtime_lineage import _Index
