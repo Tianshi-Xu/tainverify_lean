@@ -17,6 +17,7 @@ The integration includes the complete committed histories, not selected tip-file
 | Forward dependencies built by backward line | `68ab04c0ff2c736a660c09b779488f78f5556aeb` | K/V input exchange + linear/RS; Q gather/linear + exchange; projection views, head exchanges, transpose(1,2) |
 | Backward line | `35953c47740ed3a03729f9658b780f5eefe06dea` | Source-bound backward readers/consumers, local proof helpers/witnesses and handoff records |
 | Post-transpose continuation | `8db687e1a20d5106be18087f423ceb41d13415fc` | K transpose23, V AllGather replica facts, source-derived retained full-fact binding; includes `cf53bd9a` |
+| K middle exchange continuation | `8d916fc0f4455ccd0e187a3d3755ae579978ba6b` | Original K AA(2,1), complete mixed frontier/history binding, unchanged Q/V/carry facts |
 
 The QKV partition's 21 changed paths and backward partition's 179 changed paths were compared to their exact committed blobs at the merge candidate. All matched. The partitions overlap; these counts are not additive feature counts.
 
@@ -64,6 +65,16 @@ The QKV partition's 21 changed paths and backward partition's 179 changed paths 
 - Evidence: `/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/canonical-projection-frontier/`. Original failed budget run and postprocessing diagnostics are retained; successful kernel/capture work was not rerun to repair bookkeeping.
 - Next canonical attachment may consume the handed-off post-transpose stage, including genuine per-DP replica value contracts. Do not use a dummy gather axis for replicas. Saved-primal and later operator development remain with the backward line; no duplicate implementation is needed.
 - This checkpoint does not assert whole-model/public completion, saved-X1317 reconstruction, or Torch/CUDA refinement. No push to main.
+
+## K middle-exchange saved-primal checkpoint
+
+- Source handoff `8d916fc0f4455ccd0e187a3d3755ae579978ba6b` is joined by merge `a25ce8081dec89d784188acbaaf51e95981cbaa6`. The two renderer/test blobs match the independently reviewed worker exactly; no canonical attachment or mathematical helper was changed.
+- The user authorized the saved-primal line to complete this continuation's real-source, raw, kernel, joint and source-review gates, integrate it, then proceed to the next narrow source frontier. Shared canonical/DAG attachment remains a separate active workstream; do not duplicate or overwrite it.
+- Both isolated-worker and integration-candidate saved-source replays passed with private caches and no recapture: **4 new PM reads, 2 complete K unit facts, 8 ordered frontier rows**. The source-derived AA(2,1) output has local shape `[1,2,16,16]` and axis-1 reconstruction; Q remains deferred, V keeps per-DP replica equality with `gather_axis=None`, and both residual carries survive.
+- All 6 new declarations passed the Lean kernel with only `propext`, `Classical.choice`, and `Quot.sound`. All 8 complete mixed-layout contracts passed together under the same full-run and `InitialParameterValues` context. Exact accepted predecessor source/object/import closure was checked, including the middle helper's 39-source closure.
+- Integrated regression: **125 passed, zero failures/errors/skips** (124 new cases plus the previous public tracer), with complete collected IDs, disjoint batches, JUnit, exit receipts and unchanged source hashes. All 10 freshly emitted fragments, the full frontier details, execution order, bound inputs and fullrefs match the worker replay exactly.
+- Evidence: `/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/backward-middle-exchange-acceptance/`, with worker Python/TDD evidence in sibling `backward-middle-exchange-worker/`.
+- These are conditional source-value results, not canonical whole-model completion, successful whole-capture execution, saved-X1317 reconstruction or Torch refinement. Renderer flags remain uncompiled/false. The next saved-primal target is the original ordered Q/K score matmul; its downstream SM division and PM AA(1,3) are not yet consumed.
 
 ## Reproduction / receipts
 
