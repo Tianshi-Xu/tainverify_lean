@@ -20,6 +20,10 @@ NAMES_V3_MODULE = 'TrainVerifyRuntimePrefixNamesV3'
 NAMES_V3_FILE = NAMES_V3_MODULE + '.lean'
 _NAMES_V3_IMPORT = f'import {NAMES_V3_MODULE}\n'
 _QUALIFIED_HELPER = 'AllToAllSourceFaithful.localStep'
+NAMES_V4_MODULE = 'TrainVerifyRuntimePrefixNamesV4'
+NAMES_V4_FILE = NAMES_V4_MODULE + '.lean'
+_NAMES_V4_IMPORT = f'import {NAMES_V4_MODULE}\n'
+_QUALIFIED_SIMPROC = 'Nat.reduceEqDiff'
 
 
 # These aliases are syntax only: Lean restores the original identifiers before
@@ -35,13 +39,13 @@ _LOCAL_CODES = {'init': 'z', 'hInitShapes': 'z_'}
 _HELPER_CODES = {'prefixRead': 'pR', 'storeSet_eq_of_not_mem_fst': 'pS',
                  'prefixFrame_trans': 'pF'}
 
-def compact_names(text, *, names_v3=True):
+def compact_names(text, *, names_v3=True, names_v4=False):
     import re
     # The generated prefix subset has no quoted identifiers, strings or block
     # comments. Keep other Lean source forms unchanged rather than lex them badly.
     if any(token in text for token in ('"', '«', '`', '/-', 'prefix_names ', '#a')):
         return text
-    if 'prefix_names_v' in text or NAMES_V3_MODULE in text:
+    if 'prefix_names_v' in text or NAMES_V3_MODULE in text or (names_v4 and NAMES_V4_MODULE in text):
         return text
     # Only the exact native query spelling is reversible without a side table.
     # Preserve indentation, trailing whitespace, qualified names and line endings;
@@ -64,13 +68,18 @@ def compact_names(text, *, names_v3=True):
     helpers_used = False
     helpers_v2 = False
     imports = re.findall(r'^(?:import [^\n]+\n)*', text)[0]
-    qualified = names_v3 and any(m[0] == _QUALIFIED_HELPER for m in tokens.finditer(text[len(imports):]))
+    simproc = names_v4 and any(m[0] == _QUALIFIED_SIMPROC for m in tokens.finditer(text[len(imports):]))
+    qualified = simproc or (names_v3 and any(m[0] == _QUALIFIED_HELPER for m in tokens.finditer(text[len(imports):])))
+    if simproc and 'pE' in identifiers:
+        return text
     if qualified and 'pL' in identifiers:
         return text
     def replace(m):
         nonlocal helpers_used, helpers_v2
         helpers_used |= m[0] in _HELPER_CODES
         helpers_v2 |= m[0] in _HELPER_CODES and m[0] != 'prefixRead'
+        if simproc and m[0] == _QUALIFIED_SIMPROC:
+            return 'pE'
         if qualified and m[0] == _QUALIFIED_HELPER:
             return 'pL'
         found = names.get(m[0])
@@ -85,9 +94,13 @@ def compact_names(text, *, names_v3=True):
         marker += ' +'
     if query_count:
         marker += ' !'
-    wrapper = 'prefix_names_v3' if qualified else 'prefix_names'
-    compact = imports + (_NAMES_V3_IMPORT if qualified else '') + f'{wrapper} {stem}{marker} where\n' + ''.join(
+    wrapper = 'prefix_names_v4' if simproc else 'prefix_names_v3' if qualified else 'prefix_names'
+    owned_import = _NAMES_V4_IMPORT if simproc else _NAMES_V3_IMPORT if qualified else ''
+    compact = imports + owned_import + f'{wrapper} {stem}{marker} where\n' + ''.join(
         ' ' + line if line.strip() else line for line in body.splitlines(keepends=True))
+    if simproc:
+        legacy = compact_names(text, names_v3=names_v3)
+        return compact if len(compact.encode()) < len(legacy.encode()) else legacy
     return compact if len(compact.encode()) < len(text.encode()) else text
 
 
@@ -98,20 +111,22 @@ def expand_names(text):
     identifiers in runtime_prefix_support.lean. The source scanner is unchanged.
     """
     import re
-    header = re.search(r'^prefix_names(?:_v3)? ([A-Za-z][A-Za-z_0-9]*)( \+( \+)?)?( !)? where\n', text, re.M)
+    header = re.search(r'^prefix_names(?:_v[34])? ([A-Za-z][A-Za-z_0-9]*)( \+( \+)?)?( !)? where\n', text, re.M)
     first_marker = re.search(r'^prefix_names(?:_v\w*)?\b', text, re.M)
     if first_marker and (header is None or first_marker.start() != header.start()):
         raise ValueError('invalid compact prefix header')
     if header is None:
         return text
-    qualified = header[0].startswith('prefix_names_v3 ')
+    simproc = header[0].startswith('prefix_names_v4 ')
+    qualified = simproc or header[0].startswith('prefix_names_v3 ')
     preamble = text[:header.start()]
     if qualified:
         # The encoder appends exactly one owned import immediately before the
         # wrapper. Never remove a caller import from any other source shape.
-        if not preamble.endswith(_NAMES_V3_IMPORT) or preamble.count(_NAMES_V3_IMPORT) != 1:
-            raise ValueError('invalid compact prefix v3 import')
-        preamble = preamble[:-len(_NAMES_V3_IMPORT)]
+        owned_import = _NAMES_V4_IMPORT if simproc else _NAMES_V3_IMPORT
+        if not preamble.endswith(owned_import) or preamble.count(owned_import) != 1:
+            raise ValueError('invalid compact prefix v4 import' if simproc else 'invalid compact prefix v3 import')
+        preamble = preamble[:-len(owned_import)]
     lines = text[header.end():].splitlines(keepends=True)
     stop = next((i for i, line in enumerate(lines) if line.strip() and not line[0].isspace()), len(lines))
     block, suffix = lines[:stop], ''.join(lines[stop:])
@@ -130,6 +145,8 @@ def expand_names(text):
                if header[3] or name == 'prefixRead'} if header[2] else {}
     pattern = re.compile(r'([' + ''.join(families) + r'])_([0-9]+(?:_[0-9]+)*)\Z')
     def replace(m):
+        if simproc and m[0] == 'pE':
+            return _QUALIFIED_SIMPROC
         if qualified and m[0] == 'pL':
             return _QUALIFIED_HELPER
         short = pattern.fullmatch(m[0])
@@ -144,6 +161,11 @@ def support_source():
 def names_v3_source():
     from pathlib import Path
     return Path(__file__).with_name('runtime_prefix_names_v3.lean').read_text(encoding='utf-8')
+
+
+def names_v4_source():
+    from pathlib import Path
+    return Path(__file__).with_name('runtime_prefix_names_v4.lean').read_text(encoding='utf-8')
 
 
 _HEADER = '\n'.join(['namespace TrainVerify.Denote.RuntimeWorld',
@@ -161,11 +183,11 @@ class ProofGroup:
     final: bool = False
 
 
-def pack_proofs(prefixes, *, names_v3=False):
+def pack_proofs(prefixes, *, names_v3=False, names_v4=False):
     """Maximal sequential packing; every edge imports the actual prior chain.
 
-    V3 is opt-in: legacy/default bundles also contain localStep and must retain
-    their exact bytes. The caller chooses whether to enable the new vocabulary.
+    V3/V4 are opt-in: legacy/default bundles must retain their exact bytes.
+    The caller chooses whether to enable each new vocabulary.
     Budgets cover declaration bodies (import/local-attribute scaffolding is not
     a declaration). A single oversized group is an error, never split by syntax.
     """
@@ -179,9 +201,11 @@ def pack_proofs(prefixes, *, names_v3=False):
         raise ValueError('prefix atomic declaration group exceeds proof budget')
     supporting = {SUPPORT_FILE: support_source()}
     def compact(text):
-        encoded = compact_names(text, names_v3=names_v3)
+        encoded = compact_names(text, names_v3=names_v3, names_v4=names_v4)
         if encoded != text and _NAMES_V3_IMPORT in encoded:
             supporting[NAMES_V3_FILE] = names_v3_source()
+        if encoded != text and _NAMES_V4_IMPORT in encoded:
+            supporting[NAMES_V4_FILE] = names_v4_source()
         return encoded
     if fits(groups):
         return compact(imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER), supporting

@@ -62,14 +62,14 @@ def test_seeded_feed_selects_v3_without_changing_default_path():
     call, = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Name) and n.func.id == 'pack_proofs']
     assert len(call.args) == 1 and isinstance(call.args[0], ast.Name) and call.args[0].id == 'prefixes'
-    assert [k.arg for k in call.keywords] == ['names_v3']
+    assert [k.arg for k in call.keywords] == ['names_v3', 'names_v4']
     for seeds, expected in [(None, False), ({'inventories': {}}, True)]:
         seen = []
         prefixes = object()
         run = lambda *a, **kw: seen.append((a,kw))
         eval(compile(ast.Expression(call), '<feed-packing-call>', 'eval'),
              dict(pack_proofs=run,prefixes=prefixes,seeds=seeds))
-        assert seen == [((prefixes,), dict(names_v3=expected))]
+        assert seen == [((prefixes,), dict(names_v3=expected, names_v4=expected))]
 
 
 def test_real_codec_pack_matches_closed_optional_support_inventory():

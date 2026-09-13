@@ -160,16 +160,25 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
     if type(supporting_sources) is not dict or WORLD_DATA_FILE not in supporting_sources:
         raise ValueError('world bundle requires exactly one data module')
     from Verdict.runtime_prefix import (PREFIX_MODULE, SUPPORT_MODULE, SUPPORT_FILE, support_source,
-        expand_names, NAMES_V3_MODULE, NAMES_V3_FILE, names_v3_source)
+        expand_names, NAMES_V3_MODULE, NAMES_V3_FILE, names_v3_source,
+        NAMES_V4_MODULE, NAMES_V4_FILE, names_v4_source)
     if supporting_sources.get(SUPPORT_FILE) != support_source():
         raise ValueError('world bundle prefix support source mismatch')
-    names_v3 = NAMES_V3_FILE in supporting_sources
-    uses_v3 = lambda text: type(text) is str and re.search(r'^prefix_names_v3\b', text, re.M) is not None
-    if names_v3 != any(uses_v3(text) for text in [lean, *supporting_sources.values()]):
-        raise ValueError('world bundle optional names support usage mismatch')
-    if names_v3 and supporting_sources[NAMES_V3_FILE] != names_v3_source():
-        raise ValueError('world bundle names support source mismatch')
-    extra_support = [NAMES_V3_FILE] if names_v3 else []
+    # Closed syntax versions, not arbitrary support discovery. Both retain their
+    # own source and usage authority; v4 never changes the old v3 decoder.
+    versions = [('prefix_names_v3', NAMES_V3_MODULE, NAMES_V3_FILE, names_v3_source),
+                ('prefix_names_v4', NAMES_V4_MODULE, NAMES_V4_FILE, names_v4_source)]
+    def uses(text, wrapper):
+        return type(text) is str and re.search(r'^' + wrapper + r'\b', text, re.M) is not None
+    extra_support = []
+    for wrapper, _, filename, source in versions:
+        present = filename in supporting_sources
+        if present != any(uses(text, wrapper) for text in [lean, *supporting_sources.values()]):
+            raise ValueError('world bundle optional names support usage mismatch')
+        if present:
+            if supporting_sources[filename] != source():
+                raise ValueError('world bundle names support source mismatch')
+            extra_support.append(filename)
     chunks = sorted(set(supporting_sources) - {WORLD_DATA_FILE, SUPPORT_FILE, *extra_support})
     if chunks != [f'{PREFIX_MODULE}{i:04d}.lean' for i in range(len(chunks))]:
         raise ValueError('world bundle prefix module identity mismatch')
@@ -187,7 +196,7 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
             raise ValueError('world bundle source must be text')
         imports = [name for line in re.findall(r'^\s*import\s+([^\n]+)', text, re.M) for name in line.split()]
         expected = (['denote.SourceScopedEval'] if role == 'data' else
-                    [SUPPORT_MODULE] if filename == NAMES_V3_FILE else
+                    [SUPPORT_MODULE] if filename in extra_support else
                     ['Lean', 'denote.Denote'] if role == 'support' else
                     [WORLD_DATA_MODULE, 'denote.SourceScopedPrefix', SUPPORT_MODULE])
         parameter_helper = ('denote.SourceParameterFrame' if 'denote.SourceParameterFrame' in imports else
@@ -261,8 +270,8 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
-        if role in ('prefix', 'entry') and uses_v3(text):
-            expected.append(NAMES_V3_MODULE)
+        if role in ('prefix', 'entry'):
+            expected.extend(module for wrapper, module, _, _ in versions if uses(text, wrapper))
         if imports != expected:
             raise ValueError('world bundle import membership mismatch')
         source_bytes += len(text.encode('utf-8'))

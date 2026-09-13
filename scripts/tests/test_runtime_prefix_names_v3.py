@@ -101,7 +101,7 @@ def test_legacy_vocabularies_and_v3_reuse_exact_old_suffixes(plus, query, indent
     assert p.expand_names(new + old) == expected.replace('pL', HELPER) + expected
 
 
-@pytest.mark.parametrize('bad', ['prefix_names_v4 tinyPrefix where\n def r_0 := 0\n',
+@pytest.mark.parametrize('bad', ['prefix_names_v5 tinyPrefix where\n def r_0 := 0\n',
                                   'prefix_names tinyPrefix + + + where\n def r_0 := 0\n',
                                   'prefix_names_v3 tinyPrefix + + + where\n def r_0 := 0\n'])
 def test_unknown_headers_rejected_even_before_valid_suffix(bad):
