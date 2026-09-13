@@ -23,11 +23,13 @@ def fixture(D=2, tp=2, seqlen=2, alias_tid=271003, metadata='local-only'):
     old = copy.deepcopy(authority[2]); rows = []; adapters = []
     for slot in (1, 2):
         full = next(c for c in sm.cells if c.node.cid == alias_tid+2000+slot)
+        full.ir.signature = 'torch.nn.functional.linear'
         full._output_irs[0] = IR(full.outputs[0].tid, f'projection.output.{slot}', (D,seqlen,3*tp))
         full._output_irs[0].parent.tid = alias_tid+6000+slot
         sm.shapes[full.outputs[0]] = full._output_irs[0].shape
         for rank in range(D*tp):
             linear = next(c for c in pm.cells if c.rank == rank and c.node.cid == alias_tid+6000+slot)
+            linear.ir.signature = 'torch.nn.functional.linear'
             linear._output_irs[0].parent.shape = (*linear._input_irs[0].parent.shape[:2],3*tp)
             linear._output_irs[0].valmap = (rank % tp, tp)
             ranks = list(range(rank//tp*tp,(rank//tp+1)*tp)); j = ranks.index(rank)
@@ -148,6 +150,24 @@ def test_linear_raw_authentication(baseline,fault):
     elif fault == 'consts': cell.kwargs['__consts'] = [0]
     else: cell._input_irs = None
     with pytest.raises(ValueError): transport(args,closed)
+
+
+@pytest.mark.parametrize('world',['sm','pm'])
+@pytest.mark.parametrize('fault',['wrong-function','missing-ir'])
+def test_original_linear_function_not_just_stored_opcode(baseline,world,fault):
+    args,closed = copy.deepcopy(baseline)
+    transport(args,closed)
+    if world == 'pm':
+        cell = selected(args)
+    else:
+        ref = tuple(closed['frontier_units'][1]['sm_output_ref'])
+        cell = next(c for c in args[3]._inputs[0]
+                    if c.opname == 'FW_linear' and tuple(c.inputs[0]) == ref)
+    assert cell.ir.signature == 'torch.nn.functional.linear'
+    if fault == 'wrong-function': cell.ir.signature = 'torch.mul'
+    else: cell.ir = None
+    with pytest.raises(ValueError,match='input-linear original function'):
+        transport(args,closed)
 
 
 @pytest.mark.parametrize('slot',[1,2])

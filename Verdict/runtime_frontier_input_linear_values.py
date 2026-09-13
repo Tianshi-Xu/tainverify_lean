@@ -36,6 +36,9 @@ def _linear(index, activation, contribution):
     cells = predecessor.predecessor._consumers(index, [activation])
     cell = _one(cells, 'input-linear complete unique original consumer required')
     node = source.residual._identity(index, cell)
+    signature = getattr(getattr(cell, 'ir', None), 'signature', None)
+    if type(signature) is not str or signature != 'torch.nn.functional.linear':
+        raise ValueError('input-linear original function must be torch.nn.functional.linear')
     if (op(cell) != 'FW_linear' or len(cell.inputs) != 2 or len(cell.outputs) != 1
             or len(cell._input_irs) != 2 or len(cell._output_irs) != 1
             or any(node in getattr(index.view, k, {}) for k in ('collective_scopes','chunk_scopes','wred_scopes'))
