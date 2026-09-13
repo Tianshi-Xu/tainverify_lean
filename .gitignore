@@ -8,3 +8,5 @@ genmodel/mgeners/*
 __pycache__
 Verdict/gen_model/mgeners//.lake
 trainverify/denote/gpt_ly4_regen/*.olean
+# Isolated backward-line kernel artifacts (reproducers are tracked in iroha-tasks).
+.hermes/backward-kernel/
