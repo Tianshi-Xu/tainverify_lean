@@ -53,6 +53,18 @@ The QKV partition's 21 changed paths and backward partition's 179 changed paths 
 - Private evidence: `/home/v-zhouziyu/work/trainverify-backward-matmul-next/.hermes/forward-value-continuation/post-transpose-integrated/` and sibling `post-transpose-integrated-tests/`.
 - Both old worker source and shared integration must be clean before subsequent isolated implementation starts. Shared canonical/DAG files remain exclusively owned by the parallel line.
 
+## Canonical projection checkpoint
+
+- Candidate `7c2b0c07f92426cd4a89b2bf570a6677d95820d4` merged locally by `b59140c9b20f4aa57787183c0e86e0558818aa79`; merged code tree `7961f55d21178522ec17fd017a0e4ddc9d46d6d0` exactly matches the independently reviewed preview.
+- Canonical attachment now includes all seven source-bound projection stages after sequence aliases, through projection transpose(1,2). The already-imported subsequent post-transpose renderer is preserved but is not yet attached by this checkpoint.
+- Fresh saved-capture canonical bundle: **2,486,692 bytes**, all 131 modules within the unchanged strict `<2,500,000` gate. V5 is exact identifier encoding in sealed prefix chunks; the extensible entry keeps its established encoding policy. No mathematical contract or branch was removed.
+- All 131 exact-source kernel modules passed (128 fresh, 3 exact reuses), with full object/import/axiom binding to the actual published sources. Standard kernel3 only.
+- Reference/candidate comparison: **517 full Lean Expr contracts** (515 public, 2 private) identical; **479 joint declarations**, all 8 stages / 64 frontier occurrences / 16 retained-skip occurrences checked. These remain conditional contracts, not a proof of a successful whole-capture execution.
+- Default path: all 31 modules and receipt byte-identical. Focused source suite: 393 passed including real Lean codec controls. Independent final review: scoped PASS, 263 checks; parent reran it, then 35 merge-related tests and the actual bundle admission/readback with merged source passed.
+- Evidence: `/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/canonical-projection-frontier/`. Original failed budget run and postprocessing diagnostics are retained; successful kernel/capture work was not rerun to repair bookkeeping.
+- Next canonical attachment may consume the handed-off post-transpose stage, including genuine per-DP replica value contracts. Do not use a dummy gather axis for replicas. Saved-primal and later operator development remain with the backward line; no duplicate implementation is needed.
+- This checkpoint does not assert whole-model/public completion, saved-X1317 reconstruction, or Torch/CUDA refinement. No push to main.
+
 ## Reproduction / receipts
 
 Integration checks, exact source preservation, protected-tree inventory, partial-test checkpoints and final coverage reconciliation are under:
