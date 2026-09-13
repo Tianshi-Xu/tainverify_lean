@@ -1,6 +1,6 @@
 # Backward cross-graph value closure: verified dependency blocker
 
-Local continuation now proves the original 1293→three-alias values and the K/V sequence-to-hidden exchanges plus input-column linear/ReduceScatter outputs from the same run/initial contracts. See `forward-primal-continuation-status.md` for exact local kernel evidence and the separate unresolved canonical bundle-size gate. These new facts do not yet establish saved-X1317 or the attention cotangent relation below.
+Local continuation now proves the original 1293→three-alias values, K/V sequence-to-hidden exchanges plus input-column linear/ReduceScatter outputs, and Q sequence-AllGather/output-row-linear outputs from the same run/initial contracts. All eight current frontier contracts also compose in one kernel-checked joint theorem. See `forward-primal-continuation-status.md` for exact local kernel evidence and the separate unresolved canonical bundle-size gate. These new facts do not yet establish saved-X1317 or the attention cotangent relation below.
 
 ## What is and is not blocked
 

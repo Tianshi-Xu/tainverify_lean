@@ -32,7 +32,19 @@ Final local acceptance:
 - A final real saved-capture replay after that fix passed, including independent raw source/fullref/shape/parameter/axis/ordered-frontier checks. All generated Lean bytes matched their existing checked source/object/import closure, so the final gate reused those exact objects rather than recompiling unaffected modules.
 - Independent CPU64 scalar-oracle checks over all four actual source-shaped K/V groups passed with synthetic nondegenerate values and rejected averaging, mismatched weight-column pairing, and the wrong RS axis. They are not real model execution or Torch refinement. A Lean wrong-weight-pair mutation also failed with the expected producer-equation type mismatch.
 
-The next active slice is the deferred sequence-AllGather -> output-row-sharded linear branch (Q-like), in isolated `/home/v-zhouziyu/work/trainverify-backward-forward-q-projection` based on `0f877c2e`. Its current source-shaped census confirms rank0 AG55 -> linear56, but no Q output value theorem is claimed yet. This stage must preserve the already-closed K/V facts and residual skips, and use the row-sharded weight theorem rather than the input-column sum theorem.
+## Sequence AllGather -> output-row linear locally closed
+
+Implementation `1eeb8bf436d50e70f2c9a61d313c1724a578f442` is committed in `/home/v-zhouziyu/work/trainverify-backward-forward-q-projection`. It derives Q-like output reconstruction using the existing row-sharded `SourceLinearUnit` theorem, genuine ordered AllGather/linear reads, the predecessor input relation and canonical weight-row bindings. No output relation was added as a premise.
+
+- Fresh original saved-capture render: nine source reads, two new complete DP-unit facts, all eight ordered frontier rows. K/V's four view successors remain explicitly deferred; two residual skips remain retained.
+- Q: SM1294 reconstructs PM189/492 for unit0 and PM795/1098 for unit1 on axis2, with local shape `[1,16,32]`.
+- Independent original-source census passed. All eleven new read/unit declarations passed exact kernel/axiom checks; unchanged alias/exchange/input-linear modules reused verified objects.
+- `ProjectionFrontierJoint.lean` additionally combines **all eight current frontier contracts**, including six Q/K/V DP facts and both skips, under the same successful-run and initial-parameter hypotheses. Kernel passed with only the standard three axioms. This is a conditional shared-context theorem, not a witness that the whole original capture executes successfully.
+- Lean rejected reversed weight-row pairing with a producer-equation type mismatch. Synthetic CPU64 checks over both actual source-shaped Q groups also rejected reordered sequence inputs and weight rows; they are not actual model execution or Torch refinement.
+- Worker focused suite plus one predecessor regression: **75 passed**. Parent independently reran the public tracer, original-function negatives and missing-partial-descriptor negative: **8 passed, 66 deselected**. Counts overlap and are not additive.
+- Independent source-only review passed with no findings. Reviewed source hashes, actual-render source hashes, generated Lean sources and exact kernel objects were checked against the same final source.
+
+Next is Q's original rank-three AllToAll `(idim=2, odim=1)` before its view. The raw layout census also records distinct exchanges after the later views; no view or exchange may be silently skipped. All paths continue toward saved-X1317, which is still unproved.
 
 ## Public and final-LN boundary
 
