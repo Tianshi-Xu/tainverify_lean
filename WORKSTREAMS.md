@@ -42,7 +42,7 @@ The QKV partition's 21 changed paths and backward partition's 179 changed paths 
 - The accepted **alias-stage** bundle was 2,489,883 bytes. That is not a byte-size result for a newly assembled QKV/backward bundle.
 - Source consolidation, Python/public-entry regression and focused helper kernel checks do not by themselves establish canonical whole-model assembly, a successful whole-capture run, saved-X1317 reconstruction or Torch refinement.
 - QKV helper/frontier facts remain complete conditional contracts with their original common-run and initial-parameter hypotheses. No premise or theorem was weakened by this merge.
-- The post-transpose successor stage is now inside the imported source boundary, including the retained-fact fix. This is not canonical DAG wiring or whole-model acceptance. The integration line owns eventual canonical assembly/acceptance; the backward owner owns saved-primal continuation. Coordinate interface changes before starting overlapping work.
+- The post-transpose stage, including the retained-fact fix, is now inside the canonical attachment boundary (see its checkpoint below). K middle exchange is imported source but not yet canonically attached. Neither checkpoint implies whole-model acceptance. The integration line owns canonical assembly/acceptance; the backward owner owns saved-primal continuation. Coordinate interface changes before overlapping work.
 - At the user's request, no new implementation fan-out starts until this committed handoff and integration verification are complete and the integration worktree is clean.
 
 ## Post-transpose handoff verification
@@ -75,6 +75,17 @@ The QKV partition's 21 changed paths and backward partition's 179 changed paths 
 - Integrated regression: **125 passed, zero failures/errors/skips** (124 new cases plus the previous public tracer), with complete collected IDs, disjoint batches, JUnit, exit receipts and unchanged source hashes. All 10 freshly emitted fragments, the full frontier details, execution order, bound inputs and fullrefs match the worker replay exactly.
 - Evidence: `/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/backward-middle-exchange-acceptance/`, with worker Python/TDD evidence in sibling `backward-middle-exchange-worker/`.
 - These are conditional source-value results, not canonical whole-model completion, successful whole-capture execution, saved-X1317 reconstruction or Torch refinement. Renderer flags remain uncompiled/false. The next saved-primal target is the original ordered Q/K score matmul; its downstream SM division and PM AA(1,3) are not yet consumed.
+
+## Canonical post-transpose checkpoint
+
+- Candidate `584f6a2af9f3d13d3ce842ba4d5667f8e11e77a6` is merged by `ba5389e0ba7c0bfb9433d9e9e6b47656bfcbed7f`; actual merged tree `392e35346a84f039aea3eb8fc2203d974b790498` exactly matches the independently reviewed preview against shared head `d925b6f2`.
+- Canonical attachment now consumes post-transpose: 9 original reads, 4 new complete unit relations, all 8 ordered frontier rows, 2 deferred Q rows and 2 residual carries. V uses every-replica equality to its DP chunk, never a dummy gather axis or an output-value premise.
+- Actual2: **2,494,634 bytes**, all 131 modules inside the unchanged strict `<2,500,000` budget. The 130 non-entry source/metadata records and exact checked objects remain unchanged; the new entry passed the kernel with all 528 public axiom targets, kernel3 only.
+- Candidate/reference: **530 full Lean.Expr contracts** identical (including 2 private); all 517 previous contracts retained. **496 joint declarations** checked, retaining all 479 old joints and the complete mixed frontier under the original shared run/parameter hypotheses.
+- Independent final scoped review PASS. Parent revalidated its evidence and exact preview identity, then ran the same 30 entry cases on merged code, 13 mixed-contract cases, actual bundle admission/readback and 6 zero-write publication attacks. The first parent wrapper mistakenly expected all 30 cases in the 19-case new entry file; the remaining 11 prior-entry cases were run separately and exact node IDs reconciled, without rerunning the completed 19.
+- Actual1's exit139 remains unexplained; successful actual2 does not identify or claim to fix that historical cause. No accepted capture or old kernel module was rerun for this merge.
+- K middle-exchange source/tests remain byte-preserved but are **not yet canonically attached**. The next integration slice may attach that handed-off stage; Q/K matmul and later saved-primal operator development remain with the backward line.
+- Evidence: `/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/canonical-post-transpose/`, especially `final-review/review.json` and `postmerge/gate.json`. This is conditional canonical frontier acceptance, not whole-model/public completion, saved-X1317 reconstruction or Torch refinement. No push to main.
 
 ## Reproduction / receipts
 
