@@ -200,10 +200,11 @@ def test_pinned_collectiveprim_source_contract():
     import os
     import subprocess
     from pathlib import Path
-    root = Path(os.environ.get("TRAINVERIFY_NNSCALER_SOURCE",
-        "/home/v-zhouziyu/work/trainverify/.hermes-runs/remote-yoco-release-20260822/upstream/nnscaler"))
-    if not root.is_dir():
-        pytest.skip("pinned nnScaler source checkout unavailable")
+    configured = os.environ.get("TRAINVERIFY_NNSCALER_SOURCE")
+    if not configured:
+        pytest.skip("set TRAINVERIFY_NNSCALER_SOURCE to the pinned source checkout")
+    root = Path(configured)
+    assert root.is_dir(), "configured nnScaler source checkout unavailable"
     pin = "d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf"
     assert subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip() == pin
     path = "nnscaler/ir/adapter/prim.py"
