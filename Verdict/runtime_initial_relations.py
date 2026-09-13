@@ -509,6 +509,12 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if frontier_projection_transpose_detail['reads']:
             entry += '\n' + frontier_projection_transpose_text
         result['frontier_projection_transpose_values'] = frontier_projection_transpose_detail
+        from Verdict.runtime_frontier_post_transpose_values import render as render_frontier_post_transpose
+        frontier_post_transpose_text, frontier_post_transpose_detail = render_frontier_post_transpose(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_post_transpose_detail['reads']:
+            entry += '\n' + frontier_post_transpose_text
+        result['frontier_post_transpose_values'] = frontier_post_transpose_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
