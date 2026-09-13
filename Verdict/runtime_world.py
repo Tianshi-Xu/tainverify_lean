@@ -268,6 +268,14 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                                                                     expected[34:34] = gelu_imports
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
+            # The input-column linear/RS stage adds exactly this helper pair.
+            # Insert after the legacy positional inventory, preserving old bytes
+            # and rejecting partial, duplicate, reordered or unrelated imports.
+            input_linear_imports = ['denote.SourceLinearInputUnit', 'denote.SourceReduceScatterRead']
+            if ('denote.SourceLinearUnit' in expected
+                    and all(name in imports for name in input_linear_imports)):
+                at = expected.index('denote.SourceLinearUnit') + 1
+                expected[at:at] = input_linear_imports
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
         if role in ('prefix', 'entry'):

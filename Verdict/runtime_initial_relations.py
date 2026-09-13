@@ -465,6 +465,50 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if frontier_sequence_alias_detail['reads']:
             entry += '\n' + frontier_sequence_alias_text
         result['frontier_sequence_alias_values'] = frontier_sequence_alias_detail
+        from Verdict.runtime_frontier_projection_exchange_values import render as render_frontier_projection_exchange
+        frontier_projection_exchange_text, frontier_projection_exchange_detail = render_frontier_projection_exchange(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_projection_exchange_detail['reads']:
+            entry += '\n' + frontier_projection_exchange_text
+        result['frontier_projection_exchange_values'] = frontier_projection_exchange_detail
+        from Verdict.runtime_frontier_input_linear_values import render as render_frontier_input_linear
+        frontier_input_linear_text, frontier_input_linear_detail = render_frontier_input_linear(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_input_linear_detail['reads']:
+            entry = entry.replace('import denote.SourceLinearUnit\n',
+                'import denote.SourceLinearUnit\nimport denote.SourceLinearInputUnit\nimport denote.SourceReduceScatterRead\n', 1)
+            entry += '\n' + frontier_input_linear_text
+        result['frontier_input_linear_values'] = frontier_input_linear_detail
+        from Verdict.runtime_frontier_gathered_linear_values import render as render_frontier_gathered_linear
+        frontier_gathered_linear_text, frontier_gathered_linear_detail = render_frontier_gathered_linear(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_gathered_linear_detail['reads']:
+            entry += '\n' + frontier_gathered_linear_text
+        result['frontier_gathered_linear_values'] = frontier_gathered_linear_detail
+        from Verdict.runtime_frontier_gathered_exchange_values import render as render_frontier_gathered_exchange
+        frontier_gathered_exchange_text, frontier_gathered_exchange_detail = render_frontier_gathered_exchange(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_gathered_exchange_detail['reads']:
+            entry += '\n' + frontier_gathered_exchange_text
+        result['frontier_gathered_exchange_values'] = frontier_gathered_exchange_detail
+        from Verdict.runtime_frontier_projection_view_values import render as render_frontier_projection_view
+        frontier_projection_view_text, frontier_projection_view_detail = render_frontier_projection_view(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_projection_view_detail['reads']:
+            entry += '\n' + frontier_projection_view_text
+        result['frontier_projection_view_values'] = frontier_projection_view_detail
+        from Verdict.runtime_frontier_head_exchange_values import render as render_frontier_head_exchange
+        frontier_head_exchange_text, frontier_head_exchange_detail = render_frontier_head_exchange(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_head_exchange_detail['reads']:
+            entry += '\n' + frontier_head_exchange_text
+        result['frontier_head_exchange_values'] = frontier_head_exchange_detail
+        from Verdict.runtime_frontier_projection_transpose_values import render as render_frontier_projection_transpose
+        frontier_projection_transpose_text, frontier_projection_transpose_detail = render_frontier_projection_transpose(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_projection_transpose_detail['reads']:
+            entry += '\n' + frontier_projection_transpose_text
+        result['frontier_projection_transpose_values'] = frontier_projection_transpose_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
