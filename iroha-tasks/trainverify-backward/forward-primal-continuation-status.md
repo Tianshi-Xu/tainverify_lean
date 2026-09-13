@@ -53,7 +53,20 @@ Implementation `1de57d456ede689aeb25a4db4742bbe4dc03092a` in `/home/v-zhouziyu/w
 - Final worker new-suite plus one predecessor regression: **78 passed**. Parent public tracer, nonconsumed descriptor negatives and truthful deferral tests: **13 passed, 64 deselected**. Counts overlap.
 - Independent source-only review passed against the final source hashes. One provisional render was rejected by the parent source-stability guard while the worker added truthful unknown-consumer deferral; the later final-source replay passed. No stale provisional result is used for acceptance.
 
-The next slice is original Q/K/V rank-three-to-rank-four views: Q/K inputs are sequence-sharded, V input is hidden-sharded. The independent raw census records fifteen original view nodes and their `torch.Tensor.view` signatures, plus distinct later exchange axes. Neither these views nor their subsequent exchanges have been proved by this checkpoint. Saved-X1317 remains unproved.
+## Original projection views locally closed
+
+Implementation `00350e6de795cb3176339ce982be56da46cbca16` in `/home/v-zhouziyu/work/trainverify-backward-forward-projection-view` is committed and source-clean. Original `torch.Tensor.view` rank-three-to-rank-four reads derive six complete DP-unit output contracts, retaining both residual branches and every frontier row in order.
+
+- Final-source saved-capture replay and independent raw census passed: **15 reads, 6 new complete facts, 8 frontier rows, 2 retained skips**.
+- Q view: SM1297 -> PM199/502 and PM805/1108, axis1, local `[1,8,4,16]`.
+- K view: SM1299 -> PM207/510 and PM813/1116, axis1, local `[1,8,4,16]`.
+- V view: SM1301 -> PM215/518 and PM821/1124, axis2, local `[1,16,2,16]`.
+- All **21 new read/unit declarations** and the joint of all eight complete frontier contracts passed kernel with only the standard three axioms. The final inventory-only fix preserved proof bytes, so exact verified objects were reused after final-source replay. The joint remains conditional on the common original runs and initial parameter relations; it is not a whole-capture success witness.
+- Final complete view suite: **137 passed**. Parent independently reran **10** signature/parent/public tests and then **8** carry/all-peer tests; these overlap the complete suite and are not additive.
+- Early source review found four unfinished fidelity guards (live function, strict rank-four metadata/flags, SM/PM output-parent identity, rank-aware successor edges). Their RED cases were fixed and independently re-reviewed. Later, parent reproduced coherent deletion of both skips plus classifications. The fix now independently expands the original residual fork via normalization/projection ancestry, including authenticated PM exchanges, and checks every original sibling for every DP unit. It uses neither a fixed skip count nor a second predecessor render. Coherent one/all-unit deletion and substitution with a genuine earlier skip are rejected.
+- Final carry/source review matches committed implementation and test hashes. Both local-only and ordered all-peer successor metadata have public positive/negative coverage. The same-shaped wrong-projection-input Lean mutation was rejected; exact-index CPU checks passed for all six original source-shaped view groups, with reordered/layout-wrong negatives. CPU values are synthetic, not original model execution.
+
+The next stage is the distinct original rank-four exchanges **(1,2), (1,3), (2,1)** after these views. Their source inventory is retained but their values are not yet closed by this checkpoint. Saved-X1317 remains unproved.
 
 ## Public and final-LN boundary
 
