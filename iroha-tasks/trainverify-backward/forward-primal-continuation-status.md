@@ -79,7 +79,20 @@ Implementation `0cfcd5ba5c3f96e03646823fbb9dce304d4ffaf0` is committed in `/home
 - Original callable identity was hardened after RED: actual capture uses `nnscaler.runtime.adapter.nn.alltoall_alltoall`. The installed wrapper dispatches to `AllToAllAllToAllSingle.forward`, then `all_to_all_single`; its callback splits on odim and concatenates on idim. This source inspection is not a Torch/CUDA refinement claim. Final source review, test-only diagnostic-delta review, original-source replay and committed blobs match.
 - Exact-index CPU checks covered all six actual source-shaped groups and rejected peer/destination reordering. Lean rejected reversed peers in an original AA read. CPU tensors were synthetic, not a whole original model run.
 
-Next is the original `torch.transpose` `(1,2)` family for all three branches, whose incoming sharding axes are now 2/3/1. The original subsequent boundaries differ: Q reaches matmul directly, K reaches transpose with raw axes `(-2,-1)`, and V PM reaches AllGather(dim2). These successors must be preserved, not silently consumed or replaced. Saved-X1317 remains unproved.
+## Original projection transpose(1,2) locally closed
+
+Implementation `68ab04c0ff2c736a660c09b779488f78f5556aeb` is committed in `/home/v-zhouziyu/work/trainverify-backward-forward-projection-transpose`. It authenticates the live `torch.transpose` function, original raw rank-four ports/parents/typed axes and full execution suffix, then uses the appropriate sequence/inner/query transpose law for each actual input axis.
+
+- Final saved-capture replay and independent original-source census passed: **15 reads, 6 complete DP-unit relations, all 8 ordered frontier rows, 2 retained skips**.
+- Q: SM1298 reconstructs PM203/506 and PM809/1112 on axis1; local `[1,2,16,16]`.
+- K: SM1300 reconstructs PM211/514 and PM817/1120 on axis3; local `[1,4,16,8]`.
+- V: SM1302 reconstructs PM219/522 and PM825/1128 on axis2; local `[1,4,8,16]`.
+- **21 new read/unit declarations** and all eight complete frontier contracts in one common-context joint passed kernel, standard three axioms only. Exact predecessor source/object/dependency closure was reused. These remain conditional original-run/initial-parameter theorems, not whole-capture success or Torch refinement.
+- Worker new suite plus one prior public regression: **193 passed**. Parent independent public/carry/same-shaped-primal/rank-four-successor subset: **7 passed, 185 deselected**. Counts overlap. Independent source-only review read the exact commit and passed; final source, generated Lean and checked objects were verified together.
+- Same-shaped substitution of K's view output for Q's original transpose operand was rejected by Lean. Six source-shaped exact-index CPU cases rejected wrong axes and peer order; CPU values were synthetic.
+- Current input_refs are rebuilt from original transpose inputs instead of retaining stale predecessor refs. Next matmul, negative-axis transpose and rank-four AllGather descriptors are fully inventoried; AllGather logical peer lists remain distinct from its retained local-only metadata. None of these successor value relations is claimed yet.
+
+Next is K's original transpose with raw axes `(-2,-1)` and V's AllGather(dim2), preserving Q's pending matmul and both residual carries. V must become a per-DP replicated full-value contract, not a fictitious sharded relation. Saved-X1317 remains unproved.
 
 ## Public and final-LN boundary
 
