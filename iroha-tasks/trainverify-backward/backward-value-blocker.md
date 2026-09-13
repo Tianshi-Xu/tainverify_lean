@@ -1,5 +1,7 @@
 # Backward cross-graph value closure: verified dependency blocker
 
+Local continuation now proves the original 1293→three-alias values and the K/V sequence-to-hidden exchanges from the same run/initial contracts. See `forward-primal-continuation-status.md` for exact local kernel evidence and the separate unresolved canonical bundle-size gate. These new facts do not yet establish saved-X1317 or the attention cotangent relation below.
+
 ## What is and is not blocked
 
 Original same-final-Store backward source reads and their score/V-path DAG compositions are executable proof artifacts. Cross-SM/PM gradient closure is **not** implied by those artifacts. The blocker found here is an unclosed forward value-proof dependency, not a demonstrated nnScaler numerical counterexample or a missing batched-matmul formula.
