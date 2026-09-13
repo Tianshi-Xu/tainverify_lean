@@ -66,7 +66,20 @@ Implementation `00350e6de795cb3176339ce982be56da46cbca16` in `/home/v-zhouziyu/w
 - Early source review found four unfinished fidelity guards (live function, strict rank-four metadata/flags, SM/PM output-parent identity, rank-aware successor edges). Their RED cases were fixed and independently re-reviewed. Later, parent reproduced coherent deletion of both skips plus classifications. The fix now independently expands the original residual fork via normalization/projection ancestry, including authenticated PM exchanges, and checks every original sibling for every DP unit. It uses neither a fixed skip count nor a second predecessor render. Coherent one/all-unit deletion and substitution with a genuine earlier skip are rejected.
 - Final carry/source review matches committed implementation and test hashes. Both local-only and ordered all-peer successor metadata have public positive/negative coverage. The same-shaped wrong-projection-input Lean mutation was rejected; exact-index CPU checks passed for all six original source-shaped view groups, with reordered/layout-wrong negatives. CPU values are synthetic, not original model execution.
 
-The next stage is the distinct original rank-four exchanges **(1,2), (1,3), (2,1)** after these views. Their source inventory is retained but their values are not yet closed by this checkpoint. Saved-X1317 remains unproved.
+## Rank-four head exchanges locally closed
+
+Implementation `0cfcd5ba5c3f96e03646823fbb9dce304d4ffaf0` is committed in `/home/v-zhouziyu/work/trainverify-backward-forward-head-exchange`, with a clean source tree. It selects the actual rank/axis family, not a Q/K/V label, and derives complete output contracts using the existing inner/channel/middle exchange laws without inventing a softmax source node.
+
+- Final-source saved-capture replay and independent raw census passed: **12 original reads, 6 full DP-unit relations, all 8 ordered frontier rows, 2 retained skips**.
+- Q-like `(1,2)`: SM1297 reconstructs PM202/505 and PM808/1111 on axis2; local `[1,16,2,16]`.
+- K-like `(1,3)`: SM1299 reconstructs PM210/513 and PM816/1119 on axis3; local `[1,16,4,8]`.
+- V-like `(2,1)`: SM1301 reconstructs PM218/521 and PM824/1127 on axis1; local `[1,8,4,16]`.
+- All **18 new declarations** and the joint of all eight complete frontier contracts passed the local kernel/axiom gate. Final-source proof bytes matched the checked objects and dependency closure; no unchanged predecessors were recompiled. Conditional common-run/initial-parameter contracts remain explicit.
+- Final new suite plus one previous public regression: **175 passed**. Parent final public/signature/earlier-real-skip focused subset: **9 passed, 165 deselected**. Counts overlap. Earlier failures were two overly narrow error-message expectations; single-unit replacements legitimately fail the complete DP-cover check before the both-unit source-inventory check. Rejection remains required in all cases.
+- Original callable identity was hardened after RED: actual capture uses `nnscaler.runtime.adapter.nn.alltoall_alltoall`. The installed wrapper dispatches to `AllToAllAllToAllSingle.forward`, then `all_to_all_single`; its callback splits on odim and concatenates on idim. This source inspection is not a Torch/CUDA refinement claim. Final source review, test-only diagnostic-delta review, original-source replay and committed blobs match.
+- Exact-index CPU checks covered all six actual source-shaped groups and rejected peer/destination reordering. Lean rejected reversed peers in an original AA read. CPU tensors were synthetic, not a whole original model run.
+
+Next is the original `torch.transpose` `(1,2)` family for all three branches, whose incoming sharding axes are now 2/3/1. The original subsequent boundaries differ: Q reaches matmul directly, K reaches transpose with raw axes `(-2,-1)`, and V PM reaches AllGather(dim2). These successors must be preserved, not silently consumed or replaced. Saved-X1317 remains unproved.
 
 ## Public and final-LN boundary
 
