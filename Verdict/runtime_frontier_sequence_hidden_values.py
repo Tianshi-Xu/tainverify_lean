@@ -21,7 +21,10 @@ def render(sm, pm, lineages, validation, bound, execution_order):
         raise ValueError(f'malformed frontier-sequence-hidden original source: {exc}') from exc
 
 
-def _render(sm, pm, validation, order, closed):
+def _render(sm, pm, validation, order, closed, *, consumer_fn=None,
+            sm_consumer_ops=((), ('FW_add',)), theorem_stem='frontierSequenceHidden'):
+    # Reusable PM-only mechanics; the original caller retains exact defaults.
+    consumer_fn = source._consumers if consumer_fn is None else consumer_fn
     if not _same_typed(order, {'sm': build(sm), 'pm': build(pm)}):
         raise ValueError('frontier-sequence-hidden complete typed execution order mismatch')
     si, pi = (_Index(v, raw) for v, raw in zip((sm, pm), validation._inputs[:2], strict=True))
@@ -47,7 +50,7 @@ def _render(sm, pm, validation, order, closed):
     proofs, reads, units, result, retained, deferred, consumed = [], [], [], [], [], [], []
     names = {}
     for i, (old, g, ps) in enumerate(authenticated):
-        consumers = [source._consumers(si, [g]), *[source._consumers(pi, [p]) for p in ps]]
+        consumers = [consumer_fn(si, [g]), *[consumer_fn(pi, [p]) for p in ps]]
         kinds = [[op(c) for c in cs] for cs in consumers]
         if old['gather_axis'] == 2:
             if all(ks == [] for ks in kinds) or all(ks == ['FW_add'] for ks in kinds):
@@ -69,7 +72,7 @@ def _render(sm, pm, validation, order, closed):
                        or len(cs) != T for cs in consumers[2:])
                 or len(consumers[0]) > 1):
             raise ValueError('frontier-sequence-hidden partial or fan-out exchange cover unsupported')
-        if kinds[0] not in ([], ['FW_add']):
+        if tuple(kinds[0]) not in sm_consumer_ops:
             deferred.append(dict(old, reason='unsupported SM forward consumer; SM never exchanges', observed_consumer_ops=kinds))
             result.append(old)
             continue
@@ -85,12 +88,12 @@ def _render(sm, pm, validation, order, closed):
             if step.node in names:
                 raise ValueError('frontier-sequence-hidden duplicate/cross-DP operation')
             proof, row = exchange._read(pm, step, order['pm'])
-            name = row['theorem'].replace('outputProjectionExchangeRead_', 'frontierSequenceHiddenRead_')
+            name = row['theorem'].replace('outputProjectionExchangeRead_', theorem_stem + 'Read_')
             proofs.extend(line.replace(row['theorem'], name) for line in proof)
             row.update(theorem=name, unit=old['unit'], frontier_index=i, **coverage)
             reads.append(row); steps.append(step); names[step.node] = name
         proof, row = exchange._unit(old, g, ps, steps, names)
-        name = 'frontierSequenceHiddenUnitFacts_' + '_'.join(map(str, [g.endpoint.tid, old['unit'], *row['pm_output_tids']]))
+        name = theorem_stem + 'UnitFacts_' + '_'.join(map(str, [g.endpoint.tid, old['unit'], *row['pm_output_tids']]))
         proofs.extend(line.replace(row['theorem'], name) for line in proof)
         # Existing helper's S is the INPUT sequence width. Frontier S is always
         # the actual OUTPUT local width, as required by downstream consumers.
@@ -98,7 +101,7 @@ def _render(sm, pm, validation, order, closed):
                    dimensions=dict(D=D,T=T,B=row['local_shape'][0],S=row['local_shape'][1],H=row['local_shape'][2]),
                    source_output_slot=old['source_output_slot'], frontier_index=i)
         row['sm_consumers'] = [list(c.node) for c in consumers[0]]
-        row['pm_consumers'] = [list(c.node) for c in source._consumers(pi, [s.outputs[0] for s in steps])]
+        row['pm_consumers'] = [list(c.node) for c in consumer_fn(pi, [s.outputs[0] for s in steps])]
         for read in reads[-T:]:
             read.update(dimensions=row['dimensions'], layout=row['layout'])
         units.append(row); result.append(row); consumed.append(i)
