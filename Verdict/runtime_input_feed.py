@@ -146,8 +146,9 @@ def bind(world, sm, pm, raw_sm, raw_pm, snapshot, batch, receipt, reference, roo
     base = world.lean+'\n'+'\n'.join(lines)
     if not prefixes:
         return WorldDefinitions(base, result)
-    # Keep legacy unseeded bytes; seeded proofs opt into finite v3/v4 vocabularies.
-    entry, chunks = pack_proofs(prefixes, names_v3=seeds is not None, names_v4=seeds is not None)
+    # Keep legacy unseeded bytes; seeded proofs opt into finite v3/v4/v5 vocabularies.
+    entry, chunks = pack_proofs(prefixes, names_v3=seeds is not None, names_v4=seeds is not None,
+                               names_v5=seeds is not None, entry_names_v5=False)
     supporting = {WORLD_DATA_FILE: base, **chunks}
     result['proof_bundle'] = _proof_bundle(entry, supporting)
     return WorldDefinitions(entry, result, supporting)

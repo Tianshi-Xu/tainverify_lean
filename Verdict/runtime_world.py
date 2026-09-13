@@ -161,13 +161,15 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
         raise ValueError('world bundle requires exactly one data module')
     from Verdict.runtime_prefix import (PREFIX_MODULE, SUPPORT_MODULE, SUPPORT_FILE, support_source,
         expand_names, NAMES_V3_MODULE, NAMES_V3_FILE, names_v3_source,
-        NAMES_V4_MODULE, NAMES_V4_FILE, names_v4_source)
+        NAMES_V4_MODULE, NAMES_V4_FILE, names_v4_source,
+        NAMES_V5_MODULE, NAMES_V5_FILE, names_v5_source)
     if supporting_sources.get(SUPPORT_FILE) != support_source():
         raise ValueError('world bundle prefix support source mismatch')
-    # Closed syntax versions, not arbitrary support discovery. Both retain their
-    # own source and usage authority; v4 never changes the old v3 decoder.
+    # Closed syntax versions, not arbitrary support discovery. Each retains its
+    # own source and usage authority; a new vocabulary never changes old decoders.
     versions = [('prefix_names_v3', NAMES_V3_MODULE, NAMES_V3_FILE, names_v3_source),
-                ('prefix_names_v4', NAMES_V4_MODULE, NAMES_V4_FILE, names_v4_source)]
+                ('prefix_names_v4', NAMES_V4_MODULE, NAMES_V4_FILE, names_v4_source),
+                ('prefix_names_v5', NAMES_V5_MODULE, NAMES_V5_FILE, names_v5_source)]
     def uses(text, wrapper):
         return type(text) is str and re.search(r'^' + wrapper + r'\b', text, re.M) is not None
     extra_support = []
@@ -268,6 +270,14 @@ def _proof_bundle(lean, supporting_sources, entry='$entry'):
                                                                                                     expected[34:34] = gelu_imports
                 if read_helper == 'denote.SourceEmbeddingRead' and 'denote.SourceEmbeddingFacts' in imports:
                     expected.insert(5, 'denote.SourceEmbeddingFacts')
+            # The input-column linear/RS stage adds exactly this helper pair.
+            # Insert after the legacy positional inventory, preserving old bytes
+            # and rejecting partial, duplicate, reordered or unrelated imports.
+            input_linear_imports = ['denote.SourceLinearInputUnit', 'denote.SourceReduceScatterRead']
+            if ('denote.SourceLinearUnit' in expected
+                    and all(name in imports for name in input_linear_imports)):
+                at = expected.index('denote.SourceLinearUnit') + 1
+                expected[at:at] = input_linear_imports
         if role in ('prefix', 'entry') and modules[-1]['role'] == 'prefix':
             expected.append(modules[-1]['module'])
         if role in ('prefix', 'entry'):
