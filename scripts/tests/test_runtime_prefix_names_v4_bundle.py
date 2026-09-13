@@ -88,12 +88,12 @@ def test_seeded_feed_selects_both_finite_vocabularies_only_when_seeded():
     tree = ast.parse(inspect.getsource(feed))
     call, = [n for n in ast.walk(tree) if isinstance(n,ast.Call)
              and isinstance(n.func,ast.Name) and n.func.id == 'pack_proofs']
-    assert [k.arg for k in call.keywords] == ['names_v3','names_v4']
+    assert [k.arg for k in call.keywords] == ['names_v3','names_v4','names_v5','entry_names_v5']
     for seeds,expected in [(None,False),({'inventories':{}},True)]:
         seen=[]; prefixes=object()
         eval(compile(ast.Expression(call),'<v4-feed-call>','eval'),
              dict(pack_proofs=lambda *a,**kw:seen.append((a,kw)),prefixes=prefixes,seeds=seeds))
-        assert seen == [((prefixes,),dict(names_v3=expected,names_v4=expected))]
+        assert seen == [((prefixes,),dict(names_v3=expected,names_v4=expected,names_v5=expected,entry_names_v5=False))]
 
 
 def test_real_v4_codec_pack_admitted_and_default_unchanged():

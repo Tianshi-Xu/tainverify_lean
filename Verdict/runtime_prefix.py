@@ -206,7 +206,7 @@ class ProofGroup:
     final: bool = False
 
 
-def pack_proofs(prefixes, *, names_v3=False, names_v4=False, names_v5=False):
+def pack_proofs(prefixes, *, names_v3=False, names_v4=False, names_v5=False, entry_names_v5=True):
     """Maximal sequential packing; every edge imports the actual prior chain.
 
     V3/V4/V5 are opt-in: legacy/default bundles must retain their exact bytes.
@@ -223,8 +223,11 @@ def pack_proofs(prefixes, *, names_v3=False, names_v4=False, names_v5=False):
     if any(not fits([g]) for g in groups):
         raise ValueError('prefix atomic declaration group exceeds proof budget')
     supporting = {SUPPORT_FILE: support_source()}
-    def compact(text):
-        encoded = compact_names(text, names_v3=names_v3, names_v4=names_v4, names_v5=names_v5)
+    def compact(text, *, entry=False):
+        # An extensible entry can retain its old representation while sealed
+        # chunks use v5; later notation wrappers must not separate a v5 import.
+        encoded = compact_names(text, names_v3=names_v3, names_v4=names_v4,
+                                names_v5=names_v5 and (not entry or entry_names_v5))
         if encoded != text and _NAMES_V3_IMPORT in encoded:
             supporting[NAMES_V3_FILE] = names_v3_source()
         if encoded != text and _NAMES_V4_IMPORT in encoded:
@@ -233,7 +236,7 @@ def pack_proofs(prefixes, *, names_v3=False, names_v4=False, names_v5=False):
             supporting[NAMES_V5_FILE] = names_v5_source()
         return encoded
     if fits(groups):
-        return compact(imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER), supporting
+        return compact(imports + _HEADER + '\n'.join(g.text for g in groups) + _FOOTER, entry=True), supporting
     chunks = []; current = []; finals = []
     for g in groups:
         if g.final:
@@ -246,18 +249,18 @@ def pack_proofs(prefixes, *, names_v3=False, names_v4=False, names_v5=False):
     if not fits(finals):
         raise ValueError('prefix final assembly exceeds proof budget')
     previous = None
-    def source(gs):
+    def source(gs, *, entry=False):
         edge = f'import {previous}\n' if previous else ''
         attrs = 'restore_prefix_opacity\n' if previous else ''
         # Metadata is not the immediate attribute stream: preserve both exactly.
         opaque = [n for g in gs for n in g.opaque]
         record = '\nrecord_prefix_opacity ' + ' '.join(opaque) + '\n' if opaque else ''
-        return compact(imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + record + _FOOTER)
+        return compact(imports + edge + _HEADER + attrs + '\n'.join(g.text for g in gs) + record + _FOOTER, entry=entry)
     for index, chunk in enumerate(chunks):
         name = f'{PREFIX_MODULE}{index:04d}'
         supporting[name+'.lean'] = source(chunk)
         previous = name
-    return source(finals), supporting
+    return source(finals, entry=True), supporting
 
 
 class PrefixUnavailable(ValueError):
