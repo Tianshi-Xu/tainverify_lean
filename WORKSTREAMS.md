@@ -32,10 +32,10 @@ The QKV partition's 21 changed paths and backward partition's 179 changed paths 
 
 ## Protected unfinished work and evidence
 
-- `/home/v-zhouziyu/work/trainverify-backward-forward-post-transpose`: preserved development/evidence checkout, clean at `8db687e1`. Its complete committed post-transpose chain is imported through `b60e7288`; no mutable-index copying or reset was used.
+- The historical post-transpose development checkout was retired in the cleanup below. Its complete committed chain remains in the integrated history and under `archive/cleanup-20260913T144750Z/trainverify-backward-forward-post-transpose`.
 - `/home/v-zhouziyu/work/trainverify-backward-matmul-next/.hermes/`: private generated source, raw-census, kernel and review receipts; retained at their original paths.
-- Existing forward/backward proof, review and accepted-cache worktrees remain available while those receipts or running owners refer to them. Their retention does not make them a second integration authority.
-- Only the three never-launched, unchanged `trainverify-qkv-{q,kv,authority}-copilot` worktrees were removed, without force.
+- Only the dependency/evidence roots listed in the cleanup manifest remain materialized. Historical paths in earlier checkpoints describe those runs, not a promise that every old worker directory still exists.
+- The original three empty Copilot worktrees were removed in the earlier consolidation. The later complete cleanup is recorded below; recover retired sources through their archive references, not by inventing replacements.
 
 ## Acceptance boundaries
 
@@ -108,6 +108,16 @@ The QKV partition's 21 changed paths and backward partition's 179 changed paths 
 - Source handoff is now available for canonical integration, but this merge **does not attach score matmul to the canonical entry**. The canonical boundary remains K AA(2,1), with the previously accepted 2,498,688-byte/131-module bundle; no new score-stage bundle-budget result is claimed. Canonical/DAG/budget attachment remains owned by the integration line.
 - Next saved-primal source frontier: original SM division and PM AA(1,3), currently inventoried only. Saved probabilities/logits, the remaining attention/output/residual forward chain and saved-X1317 value reconstruction are not yet closed by this checkpoint. Existing backward readers/DAGs and root dX results are not a substitute for those forward value prerequisites. Whole-model/public completion, an inhabited successful whole-capture execution and Torch/CUDA refinement remain open; renderer flags stay false/uncompiled despite these external exact-source kernel receipts.
 - Evidence: `/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/backward-score-matmul-acceptance/`, especially `acceptance.json`, `review/review.json`, `actual1/FreshScoreMatmul-kernel.json`, `actual1/ProjectionFrontierJoint-check.json` and `postmerge-suffix.result.json`. Earlier interrupted/failed worker diagnostics remain historical; final worker closure and these parent gates supersede them. Historical worktrees/object caches remain preserved while receipts refer to them. No push or merge to main.
+
+## Local worktree cleanup and recovery
+
+- Scope approved by the user: TrainVerify and nnScaler; no remote pushes or remote-branch deletions. All 298 initial worktree instances have an explicit disposition in `/home/v-zhouziyu/trainverify-audits/worktree-cleanup/20260913T144750Z/worktrees-checklist.json`.
+- TrainVerify: 293 → 10 materialized worktrees; nnScaler: 5 → 1. The only development integration roots are this checkout and `/home/v-zhouziyu/work/nnscaler-internal`. The nine other TrainVerify roots are deliberately retained Git/cache/exact-source/evidence dependencies, not missing feature merges. Removing them safely requires a separate path-binding migration; the main `.lake/build` is part of the live accepted object chain and was not deleted.
+- No confirmed missing production capability or proof required importing an older candidate. Exact ancestry, patch equivalence, complete contribution-blob equality and 110 immutable semantic-difference reviews distinguish absorbed improvements from archived experiments. No `merge -s ours`, weakened guard or fake kernel acceptance was used to label history merged.
+- Every initial HEAD is recoverable under `refs/heads/archive/cleanup-20260913T144750Z/<original-worktree-basename>`. Retired original worker branch labels are mapped to those refs in `retired-local-branches.json`.
+- Dirty staged/unstaged changes and untracked files were separately preserved. Before retiring the remaining private-data trees, all ignored/untracked extras were archived with member verification; regular symlink targets were additionally retained by content, while dependency directories outside the retired set remain in place. See `dirty-backups/`, `retirement-backups/`, `derived-cache-backups/` and their manifests. Restore the committed tree first, then the staged/unstaged patches and extras into an isolated checkout; consult the original-path/target mapping rather than blindly dereferencing archive links.
+- Six unique Layernorm parameter research probes remain protected in the main Git/cache tree and in recovery archives; their use of native_decide does not make them accepted production proofs. Historical regression replacements at `aabf5106338c` and `7481367ffb42` remain explicitly unconfirmed; complete HEADs/tests are archived, not discarded or blindly merged.
+- The cleanup does not advance the canonical proof boundary or resolve any whole-model/public/Torch obligation. Source remains the already reviewed integrated score-matmul handoff plus canonical middle-exchange boundary. Formal Whole snapshots, trusted captures, current bound sources/objects and the nnScaler wheel/smoke evidence remain preserved.
 
 ## Reproduction / receipts
 
