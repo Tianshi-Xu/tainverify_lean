@@ -44,7 +44,16 @@ Implementation `1eeb8bf436d50e70f2c9a61d313c1724a578f442` is committed in `/home
 - Worker focused suite plus one predecessor regression: **75 passed**. Parent independently reran the public tracer, original-function negatives and missing-partial-descriptor negative: **8 passed, 66 deselected**. Counts overlap and are not additive.
 - Independent source-only review passed with no findings. Reviewed source hashes, actual-render source hashes, generated Lean sources and exact kernel objects were checked against the same final source.
 
-Next is Q's original rank-three AllToAll `(idim=2, odim=1)` before its view. The raw layout census also records distinct exchanges after the later views; no view or exchange may be silently skipped. All paths continue toward saved-X1317, which is still unproved.
+## Q output hidden-to-sequence exchange locally closed
+
+Implementation `1de57d456ede689aeb25a4db4742bbe4dc03092a` in `/home/v-zhouziyu/work/trainverify-backward-forward-q-exchange` consumes the original rank-three AllToAll `(idim=2, odim=1)`. Fresh source replay and independent raw identity/metadata/schedule census passed: four reads and two complete value relations, with all eight frontier rows preserved. Q's SM1294 now reconstructs PM198/501 and PM804/1107 on axis1, each local shape `[1,8,64]`. K/V's four facts remain explicitly deferred to their views and both residual skips remain intact.
+
+- All six new declarations and the joint of all eight full frontier contracts passed kernel, standard three axioms only. Unchanged predecessor objects were reused after exact source/import/dependency checks.
+- Reversing only the original AA read's peer order was rejected by Lean with source-read and downstream pairing type mismatches. Independent synthetic integer-value CPU checks on both actual source-shaped groups also rejected peer and destination reordering; these are not original model execution.
+- Final worker new-suite plus one predecessor regression: **78 passed**. Parent public tracer, nonconsumed descriptor negatives and truthful deferral tests: **13 passed, 64 deselected**. Counts overlap.
+- Independent source-only review passed against the final source hashes. One provisional render was rejected by the parent source-stability guard while the worker added truthful unknown-consumer deferral; the later final-source replay passed. No stale provisional result is used for acceptance.
+
+The next slice is original Q/K/V rank-three-to-rank-four views: Q/K inputs are sequence-sharded, V input is hidden-sharded. The independent raw census records fifteen original view nodes and their `torch.Tensor.view` signatures, plus distinct later exchange axes. Neither these views nor their subsequent exchanges have been proved by this checkpoint. Saved-X1317 remains unproved.
 
 ## Public and final-LN boundary
 
