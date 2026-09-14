@@ -65,7 +65,7 @@ def test_real_world_publication_wire_readback(tmp_path):
     assert checked['source_bytes'] == sum(len(s.encode()) for s in [artifact.lean, *artifact.supporting_sources.values()])
 
 
-def control_flow(tmp_path, mode='ok', local_bundle=False):
+def control_flow(tmp_path, mode='ok', local_bundle=False, nested=False, trace=None):
     """Mock ONLY heavy compiler/render/bind; publication and budget are real."""
     from types import SimpleNamespace
     from Verdict.runtime_lineage import RuntimeLineageBlocked
@@ -83,6 +83,45 @@ def control_flow(tmp_path, mode='ok', local_bundle=False):
     feed = SimpleNamespace(bind=lambda *a, **k: artifact)
     world_proxy = SimpleNamespace(render=lambda *a: artifact, publish=world.publish)
     world_proxy._proof_bundle = world._proof_bundle
+    if nested:
+        trace = {} if trace is None else trace
+        trace['renders'] = []
+        trace['executed'] = []
+        def render_original(*args):
+            result = replace(artifact)
+            trace['renders'].append((args, result))
+            if mode == 'recursive' and not trace.get('render_depth'):
+                trace['render_depth'] = 1
+                try:
+                    world_proxy.render(*args)
+                finally:
+                    trace['render_depth'] = 0
+            if mode == 'caught-render-error' and len(trace['renders']) == 2:
+                raise ValueError('nested render fixture failure')
+            return result
+        def feed_original(current, *args):
+            trace['executed'].append('bind')
+            trace['feed_input'] = current
+            # runtime_input_feed.bind: import world.render locally, authenticate
+            # against a fresh render, then build the feed from the original world.
+            try:
+                trace['nested_result'] = world_proxy.render(*args, [], [])
+            except ValueError:
+                if mode != 'caught-render-error': raise
+            if mode != 'bad-feed': assert current is trace['renders'][0][1]
+            result = replace(current)
+            trace['feed_result'] = result
+            return result
+        world_proxy.render = render_original
+        feed.bind = feed_original
+        def initial_bind_original(*args):
+            trace['executed'].append('initial_bind')
+            return values[4]
+        initial.bind = initial_bind_original
+        def publish_original(*args):
+            trace['executed'].append('publish')
+            return world.publish(*args)
+        world_proxy.publish = publish_original
     if local_bundle: del initial._proof_bundle
     received = []
     def stage_render(*args):
@@ -90,7 +129,8 @@ def control_flow(tmp_path, mode='ok', local_bundle=False):
         return '-- stage\n', detail
     stage.render = stage_render
     def attach(current, sm, pm, parameters, lineages, validation):
-        bound = initial.bind(sm, pm, parameters, lineages, validation)
+        if nested: trace['executed'].append('attach')
+        bound = initial.bind(dict(sm) if mode == 'bad-initial-bind' else sm, pm, parameters, lineages, validation)
         if mode != 'missing-stage':
             stage.render(sm, pm, lineages, validation, bound, current.receipt['execution_order'])
         receipt = dict(current.receipt, fixture=detail)
@@ -106,8 +146,12 @@ def control_flow(tmp_path, mode='ok', local_bundle=False):
         if mode == 'wrong-exception': raise RuntimeError(run.EXPECTED_BLOCK)
         if mode == 'wrong-message': raise RuntimeLineageBlocked('different', {})
         current = world_proxy.render(values[0], values[1], [], [])
+        if mode == 'extra-render': world_proxy.render(values[0], values[1], [], [])
+        if mode == 'bad-feed': current = replace(current)
         current = feed.bind(current, values[0], values[1])
+        if mode == 'bad-attach': current = trace['nested_result']
         current = initial.attach(current, values[0], values[1], {}, values[2], values[3])
+        if mode == 'bad-publish': current = replace(current)
         if mode != 'no-publish': world_proxy.publish(current, tmp_path / 'published' / 'RuntimeWorld.lean')
         if mode == 'generated':
             (tmp_path / 'GeneratedData.lean').write_text('bad')
@@ -124,6 +168,103 @@ def control_flow(tmp_path, mode='ok', local_bundle=False):
     for args in received:
         assert all(a is b for a, b in zip(args, values, strict=True))
     return state
+
+
+def test_seeded_bind_nested_render_keeps_top_lifecycle_and_parent_identity(tmp_path):
+    trace = {}
+    state = control_flow(tmp_path, nested=True, trace=trace)
+    row = json.loads((tmp_path / 'observation.json').read_text())
+    assert row['events'] == ['render', 'bind', 'attach', 'publish']
+    assert state['passed'] is True
+    calls = row['calls']
+    assert [c['name'] for c in calls] == ['render', 'bind', 'render', 'attach', 'publish']
+    assert row['call_counts'] == dict(render=2, bind=1, attach=1, publish=1)
+    assert [c['parent_call_id'] for c in calls] == [None, None, 1, None, None]
+    assert [c['depth'] for c in calls] == [0, 0, 1, 0, 0]
+    assert all(c['status'] == 'returned' for c in calls)
+    assert calls[1]['arg_ids'][0] == calls[0]['result_id'] == id(trace['feed_input'])
+    assert calls[2]['result_id'] == id(trace['nested_result']) != calls[0]['result_id']
+    assert calls[3]['arg_ids'][0] == calls[1]['result_id'] == id(trace['feed_result'])
+    assert calls[4]['arg_ids'][0] == calls[3]['result_id']
+    assert not row['observer_errors']
+    assert api().check_observation(tmp_path, row, lambda: None)['published']
+
+
+@pytest.mark.parametrize('mutation', ['parent', 'depth', 'count', 'id-bool', 'input', 'end', 'nested-bind', 'missing-counts'])
+def test_nested_call_evidence_recheck_fails_closed(tmp_path, mutation):
+    assert control_flow(tmp_path, nested=True)['passed']
+    row = json.loads((tmp_path / 'observation.json').read_text())
+    if mutation == 'parent': row['calls'][2]['parent_call_id'] = 0
+    elif mutation == 'depth': row['calls'][2]['depth'] = 0
+    elif mutation == 'count': row['call_counts']['render'] = 1
+    elif mutation == 'id-bool': row['calls'][1]['call_id'] = True
+    elif mutation == 'input': row['calls'][3]['arg_ids'][0] = row['calls'][2]['result_id']
+    elif mutation == 'end': row['calls'][1]['end_call_id'] = 2
+    elif mutation == 'nested-bind': row['calls'][2]['name'] = 'bind'
+    else: del row['call_counts']
+    with pytest.raises(ValueError, match='call'):
+        api().check_observation(tmp_path, row, lambda: None)
+
+
+def test_caught_nested_exception_is_recorded_then_rejected_after_originals(tmp_path):
+    trace = {}
+    state = control_flow(tmp_path, 'caught-render-error', nested=True, trace=trace)
+    assert trace['executed'] == ['bind', 'attach', 'initial_bind', 'publish']
+    row = json.loads((tmp_path / 'observation.json').read_text())
+    assert row['events'] == ['render', 'bind', 'attach', 'publish']
+    assert row['calls'][2]['status'] == 'raised'
+    assert row['calls'][2]['exception'] == dict(type='builtins.ValueError', message='nested render fixture failure')
+    assert state['passed'] is False
+
+
+def test_recursive_render_keeps_every_result_and_parent(tmp_path):
+    trace = {}
+    assert control_flow(tmp_path, 'recursive', nested=True, trace=trace)['passed']
+    row = json.loads((tmp_path / 'observation.json').read_text())
+    calls = row['calls']
+    assert row['events'] == ['render', 'bind', 'attach', 'publish']
+    assert [c['parent_call_id'] for c in calls] == [None, 0, None, 2, 3, None, None]
+    assert [c['depth'] for c in calls] == [0, 1, 0, 1, 2, 0, 0]
+    assert row['call_counts'] == dict(render=4, bind=1, attach=1, publish=1)
+    renders = [c for c in calls if c['name'] == 'render']
+    assert [c['result_id'] for c in renders] == [id(r) for _, r in trace['renders']]
+    assert [c['arg_ids'] for c in renders] == [[id(a) for a in args] for args, _ in trace['renders']]
+    assert calls[2]['arg_ids'][0] == calls[0]['result_id']
+    assert trace['executed'] == ['bind', 'attach', 'initial_bind', 'publish']
+
+
+@pytest.mark.parametrize('mode, error', [('bad-feed', 'bind did not receive'),
+    ('bad-attach', 'attach world identity'), ('bad-publish', 'publish did not receive'),
+    ('bad-initial-bind', 'initial bind object identity'), ('extra-render', 'bind did not receive')])
+def test_nested_render_identity_errors_do_not_interrupt_originals(tmp_path, mode, error):
+    trace = {}
+    state = control_flow(tmp_path, mode, nested=True, trace=trace)
+    assert trace['executed'] == ['bind', 'attach', 'initial_bind', 'publish']
+    assert state['passed'] is False
+    row = json.loads((tmp_path / 'observation.json').read_text())
+    assert any(error in e for e in row['observer_errors'])
+    assert row['exception']['message'] == api().EXPECTED_BLOCK
+    assert (tmp_path / 'published' / 'RuntimeWorld.lean').is_file()
+
+
+def test_legacy_no_nested_observation_recheck_remains_compatible(tmp_path):
+    assert control_flow(tmp_path)['passed']
+    row = json.loads((tmp_path / 'observation.json').read_text())
+    del row['calls'], row['call_counts']
+    assert api().check_observation(tmp_path, row, lambda: None)['published']
+    row['events'].insert(1, 'render')
+    with pytest.raises(ValueError, match='incomplete canonical'):
+        api().check_observation(tmp_path, row, lambda: None)
+
+
+def test_seeded_nested_render_budget_failure_stays_failed(tmp_path):
+    assert control_flow(tmp_path, 'budget', nested=True)['passed'] is False
+    row = json.loads((tmp_path / 'observation.json').read_text())
+    assert row['events'] == ['render', 'bind']
+    assert row['calls'][-1]['name'] == 'attach'
+    assert row['calls'][-1]['status'] == 'raised'
+    assert 'byte limit' in row['exception']['message']
+    assert not (tmp_path / 'published').exists()
 
 
 def test_complete_compiler_control_flow_and_hooks_restored(tmp_path):

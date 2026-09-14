@@ -9,6 +9,7 @@ from Verdict.runtime_relation_source import _token
 _START = 'section RuntimeReadSource\nopen TrainVerify.Denote TrainVerify.Denote.RuntimeWorld\n'
 _END = 'end RuntimeReadSource\n'
 _VERSION = '-- RuntimeReadSource v2\n'
+_VERSION_V3 = '-- RuntimeReadSource v3\n'
 _LEGACY_HELPERS = ('SourceInitialInputRead.input_value_of_split',
     'SourceEmbeddingRead.embedding_value_of_split', 'SourceAddRead.add_value_of_split',
     'SourcePrimitiveRead.chunk_value_of_split', 'SourcePrimitiveRead.allToAll_value_of_split',
@@ -32,6 +33,44 @@ _ENTRY_TERMS = (
     'TrainVerify.Denote.source_add_unit_output_facts',
 )
 _ENTRY_METHODS = {w + 'InputRequests.' + op for w in ('sm', 'pm') for op in ('take', 'drop')}
+# Fixed vocabulary of the supported read/operator families, not a payload dictionary.
+# Keep v1/v2 tuples immutable: their canonical decoders depend on exact ordering.
+_HELPERS_V3 = _HELPERS + (
+    'SourceMatmulRead.matmul_value_of_split',
+    'SourceDivRead.div_value_of_split',
+    'SourceSoftmaxRead.softmax_value_of_split',
+    'SourceContiguousRead.contiguous_value_of_split',
+    'SourceGeluRead.gelu_value_of_split',
+    'SourceReduceScatterRead.reduceScatter_value_of_split',
+)
+_ENTRY_TERMS_V3 = _ENTRY_TERMS + (
+    'List.Forall₂.nil', 'List.Forall₂', 'List.ofFn', 'List.mem_cons',
+    'List.zipWith', 'List.get_mem', 'RelationCompiler.ShardedRel',
+    'transposeAxes', 'fw_matmul', 'fw_div', 'fw_softmax', 'fw_contiguous', 'fw_gelu',
+    'SourceHiddenSequenceExchange.output_facts',
+    'SourceSequenceHiddenExchange.output_facts',
+    'SourceRank4Exchange.axis1_output_facts',
+    'SourceRank4Exchange.axis2_output_facts',
+    'SourceRank4MiddleExchange.axis2_output_facts',
+    'SourceRank4InnerExchange.axis1_output_facts',
+    'SourceRank4ReverseExchange.axis3_output_facts',
+    'TrainVerify.Denote.source_layernorm_unit_output_reconstruct',
+    'TrainVerify.Denote.source_linear_sequence_unit_output_reconstruct',
+    'TrainVerify.Denote.source_linear_weight_unit_output_reconstruct',
+    'TrainVerify.Denote.source_linear_input_unit_output_reduce',
+    'TrainVerify.Denote.source_view_sequence_unit_output_reconstruct',
+    'TrainVerify.Denote.source_view_head_unit_output_reconstruct',
+    'TrainVerify.Denote.source_view_flatten_head_unit_output_reconstruct',
+    'TrainVerify.Denote.source_transpose12_sequence_unit_output_reconstruct',
+    'TrainVerify.Denote.source_transpose12_inner_unit_output_reconstruct',
+    'TrainVerify.Denote.source_transpose12_query_unit_output_reconstruct',
+    'TrainVerify.Denote.source_transpose23_inner_unit_output_reconstruct',
+    'TrainVerify.Denote.source_matmul_unit_output_reconstruct',
+    'TrainVerify.Denote.source_query_matmul_unit_output_reconstruct',
+    'TrainVerify.Denote.source_div_unit_output_reconstruct',
+    'TrainVerify.Denote.source_softmax_unit_output_reconstruct',
+    'TrainVerify.Denote.source_gelu_unit_output_reconstruct',
+)
 _IDENT = r"[\w.'!?]+"
 _OLD = r'local notation "(r\d+)" => ([\w.]+)'
 
@@ -81,16 +120,25 @@ def _balanced(text):
     return not stack
 
 
-def compact(text):
+def compact(text, *, version=2):
+    """Keep historical bytes by default; v3 is an explicit entry policy."""
+    if type(version) is not int or version not in (2, 3):
+        raise ValueError('unsupported source-read version')
+    if version == 3:
+        return _compact(text, _HELPERS_V3, _ENTRY_TERMS_V3)
     return _compact(text, _HELPERS)
 
 
-def _compact(text, helpers):
+def _compact(text, helpers, entry_terms=_ENTRY_TERMS):
     if (any(x in text for x in ('RuntimeReadSource', '/-', '-/', '`', '«', '\r'))
+            # @ and named arguments target notation syntax, not its RHS.
+            # Keep these fail-closed restrictions out of legacy canonicality.
+            or (helpers == _HELPERS_V3 and ('@' in _code(text)
+                or re.search(r'\(\s*[\w\']+\s*:=', _code(text))))
             or re.search(r'\b(?:vP|c)\d+\b', text)
             or text.count('section RuntimeRelationSource\n') > 1):
         return text
-    protected = {p for h in helpers + _ENTRY_TERMS
+    protected = {p for h in helpers + entry_terms
                  for p in (h, *h.split('.'))}
     protected.update(w+s for w in ('sm','pm') for s in ('Graph','Scope','Peers','InputRequests'))
     lines = [line.split('--', 1)[0] for line in text.splitlines()]
@@ -161,6 +209,7 @@ def _compact(text, helpers):
     imports = re.match(r'(?:import [^\n]+\n)*', text)[0]
     body, definitions = text[len(imports):], []
     extended = False
+    v3_used = False
     for helper in helpers:
         for world in ('sm','pm'):
             for spelling in [helper]+[a for a,h in old if h==helper]:
@@ -181,8 +230,9 @@ def _compact(text, helpers):
                 body = replaced
                 definitions.append(definition)
                 extended |= helper not in _LEGACY_HELPERS
+                v3_used |= helper not in _HELPERS
     terms = []
-    for original in _ENTRY_TERMS:
+    for original in entry_terms:
         alias = f'c{len(terms)}'
         definition = _entry_definition(alias, original)
         replaced = _replace(body, _token(original), alias)
@@ -190,8 +240,9 @@ def _compact(text, helpers):
             continue
         body = replaced
         terms.append(definition)
+        v3_used |= original not in _ENTRY_TERMS
     # Only profitable added prefixes opt into the extended canonical whitelist.
-    version = _VERSION if extended else ''
+    version = _VERSION_V3 if v3_used else (_VERSION if extended else '')
     result = imports+_START+version+''.join(definitions+terms)+body+_END
     return result if len(result.encode())<len(text.encode()) else text
 
@@ -205,10 +256,12 @@ def expand(text):
     before,_,rest = text.partition(_START)
     if not re.fullmatch(r'(?:import [^\n]+\n)*', before) or not rest.endswith(_END):
         raise ValueError('invalid source-read scope')
-    extended = rest.startswith(_VERSION)
-    helpers = _HELPERS if extended else _LEGACY_HELPERS
+    v3 = rest.startswith(_VERSION_V3)
+    extended = v3 or rest.startswith(_VERSION)
+    helpers = _HELPERS_V3 if v3 else (_HELPERS if extended else _LEGACY_HELPERS)
+    entry_terms = _ENTRY_TERMS_V3 if v3 else _ENTRY_TERMS
     if extended:
-        rest = rest[len(_VERSION):]
+        rest = rest[len(_VERSION_V3 if v3 else _VERSION):]
     replacements = []
     seen = set()
     while rest.startswith('local notation "vP'):
@@ -229,10 +282,10 @@ def expand(text):
         line,sep,rest = rest.partition('\n')
         match = re.fullmatch(r'local notation(?::max)? "(c\d+)"(?: n:max)? => (\S+)(?: n)?', line)
         if (not match or not sep or match[1] != f'c{len(terms)}'
-                or match[2] not in _ENTRY_TERMS or _ENTRY_TERMS.index(match[2]) <= last
+                or match[2] not in entry_terms or entry_terms.index(match[2]) <= last
                 or line + '\n' != _entry_definition(match[1], match[2])):
             raise ValueError('invalid entry-term notation')
-        last = _ENTRY_TERMS.index(match[2])
+        last = entry_terms.index(match[2])
         terms.append((match[1], match[2]))
     body = rest[:-len(_END)]
     if not (replacements or terms) or not _balanced(body):
@@ -244,6 +297,6 @@ def expand(text):
         raise ValueError('invalid source-read alias use')
     # Validate each format against its own canonical helper whitelist.
     # Old vP-only entries predate the term whitelist and remain decodable.
-    if (terms or extended) and _compact(result, helpers) != text:
+    if (terms or extended) and _compact(result, helpers, entry_terms) != text:
         raise ValueError('noncanonical entry-term source')
     return result

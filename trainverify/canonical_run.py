@@ -40,6 +40,43 @@ def _native_log(log):
             os.close(old)
 
 
+def _check_calls(observation):
+    """Validate optional new call evidence; old top-level-only logs still work."""
+    if 'calls' not in observation and 'call_counts' not in observation:
+        return
+    calls, counts = observation.get('calls'), observation.get('call_counts')
+    require(type(calls) is list and bool(calls) and type(counts) is dict, 'missing call evidence')
+    active, tops, actual = [], [], {}
+    for index, row in enumerate(calls):
+        require(type(row) is dict and type(row.get('call_id')) is int
+                and row['call_id'] == index, 'call ID mismatch')
+        end = row.get('end_call_id')
+        require(type(end) is int and index < end <= len(calls), 'call interval mismatch')
+        while active and active[-1]['end_call_id'] <= index:
+            active.pop()
+        parent = row.get('parent_call_id')
+        require(type(row.get('depth')) is int and row['depth'] == len(active)
+                and ((not active and parent is None) or (active and type(parent) is int
+                     and parent == active[-1]['call_id'] and end <= active[-1]['end_call_id'])),
+                'call parent/depth mismatch')
+        name = row.get('name')
+        require(name in ('render', 'bind', 'attach', 'publish')
+                and (not active or name == 'render'), 'unexpected nested lifecycle call')
+        require(row.get('status') == 'returned' and 'exception' not in row, 'unsuccessful observed call')
+        args, kwargs, result = row.get('arg_ids'), row.get('kwarg_ids'), row.get('result_id')
+        require(type(args) is list and type(kwargs) is dict and type(result) is int and result > 0
+                and all(type(v) is int and v > 0 for v in [*args, *kwargs.values()]), 'call object IDs malformed')
+        actual[name] = actual.get(name, 0) + 1
+        if not active:
+            tops.append(row)
+        active.append(row)
+    require(wire(actual) == wire(counts), 'call count mismatch')
+    require([row['name'] for row in tops] == observation['events'], 'call lifecycle mismatch')
+    for previous, current in zip(tops, tops[1:]):
+        require(bool(current['arg_ids']) and current['arg_ids'][0] == previous['result_id'],
+                'call world identity mismatch')
+
+
 def check_observation(out, observation, verify):
     """Bookkeeping only: no compiler, attachment or render invocation."""
     from Verdict.runtime_lineage import RuntimeLineageBlocked
@@ -50,6 +87,7 @@ def check_observation(out, observation, verify):
             and exc == dict(type=RuntimeLineageBlocked.__module__ + '.' + RuntimeLineageBlocked.__qualname__,
                             message=EXPECTED_BLOCK), 'unexpected compiler exit/exception')
     require(observation['events'] == ['render', 'bind', 'attach', 'publish'], 'incomplete canonical render/bind/attach/publish')
+    _check_calls(observation)
     require(observation['six_identity_checked'] is True, 'missing six-object authority observation')
     require(observation['top_stages'] == observation['expected_stages'], 'stage membership/order mismatch')
     payload = observation['attached']
@@ -76,18 +114,47 @@ def observe(compiler, initial, feed, world, stages, out, argv, verify):
     attachment. Recursive predecessor calls are observed, not forced each-once.
     """
     out = Path(out)
-    observation = dict(events=[], stages={}, top_stages=[], expected_stages=[s['receipt_key'] for _, s in stages],
+    observation = dict(events=[], calls=[], call_counts={}, stages={}, top_stages=[], expected_stages=[s['receipt_key'] for _, s in stages],
                        observer_errors=[], six_identity_checked=False, compiler_exit=None, exception=None)
     if (out / 'command.json').exists():
         observation['command_sha256'] = sha256(out / 'command.json')
-    live = dict(depth=0, attaching=False)
+    live = dict(depth=0, attaching=False, calls=[])
     def watch(action):
         try:
             action()
         except Exception as exc:
             observation['observer_errors'].append(type(exc).__name__ + ': ' + str(exc))
     def event(name):
-        observation['events'].append(name)
+        if len(live['calls']) == 1:
+            observation['events'].append(name)
+    def tracked(name, original):
+        """Separate compiler lifecycle from nested authority re-renders.
+
+        Entry-ordered call IDs retain parent identity even when completion is
+        recursive. Never overwrite the compiler's top-level world with a child.
+        """
+        def call(*args, **kwargs):
+            active = live['calls']
+            row = dict(call_id=len(observation['calls']), name=name,
+                       parent_call_id=active[-1]['call_id'] if active else None,
+                       depth=len(active), arg_ids=[id(x) for x in args],
+                       kwarg_ids={k: id(v) for k, v in kwargs.items()}, status='entered')
+            observation['calls'].append(row)
+            counts = observation['call_counts']
+            counts[name] = counts.get(name, 0) + 1
+            active.append(row)
+            try:
+                result = original(*args, **kwargs)
+                row.update(status='returned', result_id=id(result))
+                return result
+            except BaseException as exc:
+                row.update(status='raised', exception=dict(
+                    type=type(exc).__module__ + '.' + type(exc).__qualname__, message=str(exc)))
+                raise
+            finally:
+                row['end_call_id'] = len(observation['calls'])
+                active.pop()
+        return call
     render_original, feed_original = world.render, feed.bind
     attach_original, bind_original, publish_original = initial.attach, initial.bind, world.publish
     # This source imports _proof_bundle locally inside attach; patch its owner,
@@ -96,7 +163,8 @@ def observe(compiler, initial, feed, world, stages, out, argv, verify):
     bundle_original = owner._proof_bundle
     def render(*args, **kwargs):
         result = render_original(*args, **kwargs)
-        live['rendered'] = result
+        if len(live['calls']) == 1:
+            live['rendered'] = result
         event('render')
         return result
     def feed_bind(*args, **kwargs):
@@ -174,8 +242,8 @@ def observe(compiler, initial, feed, world, stages, out, argv, verify):
     started = time.monotonic()
     with (out / 'generator.log').open('x', buffering=1) as log:
         with _native_log(log), redirect_stdout(log), redirect_stderr(log), ExitStack() as stack:
-            for module, name, replacement in [(world, 'render', render), (feed, 'bind', feed_bind),
-                    (initial, 'attach', attach), (initial, 'bind', bind), (world, 'publish', publish),
+            for module, name, replacement in [(world, 'render', tracked('render', render)), (feed, 'bind', tracked('bind', feed_bind)),
+                    (initial, 'attach', tracked('attach', attach)), (initial, 'bind', bind), (world, 'publish', tracked('publish', publish)),
                     (owner, '_proof_bundle', bundle)]:
                 stack.enter_context(patch.object(module, name, replacement))
             for module, spec in stages:

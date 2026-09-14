@@ -521,11 +521,25 @@ def attach(world, sm, pm, parameter_inputs, lineages, validation):
         if frontier_middle_exchange_detail['reads']:
             entry += '\n' + frontier_middle_exchange_text
         result['frontier_middle_exchange_values'] = frontier_middle_exchange_detail
+        from Verdict.runtime_frontier_score_matmul_values import render as render_frontier_score_matmul
+        frontier_score_matmul_text, frontier_score_matmul_detail = render_frontier_score_matmul(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_score_matmul_detail['reads']:
+            entry += '\n' + frontier_score_matmul_text
+        result['frontier_score_matmul_values'] = frontier_score_matmul_detail
+        from Verdict.runtime_frontier_score_exchange_values import render as render_frontier_score_exchange
+        frontier_score_exchange_text, frontier_score_exchange_detail = render_frontier_score_exchange(
+            sm, pm, lineages, validation, bound, world.receipt['execution_order'])
+        if frontier_score_exchange_detail['reads']:
+            entry += '\n' + frontier_score_exchange_text
+        result['frontier_score_exchange_values'] = frontier_score_exchange_detail
         if unit_detail['units'] or result.get('embedding_position_units', {}).get('units'):
             entry = entry.replace('import denote.SourceEmbeddingRead\n',
                 'import denote.SourceEmbeddingRead\nimport denote.SourceEmbeddingFacts\n', 1)
     from Verdict.runtime_binder_source import compact as compact_binders
     from Verdict.runtime_read_source import compact as compact_reads
-    entry = compact_reads(compact_binders(entry))
+    read_version = (3 if world.receipt.get('seed_input', {}).get('parameter_inputs', {}).get('status')
+                    == 'current-run-parameter-values-validated' else 2)
+    entry = compact_reads(compact_binders(entry), version=read_version)
     result['proof_bundle'] = _proof_bundle(entry, world.supporting_sources)
     return WorldDefinitions(entry, result, world.supporting_sources)
