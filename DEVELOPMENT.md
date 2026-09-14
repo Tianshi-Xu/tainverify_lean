@@ -47,6 +47,7 @@ These commands request help only: no capture, compiler run, or Lean build.
 They expose existing entry points rather than another umbrella planner.
 
 ```bash
+"$TV_PY" -m Verdict.main --help
 "$TV_PY" -m Verdict.graph_to_lean --help
 "$TV_PY" -m trainverify.bridge_emitter.emit2 --help
 "$TV_PY" -m trainverify.artifact_tools --help
@@ -62,6 +63,7 @@ They expose existing entry points rather than another umbrella planner.
 
 | Entry | What a real invocation does; limits |
 | --- | --- |
+| `Verdict.main` | Graph inspection: loads both explicit captures, prints SM operations/kwargs and input/output shapes. No SMT stages, Lean generation, or proof acceptance. |
 | `Verdict.graph_to_lean` | Imports SM/PM graph authority and emits Lean definitions/goals; requires explicit `--out` and `--module`. The opt-in runtime-world path still stops at `RuntimeLineageBlocked`. |
 | `trainverify.bridge_emitter.emit2` | Uses graph-authority planners and shared DAGs. `--whole-model`, `--targets`, `--model-id`, and `--parallel-config` select existing supported contracts, not arbitrary-network support. |
 | `trainverify.artifact_tools` | Resolves explicit layouts, checks pinned files/historical receipts, renders joints, and offers direct Lean checks. Integrity readback alone is not a new proof. |
@@ -86,6 +88,63 @@ checkout with `.git` and caches. Recheck uses the original pinned source and
 observer, not an arbitrarily updated implementation. Graph-authority
 configuration requirements are described separately in
 [parallel authority](docs/PARALLEL_CONFIG_AUTHORITY.md).
+
+## Graph inspection of trusted local captures
+
+`Verdict.main` is a graph inspection entry, not an end-to-end verifier. Its
+import and `--help` need only the Python standard library: no nnScaler/Z3
+imports, warning-filter changes, path setup, or application cache writes.
+Without `PYTHONPATH`, module help works from `TV_ROOT`; direct script help
+also works from an unrelated directory:
+
+```bash
+env -u PYTHONPATH "$TV_PY" "$TV_ROOT/Verdict/main.py" --help
+```
+
+Actual loading needs the prepared backend environment described above. Pickle
+loading can execute **arbitrary code**: use only trusted local captures and
+trusted adjacent world-metadata `.json` files. The existing loader uses an
+adjacent JSON when present, otherwise its legacy filename-based world parser;
+this entry does not validate capture provenance or introduce new metadata.
+
+Provide both capture files and **fresh or empty**, absolute private output
+directories. The CLI rejects overlap with its source tree, capture directories,
+and the other output directory (including resolved symlinks), and rejects
+nonempty outputs. Capture names whose stem is `.` or `..` (such as `..pkl`
+or `...pkl`) are rejected before loading because the backend uses that stem
+as a cache-directory component. You must also keep outputs outside all accepted artifacts:
+the CLI does not discover unrelated artifact stores or sandbox trusted pickle
+code. Existing outputs are not reused by this inspection entry.
+
+```bash
+TV_SM=/absolute/path/to/trusted-captures/sm.pkl
+TV_PM=/absolute/path/to/trusted-captures/pm.pkl
+"$TV_PY" "$TV_ROOT/Verdict/main.py" --sm "$TV_SM" --pm "$TV_PM" \
+  --cache_dir "$TV_CHECKS/inspect-cache" --log_dir "$TV_CHECKS/inspect-logs" \
+  --max_ser_proc 1 --loglevel INFO --no_cache_nodes
+```
+
+`--cache_dir` is mandatory even with `--no_cache_nodes`: rank-cell loading
+still writes caches. `--use_cache_nodes` additionally writes serialized DFG
+caches into the private directory. `--log_dir` receives `inspection.log`;
+node/shape output is on stdout. Preserve stderr too when retaining a run.
+Optional inspection-relevant Config flags are `--max_ser_proc`, `--loglevel`,
+`--seed`, `--time`, and the mutually exclusive node-cache switches. Omitted
+optional values use the existing Config defaults. Verification-only flags
+(`--max_vrf_proc`, stage caches, lineage/stage dumps), `--stats_dir`, and unknown
+options are rejected instead of silently ignored. No stats success row is written.
+
+Missing required flags or invalid paths/options produce exit 2 before backend
+loading; loading/printing exceptions produce exit 1. Exit 0 means only that
+both graphs loaded and the SM graph was printed. This entry does not call
+`StageParallelVerifier.launch()`, run SMT stages, or prove SM/PM equivalence.
+It does not replace the Lean exporter or change `RuntimeLineageBlocked`.
+
+The scoped regression includes real minimal nnScaler IR construction, pickle
+loading, rank-cell serialization, and graph printing, not model tracing or
+whole-capture/SMT acceptance. Run it with the same private pytest output
+routing as below, selecting `scripts/tests/test_graph_inspect_cli.py` together
+with `scripts/tests/test_developer_entry_docs.py`.
 
 ## Focused Python and source-only checks
 

@@ -128,6 +128,7 @@ class HelpCase:
 
 
 HELP_CASES = (
+    HelpCase("Verdict.main", flags=("--sm", "--pm", "--cache_dir", "--log_dir")),
     HelpCase("Verdict.graph_to_lean", flags=("--sm-pkl", "--pm-pkl", "--out", "--module",
                                           "--runtime-world-definitions-out")),
     HelpCase("trainverify.bridge_emitter.emit2", flags=("--whole-model", "--parallel-config",
@@ -167,6 +168,20 @@ def test_real_cli_help(case, tmp_path):
     assert "usage:" in output.lower()
     for flag in case.flags:
         assert flag in output, f"{case.module}: missing documented option {flag}"
+
+
+def test_graph_inspection_role_and_private_commands():
+    guide = (ROOT / "DEVELOPMENT.md").read_text(encoding="utf-8")
+    architecture = (ROOT / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+    for term in ("Graph inspection", "--sm", "--pm", "--cache_dir", "--log_dir",
+                 "fresh or empty", "pickle", "arbitrary code", "inspection.log",
+                 "--max_ser_proc", "--no_cache_nodes", "exit 2", "exit 1"):
+        assert term in guide
+    assert '"$TV_PY" "$TV_ROOT/Verdict/main.py" --help' in guide
+    assert "legacy default capture paths" not in architecture
+    assert "graph inspection" in architecture
+    assert "does not call" in architecture and "launch()" in architecture
+    assert "RuntimeLineageBlocked" in architecture
 
 
 def test_documented_help_commands_match_exercised_surface():

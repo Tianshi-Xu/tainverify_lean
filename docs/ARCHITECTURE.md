@@ -17,10 +17,15 @@ alignment, stage cutting, and `StageParallelVerifier`.
 [z3_backend](../Verdict/z3_backend/) supplies symbolic reasoning for the
 original SMT verifier. An SMT result is not a Lean kernel receipt.
 
-The checked-in [Verdict/main.py](../Verdict/main.py) currently constructs the
-verifier and calls `get_graph()` to inspect nodes; it does not call the
-verifier's `launch()` verification pipeline. Its legacy default capture paths
-are not a supported installation walkthrough or a new end-to-end verifier.
+The [Verdict/main.py](../Verdict/main.py) entry performs **graph inspection**:
+it requires explicit SM/PM capture files plus private cache/log directories,
+calls `get_graph()` to load both graphs, and prints SM operations and shapes.
+It does not call the verifier's `launch()` verification pipeline. Import/help
+are dependency-lazy; executable loading still needs the prepared nnScaler/Z3
+backend environment and can write rank-cell caches. Trusted local pickle
+inputs can execute arbitrary code. Exit 0 is an inspection result, not an
+SMT proof, Lean receipt, capture-provenance check, or whole-model acceptance.
+See [the inspection commands](../DEVELOPMENT.md#graph-inspection-of-trusted-local-captures).
 The Lean exporter lives separately in
 [graph_to_lean.py](../Verdict/graph_to_lean.py).
 

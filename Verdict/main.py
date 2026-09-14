@@ -1,161 +1,133 @@
 #  Copyright (c) Microsoft Corporation.
 #  Licensed under the MIT License.
 
+"""Inspect trusted local SM/PM graphs; this entry does not verify equivalence."""
+
+import argparse
+from pathlib import Path
 import sys
 
-sys.path.append(".")
-sys.path.append("./genmodel")
+
+def _parser():
+    parser = argparse.ArgumentParser(
+        description="Graph inspection of trusted local SM/PM pickle captures; not verification.",
+        allow_abbrev=False,
+    )
+    parser.add_argument("--sm", required=True, help="trusted single-model capture file")
+    parser.add_argument("--pm", required=True, help="trusted parallel-model capture file")
+    parser.add_argument("--cache_dir", required=True, help="private external cache directory")
+    parser.add_argument("--log_dir", required=True, help="private external log directory")
+    parser.add_argument("--max_ser_proc", type=int, help="positive graph-serialization worker count")
+    parser.add_argument("--loglevel", choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"))
+    parser.add_argument("--seed", type=int, help="backend preparation random seed")
+    parser.add_argument("--time", action="store_true", default=None, help="enable backend timing")
+    cache = parser.add_mutually_exclusive_group()
+    cache.add_argument("--use_cache_nodes", action="store_true", default=None,
+                       help="write serialized graph caches in the fresh private cache directory")
+    cache.add_argument("--no_cache_nodes", dest="use_cache_nodes", action="store_false")
+    return parser
 
 
-import z3
-import csv
-import argparse
-from typing import List
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from pprint import pprint
-import traceback
+def _validate(args):
+    # Parse all options before filesystem checks or optional backend imports.
+    for name in ("sm", "pm", "cache_dir", "log_dir"):
+        if not getattr(args, name).strip():
+            raise ValueError(f"--{name} must not be empty")
+    if args.max_ser_proc is not None and args.max_ser_proc < 1:
+        raise ValueError("--max_ser_proc must be positive")
+    source = Path(__file__).resolve().parent.parent
+    for name in ("sm", "pm"):
+        path = Path(getattr(args, name)).resolve()
+        if not path.is_file():
+            raise ValueError(f"--{name} must name an existing capture file: {path}")
+        # Both backend cache layers use the resolved capture stem as a directory.
+        if path.stem in {"", ".", ".."}:
+            raise ValueError(f"--{name} capture stem must be a normal cache component: {path.name}")
+        setattr(args, name, path)
+    protected = (source, args.sm.parent, args.pm.parent)
+    for name in ("cache_dir", "log_dir"):
+        path = Path(getattr(args, name))
+        if not path.is_absolute():
+            raise ValueError(f"--{name} must be an absolute private path")
+        path = path.resolve()
+        if any(path.is_relative_to(p) or p.is_relative_to(path) for p in protected):
+            raise ValueError(f"--{name} must be outside source and capture directories")
+        if path.exists() and (not path.is_dir() or any(path.iterdir())):
+            raise ValueError(f"--{name} must be a fresh or empty private directory")
+        setattr(args, name, path)
+    if args.cache_dir.is_relative_to(args.log_dir) or args.log_dir.is_relative_to(args.cache_dir):
+        raise ValueError("--cache_dir and --log_dir must not overlap")
 
-from verdict.config import Config
-from verdict.log import setup_logger, logerr, loginfo
-from verdict.verifier import StageParallelVerifier
-from verdict.timer import timer
 
-from nnscaler_backend import nnScalerGraphBackend
-from z3_backend import z3Backend
-import warnings
+def _inspect(args):
+    # Legacy backend imports need these roots, never the caller's working directory.
+    root = Path(__file__).resolve().parent
+    for path in (root, root.parent, root.parent / "genmodel"):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
 
-warnings.simplefilter(action="ignore", category=FutureWarning)
+    from verdict.config import Config
 
+    for name in ("cache_dir", "log_dir", "max_ser_proc", "loglevel", "seed", "time", "use_cache_nodes"):
+        value = getattr(args, name)
+        if value is not None:
+            setattr(Config, name, value)
 
-def prepare(cfg: Config):
-    setup_logger(cfg.loglevel)
-    z3.set_param("smt.random_seed", cfg.seed)
+    import logging
+    import z3
+    from verdict.log import setup_logger, loginfo
+    from verdict.timer import timer
+    from verdict.verifier import StageParallelVerifier
+    from nnscaler_backend import nnScalerGraphBackend
+    from z3_backend import z3Backend
+
+    Config.cache_dir.mkdir(parents=True, exist_ok=True)
+    Config.log_dir.mkdir(parents=True, exist_ok=True)
+    setup_logger(Config.loglevel)
+    handler = logging.FileHandler(Config.log_dir / "inspection.log", mode="x", encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    logging.getLogger().addHandler(handler)
+    z3.set_param("smt.random_seed", Config.seed)
     z3.set_param("memory_max_size", 0)
     sys.setrecursionlimit(10000)
-
-
-def dump_stats(v: StageParallelVerifier, err: Exception | None, sm: str, pm: str):
-    @dataclass
-    class Stats:
-        # job meta
-        success: bool = None
-        num_layers: int = None
-        num_dp: int = None
-        num_pp: int = None
-        num_tp: int = None
-        num_mb: int = None
-        gbs: int = None
-        num_heads: int = None
-        hidden_size: int = None
-        seqlen: int = None
-        n_activated_experts: int = None
-        n_routed_experts: int = None
-
-        # time profile
-        t_graph: float = None
-        t_lineage: float = None
-        t_schedule: float = None
-        t_vrf: float = None
-        t_total: float = None
-
-        # exception
-        sm: str = None
-        pm: str = None
-        error: List[str] = None
-
-    # init Stats
-    stats = Stats(
-        success=err is None, sm=sm, pm=pm, error=[] if err is None else [str(err)]
-    )
-
-    # set Stats
     try:
-        for k, v_ in asdict(v.Wp).items():
-            if k in Stats.__annotations__:
-                setattr(stats, k, v_)
-        if Config.time:
-            stats.t_graph = timer.get("load Gs") + timer.get("load Gp")
-            stats.t_lineage = timer.get("align lineages")
-            stats.t_schedule = timer.get("cut stages")
-            stats.t_vrf = timer.get("run stages")
-            stats.t_total = timer.get("main")
-    except Exception as e:
-        if err is None:
-            logerr(e, traceback=traceback.format_exc())
-            stats.error.append(str(e))
-
-    # print Stats
-    pprint(stats)
-
-    # dump Stats
-    path = Path(Config.stats_dir / "stats.csv")
-    file_exists = path.exists()
-    path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
-
-    with path.open("a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=Stats.__annotations__.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(asdict(stats))
+        timer.start("graph inspection")
+        loginfo("Start graph inspection (not verification).")
+        verifier = StageParallelVerifier(
+            Gs_path=args.sm, Ws_path=None, Gp_path=args.pm, Wp_path=None,
+            graph_backend=nnScalerGraphBackend, symbolic_backend=z3Backend,
+        )
+        single, parallel = verifier.get_graph()
+        print("Graph inspection — Single-model graph:")
+        for node in single.nodes():
+            print(single.node_opname(node), single.node_kwargs(node))
+            print("Input shapes:")
+            for tensor in single.node_inputs(node):
+                print(single.tensor_shape(tensor))
+            print("Output shapes:")
+            for tensor in single.node_outputs(node):
+                print(single.tensor_shape(tensor))
+        timer.end("graph inspection")
+        timer.display(print_fn=loginfo)
+    finally:
+        logging.getLogger().removeHandler(handler)
+        handler.close()
 
 
-def main(sm: str, pm: str) -> StageParallelVerifier:
-    loginfo(f"🚀 Start verifying {pm}.")
-    timer.start("main")
-    v = StageParallelVerifier(
-        Gs_path=sm,
-        Ws_path=None,
-        Gp_path=pm,
-        Wp_path=None,
-        graph_backend=nnScalerGraphBackend,
-        symbolic_backend=z3Backend,
-    )
-    graph_sinlge, graph_parallel = v.get_graph()
-    print("Single-model graph:")
-    # print(graph_sinlge.nodes())
-    for node in graph_sinlge.nodes():
-        print(graph_sinlge.node_opname(node), graph_sinlge.node_kwargs(node))
-        input_nodes = graph_sinlge.node_inputs(node)
-        output_nodes = graph_sinlge.node_outputs(node)
-        print("Input shapes:")
-        for input_node in input_nodes:
-            print(graph_sinlge.tensor_shape(input_node))
-        print("Output shapes:")
-        for output_node in output_nodes:
-            print(graph_sinlge.tensor_shape(output_node))
-    # print("Parallel-model graph:")
-    # print(graph_parallel.nodes())
-    return v
-
-
-def main_w_stats(sm: str, pm: str):
-    v = None
-    err = None
+def cli(argv=None):
+    parser = _parser()
+    args = parser.parse_args(argv)
     try:
-        v = main(sm, pm)
-    except Exception as e:
-        err = e
-        logerr(e, traceback=traceback.format_exc())
-    dump_stats(v, err, sm, pm)
+        _validate(args)
+    except (ValueError, OSError) as exc:
+        parser.error(str(exc))
+    try:
+        _inspect(args)
+    except Exception as exc:
+        print(f"Graph inspection failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--sm", type=str, default="")
-    parser.add_argument("--pm", type=str, default="")
-    args, config_args = parser.parse_known_args()
-    Config.update_from_args(config_args)
-    Config.display()
-    prepare(Config)
-
-    # sm = "../genmodel/mgeners/llama3adpt_mgener_dp1_pp1_tp1_nm1_gbs64_ly2_h32_hi4096_sq128.pkl"
-    # pm = "../genmodel/mgeners/llama3adptMeg_mgener_dp2_pp2_tp2_nm1_gbs64_ly2_h32_hi4096_sq128.pkl"
-
-    sm = "./genmodel/mgeners/llama3adptMegE_mgener_dp1_pp1_tp1_nm1_gbs64_ly1_h32_hi4096_sq128.pkl"
-    pm = "./genmodel/mgeners/llama3adptMegE_mgener_dp2_pp2_tp8_nm1_gbs64_ly1_h32_hi4096_sq128.pkl"
-
-    # sm = "./genmodel/mgeners/mlp_mgener_dp1_pp1_tp1_nm1_gbs1024_dim1024_ly1.pkl"
-    # pm = "./genmodel/mgeners/mlp_mgener_dp2_pp2_tp2_nm2_gbs1024_dim1024_ly1.pkl"
-
-    main(args.sm or sm, args.pm or pm)
+    raise SystemExit(cli())
