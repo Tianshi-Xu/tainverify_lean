@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import asdict, dataclass, replace
 from enum import Enum
+from typing import Literal
 
 try:
     from .parser import GoalIR, Node
@@ -7481,6 +7482,36 @@ def render_closed_k_rank_output_sharded_linear_segment(
     return "\n".join(lines)
 
 
+def _matmul_writer_lines(
+    ir: GoalIR,
+    name: str,
+    side: Literal["sm", "pm"],
+    pos: int,
+    node: Node,
+    node_name: str,
+) -> list[str]:
+    """Emit a caller-validated matmul writer at a frame-relative position."""
+    graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+    store = "smStore" if side == "sm" else "pmStore"
+    nodes = "smNodes" if side == "sm" else "pmNodes"
+    final = "smFinal" if side == "sm" else "pmFinal"
+    return [
+        f"    have {name} : {final} {node.outs[0]} = fw_matmul ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
+        f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
+        f"      rw [show {nodes} = {nodes}.take {pos} ++ [{node_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
+        f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
+        f"        {node_name} {node.outs[0]} (fun t => fw_matmul (t {node.ins[0]}) (t {node.ins[1]})) (by",
+        "          intro t",
+        "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+        "          simp [applyNodeDistributed, applyNodeRingAttn]",
+        f"          exact applyNode_fw_matmul_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
+        "        ) (by native_decide) (by native_decide)]",
+        f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
+        f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[1]} (by native_decide) (by native_decide)]",
+    ]
+
+
 def render_closed_k_rank_matmul_head_axis_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Replay exact one-SM plus ordered-K-PM aligned head-axis matmuls."""
     try:
@@ -7605,30 +7636,13 @@ def render_closed_k_rank_matmul_head_axis_segment(ir: GoalIR, relation, segment_
         f"    change ShardedRel (smStore {second.sm_tid}) [{', '.join(f'pmStore {tid}' for tid in second.pm_tids)}] 1 {_shape_text(list(y_full))} {_shape_text(list(y_shard))} at hSecond",
     ]
 
-    def writer(name, side, pos, node, node_name):
-        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
-        store = "smStore" if side == "sm" else "pmStore"
-        nodes = "smNodes" if side == "sm" else "pmNodes"
-        final = "smFinal" if side == "sm" else "pmFinal"
-        return [
-            f"    have {name} : {final} {node.outs[0]} = fw_matmul ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
-            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
-            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{node_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
-            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
-            f"        {node_name} {node.outs[0]} (fun t => fw_matmul (t {node.ins[0]}) (t {node.ins[1]})) (by",
-            "          intro t",
-            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
-            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
-            "          simp [applyNodeDistributed, applyNodeRingAttn]",
-            f"          exact applyNode_fw_matmul_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
-            "        ) (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[1]} (by native_decide) (by native_decide)]",
-        ]
-
-    lines += writer("hSmWriter", "sm", sm_writer_index - sm_start, sm_node, sm_node_name)
+    lines += _matmul_writer_lines(
+        ir, "hSmWriter", "sm", sm_writer_index - sm_start, sm_node, sm_node_name
+    )
     for rank, (writer_index, node) in enumerate(zip(transition.pm_node_indices, pm_nodes)):
-        lines += writer(f"hPmWriter{rank}", "pm", writer_index - pm_start, node, pm_node_names[rank])
+        lines += _matmul_writer_lines(
+            ir, f"hPmWriter{rank}", "pm", writer_index - pm_start, node, pm_node_names[rank]
+        )
     pm_xs = "[" + ", ".join(f"pmStore {tid}" for tid in first.pm_tids) + "]"
     pm_ys = "[" + ", ".join(f"pmStore {tid}" for tid in second.pm_tids) + "]"
     pm_outputs = "[" + ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) + "]"
@@ -7792,30 +7806,13 @@ def render_closed_k_rank_matmul_output_axis_segment(ir: GoalIR, relation, segmen
         f"    change ShardedRel (smStore {second.sm_tid}) [{', '.join(f'pmStore {tid}' for tid in second.pm_tids)}] 3 {_shape_text(list(y_full_shape))} {_shape_text(list(y_shard_shape))} at hSecond",
     ]
 
-    def writer(name, side, pos, node, node_name):
-        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
-        store = "smStore" if side == "sm" else "pmStore"
-        nodes = "smNodes" if side == "sm" else "pmNodes"
-        final = "smFinal" if side == "sm" else "pmFinal"
-        return [
-            f"    have {name} : {final} {node.outs[0]} = fw_matmul ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
-            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
-            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{node_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
-            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
-            f"        {node_name} {node.outs[0]} (fun t => fw_matmul (t {node.ins[0]}) (t {node.ins[1]})) (by",
-            "          intro t",
-            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
-            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
-            "          simp [applyNodeDistributed, applyNodeRingAttn]",
-            f"          exact applyNode_fw_matmul_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
-            "        ) (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[1]} (by native_decide) (by native_decide)]",
-        ]
-
-    lines += writer("hSmWriter", "sm", sm_writer_index - sm_start, sm_node, sm_node_name)
+    lines += _matmul_writer_lines(
+        ir, "hSmWriter", "sm", sm_writer_index - sm_start, sm_node, sm_node_name
+    )
     for rank, (writer_index, node) in enumerate(zip(transition.pm_node_indices, pm_nodes)):
-        lines += writer(f"hPmWriter{rank}", "pm", writer_index - pm_start, node, pm_node_names[rank])
+        lines += _matmul_writer_lines(
+            ir, f"hPmWriter{rank}", "pm", writer_index - pm_start, node, pm_node_names[rank]
+        )
     pm_inputs = "[" + ", ".join(f"pmStore {tid}" for tid in second.pm_tids) + "]"
     pm_outputs = "[" + ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) + "]"
     lines += [
@@ -7979,30 +7976,9 @@ def render_closed_k_rank_matmul_query_axis_segment(ir: GoalIR, relation, segment
         f"    change smStore {second.sm_tid} = pmStore {shared_y} ∧ (smStore {second.sm_tid}).shape = {_shape_text(list(y_shape))} ∧ (pmStore {shared_y}).shape = {_shape_text(list(y_shape))} at hSecond",
     ]
 
-    def writer(name, side, pos, node, node_name):
-        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
-        store = "smStore" if side == "sm" else "pmStore"
-        nodes = "smNodes" if side == "sm" else "pmNodes"
-        final = "smFinal" if side == "sm" else "pmFinal"
-        return [
-            f"    have {name} : {final} {node.outs[0]} = fw_matmul ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
-            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
-            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{node_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
-            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
-            f"        {node_name} {node.outs[0]} (fun t => fw_matmul (t {node.ins[0]}) (t {node.ins[1]})) (by",
-            "          intro t",
-            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
-            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
-            "          simp [applyNodeDistributed, applyNodeRingAttn]",
-            f"          exact applyNode_fw_matmul_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
-            "        ) (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[1]} (by native_decide) (by native_decide)]",
-        ]
-
-    lines += writer("hSmWriter", "sm", 0, sm_node, sm_node_name)
+    lines += _matmul_writer_lines(ir, "hSmWriter", "sm", 0, sm_node, sm_node_name)
     for rank, node in enumerate(pm_nodes):
-        lines += writer(f"hPmWriter{rank}", "pm", rank, node, pm_node_names[rank])
+        lines += _matmul_writer_lines(ir, f"hPmWriter{rank}", "pm", rank, node, pm_node_names[rank])
     pm_inputs = "[" + ", ".join(f"pmStore {tid}" for tid in first.pm_tids) + "]"
     pm_outputs = "[" + ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) + "]"
     lines += [
@@ -8160,30 +8136,13 @@ def render_closed_k_rank_matmul_contraction_segment(ir: GoalIR, relation, segmen
         f"    change ShardedRel (smStore {y_fact.sm_tid}) [{', '.join(f'pmStore {tid}' for tid in y_fact.pm_tids)}] 2 {_shape_text(list(y_full))} {_shape_text(list(y_shard))} at hY",
     ]
 
-    def writer(name, side, pos, node, node_name):
-        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
-        store = "smStore" if side == "sm" else "pmStore"
-        nodes = "smNodes" if side == "sm" else "pmNodes"
-        final = "smFinal" if side == "sm" else "pmFinal"
-        return [
-            f"    have {name} : {final} {node.outs[0]} = fw_matmul ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
-            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
-            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{node_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
-            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
-            f"        {node_name} {node.outs[0]} (fun t => fw_matmul (t {node.ins[0]}) (t {node.ins[1]})) (by",
-            "          intro t",
-            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
-            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
-            "          simp [applyNodeDistributed, applyNodeRingAttn]",
-            f"          exact applyNode_fw_matmul_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
-            "        ) (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[1]} (by native_decide) (by native_decide)]",
-        ]
-
-    lines += writer("hSmWriter", "sm", sm_writer_index - sm_start, sm_node, sm_node_name)
+    lines += _matmul_writer_lines(
+        ir, "hSmWriter", "sm", sm_writer_index - sm_start, sm_node, sm_node_name
+    )
     for rank, (writer_index, node) in enumerate(zip(transition.pm_node_indices, pm_nodes)):
-        lines += writer(f"hPmWriter{rank}", "pm", writer_index - pm_start, node, pm_node_names[rank])
+        lines += _matmul_writer_lines(
+            ir, f"hPmWriter{rank}", "pm", writer_index - pm_start, node, pm_node_names[rank]
+        )
     x_list = "[" + ", ".join(f"pmStore {tid}" for tid in x_fact.pm_tids) + "]"
     y_list = "[" + ", ".join(f"pmStore {tid}" for tid in y_fact.pm_tids) + "]"
     out_list = "[" + ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) + "]"
