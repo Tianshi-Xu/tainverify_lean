@@ -1,63 +1,70 @@
 # TrainVerify
 
-TrainVerify checks whether a distributed training graph faithfully implements its single-model reference graph. Execution plans are translated into Lean graph declarations, interpreted by a shared denotational semantics, and proved against explicit lineage and ownership relations.
+TrainVerify studies whether a distributed training graph (PM) implements its
+single-model reference (SM). This repository, **tainverify_lean**, extends the
+original SMT-based TrainVerify with Lean denotational semantics, explicit
+ownership relations, proof rules, and source-bound proof generation.
 
-## Project direction
+## What is established, and what is not
 
-The target is a **proof compiler**, not a collection of model-specific proof scripts:
+The current runtime canonical path attaches QKV projection/layout facts,
+Q/K score matmul, and PM score AllToAll(1 -> 3). Both following divisions remain
+**inventory-only**. Its public entry intentionally raises
+`RuntimeLineageBlocked`: conditional frontier proofs are not a complete public
+equivalence proof or a witness of successful whole-capture execution.
 
-> Once an operator has a faithful denotation and its local relation rules are registered, an unseen supported SM/PM network pair should produce a complete kernel-checked proof in one command.
+The mathematical corpus remains valuable. The reported historical
+YOCO-MoE-A0.4B checkpoint has 649 ordinary and 505 zigzag faithful obligations,
+with two false ordinary-gather targets retained among 1,156 obligations.
+Historical GPT and YOCO Whole results also exist under their recorded
+authority, statements, and trust policies. These are scoped contributions,
+**not arbitrary-network one-command completion or Torch/CUDA refinement**.
+Different proof routes do not have interchangeable evaluators or axiom policies.
 
-Unsupported operators, missing side conditions, and false equivalence goals must fail closed with a localized diagnostic or counterexample. See [Proof compiler requirements](docs/PROOF_COMPILER_REQUIREMENTS.md) for the acceptance criteria.
+## Start here
 
-## Current status
+| Entry | Purpose |
+| --- | --- |
+| [Architecture](docs/ARCHITECTURE.md) | SMT, graph-authority, and runtime routes; mathematics and trust boundaries |
+| [Development](DEVELOPMENT.md) | Prerequisites, real CLI entry points, focused checks, and build gates |
+| [Contribution rules](AGENTS.md) | Authority-first changes and evidence discipline |
+| [Artifact tooling](docs/artifact-tools.md) | Explicit layouts, pinned external inputs, replay and object checks |
+| [Workstream ledger](WORKSTREAMS.md) | Dated integration checkpoints and ownership, not a quick-start script |
 
-YOCO-MoE A0.4B is the main large-scale case study. Its authority corpus contains 1,156 obligations:
+Code lives in [Verdict](Verdict/) (graph import, SMT and runtime export),
+[bridge_emitter](trainverify/bridge_emitter/) (graph-authority compiler), and
+[denote](trainverify/denote/) (Lean mathematics and model corpus).
+[Scripts](scripts/) and [library scripts](trainverify/scripts/) contain focused
+regressions, deterministic generators, and coverage checks.
 
-- 649/649 ordinary contiguous-ownership goals are faithfully proved;
-- 505/505 CP-zigzag ownership goals are faithfully proved;
-- 2 top-level ordinary-gather equalities are retained as false upstream findings.
+## Verification is not one gate
 
-This demonstrates the semantics and proof-rule foundation, but **does not yet satisfy the one-command, arbitrary-network requirement**. Some YOCO proofs and well-formedness contracts remain model-specific.
-
-## Repository map
-
-- `Verdict/graph_to_lean.py`: SM/PM execution-plan to Lean graph/goal emitter.
-- `trainverify/denote/`: denotational semantics, generated authority snapshots, proof rules, and checked model proofs.
-- `trainverify/scripts/`: deterministic generators and coverage checks.
-- `scripts/`: authority regeneration and comparison tooling.
-- `docs/`: design requirements and concise audit records.
-
-## Core verification
-
-From the repository root:
+Use a prepared environment and private outputs as described in
+[Development](DEVELOPMENT.md). Python checks, source coverage, kernel checking,
+and public acceptance answer different questions:
 
 ```bash
-PYTHONPATH=. uv run --with pytest pytest -q Verdict/tests scripts/tests trainverify/tests
-python3 trainverify/scripts/count_yoco_faithful_coverage.py
-python3 trainverify/scripts/generate_multiref_certificates.py --check
+"$TV_PY" -m pytest scripts/tests/test_developer_entry_docs.py -q -p no:cacheprovider \
+  --basetemp="$TV_CHECKS/tmp" --junitxml="$TV_CHECKS/junit.xml"
+"$TV_PY" trainverify/scripts/generate_multiref_certificates.py --check
 ```
 
-Build the Lean library from its package directory:
+The [historical coverage diagnostic](DEVELOPMENT.md#historical-coverage-diagnostic)
+currently rejects the checked-in corpus; it does not reproduce the historical
+counts above and is not a clean-checkout success gate.
 
-```bash
-cd trainverify
-lake build denote
-```
+In the `trainverify/` package, bare `lake build` selects **`Trainverify`**, only
+a Basic/hello stub. The actual library is **`lake build denote`**. Push/PR CI
+builds a bounded Lean smoke, not that full corpus; the full library build is a
+separate release gate, not proof of every system-level claim.
 
-The complete Lean corpus is the release gate. GitHub-hosted push/PR CI runs a
-bounded kernel smoke over the core graph gears and generated multiref
-certificates. A full hosted build is available through `workflow_dispatch` with
-`full=true`; it is intentionally manual because a cold build of the generated
-corpus exceeds two hours on the hosted runner. Local or high-capacity-runner
-`lake build denote` remains mandatory before release.
+## Historical context
 
-The checked-in YOCO authority can be regenerated only from the pinned llm-train/nnScaler revisions and artifact hashes recorded in `denote/GeneratedYOCOMoE.manifest.json`; use the repository regeneration scripts rather than editing generated graph data by hand.
-
-## Trust discipline
-
-- Upstream semantic fidelity takes priority over downstream proof completion.
-- Faithful coverage excludes value-lossy evaluators and false statements.
-- Generated certificates expose their side conditions and are checked by Lean.
-- No model-specific handwritten axiom is accepted as a substitute for a missing semantic rule.
-- A green build alone is not a claim: coverage, theorem statements, provenance, and axiom footprints are audited separately.
+The [2026-09-14 handoff](docs/HANDOFF_2026-09-14.md) records contributions,
+conditional acceptance, and open obligations. The
+[branch-consolidation record](docs/BRANCH_CONSOLIDATION_2026-09-14.md) explains
+retained prototypes, archives, and the unresolved legacy replication heuristic.
+These records preserve historical paths and commands; do not execute them as
+current setup instructions. [Proof-compiler requirements](docs/PROOF_COMPILER_REQUIREMENTS.md)
+and [three-model acceptance](docs/THREE_MODEL_PROOF_COMPILER_ACCEPTANCE.md)
+describe goals, not a completed product or an installation promise.
