@@ -11,17 +11,19 @@ except ImportError:
 def render_closed_bw_softmax_reduce_scatter_segment(ir, relation, segment_id: str) -> str:
     validate_atomic_transition_contracts(relation, segment_id)
     try:
+        from .closed_fact_sources import fact_tids, source_exact
         from .composer import (
             _node_text, _render_mixed_final_value, _select_exact_typed_certificate,
             _shape_text,
         )
-        from .relation_compiler import (get_closed_rule_spec, KRankReduceScatterReconstructionCertificate, ClosedRelationFactRecord, ClosedTensorShapeFactRecord, ClosedTensorEqFactRecord, ClosedGatherFactRecord, ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord)
+        from .relation_compiler import get_closed_rule_spec, KRankReduceScatterReconstructionCertificate
     except ImportError:
+        from closed_fact_sources import fact_tids, source_exact
         from composer import (
             _node_text, _render_mixed_final_value, _select_exact_typed_certificate,
             _shape_text,
         )
-        from relation_compiler import (get_closed_rule_spec, KRankReduceScatterReconstructionCertificate, ClosedRelationFactRecord, ClosedTensorShapeFactRecord, ClosedTensorEqFactRecord, ClosedGatherFactRecord, ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord)
+        from relation_compiler import get_closed_rule_spec, KRankReduceScatterReconstructionCertificate
 
     chain = relation.dependent_chain_plan
     segments = [] if chain is None else [s for s in chain.segments if s.segment_id == segment_id]
@@ -107,73 +109,6 @@ def render_closed_bw_softmax_reduce_scatter_segment(ir, relation, segment_id: st
                 or node.outs!=[output.pm_tids[rank]]):
             raise ValueError("BW_softmax PM writer roles/order are not exact")
 
-    def fact_tids(fact):
-        if type(fact) is ClosedRelationFactRecord:
-            if fact.kind in {"sharded", "chunked", "reduction", "replicated", "ordinary"}:
-                return {fact.sm_tid}, set(fact.pm_tids)
-            if fact.kind == "joined":
-                if fact.joined_pm_tid is None:
-                    raise ValueError("joined retained fact lacks PM TID")
-                return {fact.sm_tid}, {fact.joined_pm_tid}
-            if fact.kind == "zigzag":
-                if fact.metadata_tid is None:
-                    raise ValueError("zigzag retained fact lacks metadata TID")
-                return {fact.sm_tid}, {*fact.pm_tids, fact.metadata_tid}
-            if fact.kind == "joined_ordinary":
-                if fact.joined_pm_tid is None:
-                    raise ValueError("joined ordinary retained fact lacks PM TID")
-                return {fact.sm_tid}, {*fact.pm_tids, fact.joined_pm_tid}
-            if fact.kind == "joined_indexed_stack_dim1":
-                if fact.joined_pm_tid is None or not fact.source_tid_triples:
-                    raise ValueError("joined indexed-stack retained fact is incomplete")
-                sm, pm = {fact.sm_tid}, {*fact.pm_tids, fact.joined_pm_tid}
-                for source_sm, source_pm0, source_pm1 in fact.source_tid_triples:
-                    sm.add(source_sm); pm.update((source_pm0, source_pm1))
-                return sm, pm
-            if fact.kind == "label_chunks":
-                return set(), {fact.sm_tid, *fact.pm_tids}
-            raise ValueError(f"unsupported retained relation fact kind: {fact.kind!r}")
-        if type(fact) is ClosedTensorShapeFactRecord:
-            if fact.side not in {"sm", "pm"}:
-                raise ValueError("retained tensor-shape fact has invalid side")
-            return ({fact.tid}, set()) if fact.side == "sm" else (set(), {fact.tid})
-        if type(fact) is ClosedTensorEqFactRecord:
-            if fact.left_side not in {"sm", "pm"} or fact.right_side not in {"sm", "pm"}:
-                raise ValueError("retained tensor-equality fact has invalid side")
-            sm, pm = set(), set()
-            (sm if fact.left_side == "sm" else pm).add(fact.left_tid)
-            (sm if fact.right_side == "sm" else pm).add(fact.right_tid)
-            return sm, pm
-        if type(fact) is ClosedGatherFactRecord:
-            return {fact.sm_tid}, {fact.pm_rank0_tid, fact.pm_rank1_tid}
-        if type(fact) in {ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord}:
-            if fact.side not in {"sm", "pm"}:
-                raise ValueError("retained side-specific authority fact has invalid side")
-            return ({fact.tid}, set()) if fact.side == "sm" else (set(), {fact.tid})
-        raise ValueError(f"unsupported retained fact record: {type(fact).__name__}")
-
-    def latest_ref(side, tid, end):
-        nodes = ir.sm_nodes if side == "sm" else ir.pm_nodes
-        latest = f"init:{tid}"
-        for index, node in enumerate(nodes[:end]):
-            for slot, out in enumerate(node.outs):
-                if out == tid:
-                    latest = f"{side}:{index}:{slot}"
-        return latest
-
-    def source_exact(fact, sm_end, pm_end):
-        source = fact.source
-        if source.layout != fact.kind or source.gather_dim != fact.gather_dim or source.source_step_triples:
-            raise ValueError("BW_softmax/ReduceScatter source layout/axis mismatch")
-        tids = (fact.sm_tid, *fact.pm_tids)
-        expected = (latest_ref("sm", tids[0], sm_end),
-                    *(latest_ref("pm", tid, pm_end) for tid in tids[1:]))
-        if source.step_triple != expected:
-            raise ValueError("BW_softmax/ReduceScatter source is not the latest ordered TID authority")
-        joined = None if fact.joined_pm_tid is None else latest_ref("pm", fact.joined_pm_tid, pm_end)
-        if source.joined_pm_step != joined:
-            raise ValueError("BW_softmax/ReduceScatter joined source is not the latest writer")
-
     if (ir.sm_num_ranks != 1 or ir.pm_num_ranks != k or rc.rank_count != k
             or reduction.kind != "reduction" or reduction.gather_dim is not None
             or scattered.kind != "sharded" or scattered.sm_tid != reduction.sm_tid
@@ -205,9 +140,9 @@ def render_closed_bw_softmax_reduce_scatter_segment(ir, relation, segment_id: st
             or chain.anchor_fact.fact_id not in after.fact_ids):
         raise ValueError("fresh outputs or active anchor mismatch")
     for fact in (gradient, activation, reduction):
-        source_exact(fact, sm_start, pm_start)
+        source_exact(ir, fact, sm_start, pm_start, context="BW_softmax/ReduceScatter")
     for fact in (output, scattered):
-        source_exact(fact, sm_end, pm_end)
+        source_exact(ir, fact, sm_end, pm_end, context="BW_softmax/ReduceScatter")
     all_records = (*chain.relation_facts, *chain.authority_facts, chain.anchor_fact)
     by_id = {f.fact_id: f for f in all_records}
     if len(by_id) != len(all_records):

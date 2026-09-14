@@ -4,66 +4,13 @@ from __future__ import annotations
 
 def render_closed_cross_dp_wred_segment(ir, relation, segment_id: str) -> str:
     try:
+        from .closed_fact_sources import fact_tids
         from .composer import _node_text, _select_exact_typed_certificate, _shape_text
-        from .relation_compiler import (
-            KRankAllReduceReconstructionCertificate,
-            ClosedRelationFactRecord, ClosedTensorShapeFactRecord,
-            ClosedTensorEqFactRecord, ClosedGatherFactRecord,
-            ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord,
-        )
+        from .relation_compiler import KRankAllReduceReconstructionCertificate
     except ImportError:
+        from closed_fact_sources import fact_tids
         from composer import _node_text, _select_exact_typed_certificate, _shape_text
-        from relation_compiler import (
-            KRankAllReduceReconstructionCertificate,
-            ClosedRelationFactRecord, ClosedTensorShapeFactRecord,
-            ClosedTensorEqFactRecord, ClosedGatherFactRecord,
-            ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord,
-        )
-
-    def fact_tids(fact):
-        if type(fact) is ClosedRelationFactRecord:
-            if fact.kind in {"sharded", "chunked", "reduction", "replicated", "ordinary"}:
-                return {fact.sm_tid}, set(fact.pm_tids)
-            if fact.kind == "joined":
-                if fact.joined_pm_tid is None:
-                    raise ValueError("joined retained fact lacks PM TID")
-                return {fact.sm_tid}, {fact.joined_pm_tid}
-            if fact.kind == "zigzag":
-                if fact.metadata_tid is None:
-                    raise ValueError("zigzag retained fact lacks metadata TID")
-                return {fact.sm_tid}, {*fact.pm_tids, fact.metadata_tid}
-            if fact.kind == "joined_ordinary":
-                if fact.joined_pm_tid is None:
-                    raise ValueError("joined ordinary retained fact lacks PM TID")
-                return {fact.sm_tid}, {*fact.pm_tids, fact.joined_pm_tid}
-            if fact.kind == "joined_indexed_stack_dim1":
-                if fact.joined_pm_tid is None or not fact.source_tid_triples:
-                    raise ValueError("joined indexed-stack retained fact is incomplete")
-                sm, pm = {fact.sm_tid}, {*fact.pm_tids, fact.joined_pm_tid}
-                for source_sm, source_pm0, source_pm1 in fact.source_tid_triples:
-                    sm.add(source_sm); pm.update((source_pm0, source_pm1))
-                return sm, pm
-            if fact.kind == "label_chunks":
-                return set(), {fact.sm_tid, *fact.pm_tids}
-            raise ValueError(f"unsupported retained relation fact kind: {fact.kind!r}")
-        if type(fact) is ClosedTensorShapeFactRecord:
-            if fact.side not in {"sm", "pm"}:
-                raise ValueError("retained tensor-shape fact has invalid side")
-            return ({fact.tid}, set()) if fact.side == "sm" else (set(), {fact.tid})
-        if type(fact) is ClosedTensorEqFactRecord:
-            if fact.left_side not in {"sm", "pm"} or fact.right_side not in {"sm", "pm"}:
-                raise ValueError("retained tensor-equality fact has invalid side")
-            sm, pm = set(), set()
-            (sm if fact.left_side == "sm" else pm).add(fact.left_tid)
-            (sm if fact.right_side == "sm" else pm).add(fact.right_tid)
-            return sm, pm
-        if type(fact) is ClosedGatherFactRecord:
-            return {fact.sm_tid}, {fact.pm_rank0_tid, fact.pm_rank1_tid}
-        if type(fact) in {ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord}:
-            if fact.side not in {"sm", "pm"}:
-                raise ValueError("retained side-specific authority fact has invalid side")
-            return ({fact.tid}, set()) if fact.side == "sm" else (set(), {fact.tid})
-        raise ValueError(f"unsupported retained fact record: {type(fact).__name__}")
+        from relation_compiler import KRankAllReduceReconstructionCertificate
 
     rule = "cross-dp-wred-reconstruction-k-rank"
     theorem = "TrainVerify.Denote.RelationCompiler.ReductionRel.to_joined_allReduce"

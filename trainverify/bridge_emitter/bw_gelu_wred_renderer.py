@@ -4,88 +4,19 @@ from __future__ import annotations
 
 def render_closed_bw_gelu_wred_segment(ir, relation, segment_id: str) -> str:
     try:
+        from .closed_fact_sources import fact_tids, source_exact
         from .composer import (
             _node_text, _render_mixed_final_value, _select_exact_typed_certificate,
             _shape_text,
         )
-        from .relation_compiler import (get_closed_rule_spec, KRankAllReduceReconstructionCertificate, ClosedRelationFactRecord, ClosedTensorShapeFactRecord,
-            ClosedTensorEqFactRecord, ClosedGatherFactRecord,
-            ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord)
+        from .relation_compiler import get_closed_rule_spec, KRankAllReduceReconstructionCertificate
     except ImportError:
+        from closed_fact_sources import fact_tids, source_exact
         from composer import (
             _node_text, _render_mixed_final_value, _select_exact_typed_certificate,
             _shape_text,
         )
-        from relation_compiler import (get_closed_rule_spec, KRankAllReduceReconstructionCertificate, ClosedRelationFactRecord, ClosedTensorShapeFactRecord,
-            ClosedTensorEqFactRecord, ClosedGatherFactRecord,
-            ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord)
-
-    def fact_tids(fact):
-        if type(fact) is ClosedRelationFactRecord:
-            if fact.kind in {"sharded", "chunked", "reduction", "replicated", "ordinary"}:
-                return {fact.sm_tid}, set(fact.pm_tids)
-            if fact.kind == "joined":
-                if fact.joined_pm_tid is None:
-                    raise ValueError("joined retained fact lacks PM TID")
-                return {fact.sm_tid}, {fact.joined_pm_tid}
-            if fact.kind == "zigzag":
-                if fact.metadata_tid is None:
-                    raise ValueError("zigzag retained fact lacks metadata TID")
-                return {fact.sm_tid}, {*fact.pm_tids, fact.metadata_tid}
-            if fact.kind == "joined_ordinary":
-                if fact.joined_pm_tid is None:
-                    raise ValueError("joined ordinary retained fact lacks PM TID")
-                return {fact.sm_tid}, {*fact.pm_tids, fact.joined_pm_tid}
-            if fact.kind == "joined_indexed_stack_dim1":
-                if fact.joined_pm_tid is None or not fact.source_tid_triples:
-                    raise ValueError("joined indexed-stack retained fact is incomplete")
-                sm, pm = {fact.sm_tid}, {*fact.pm_tids, fact.joined_pm_tid}
-                for source_sm, source_pm0, source_pm1 in fact.source_tid_triples:
-                    sm.add(source_sm); pm.update((source_pm0, source_pm1))
-                return sm, pm
-            if fact.kind == "label_chunks":
-                return set(), {fact.sm_tid, *fact.pm_tids}
-            raise ValueError(f"unsupported retained relation fact kind: {fact.kind!r}")
-        if type(fact) is ClosedTensorShapeFactRecord:
-            if fact.side not in {"sm", "pm"}:
-                raise ValueError("retained tensor-shape fact has invalid side")
-            return ({fact.tid}, set()) if fact.side == "sm" else (set(), {fact.tid})
-        if type(fact) is ClosedTensorEqFactRecord:
-            if fact.left_side not in {"sm", "pm"} or fact.right_side not in {"sm", "pm"}:
-                raise ValueError("retained tensor-equality fact has invalid side")
-            sm, pm = set(), set()
-            (sm if fact.left_side == "sm" else pm).add(fact.left_tid)
-            (sm if fact.right_side == "sm" else pm).add(fact.right_tid)
-            return sm, pm
-        if type(fact) is ClosedGatherFactRecord:
-            return {fact.sm_tid}, {fact.pm_rank0_tid, fact.pm_rank1_tid}
-        if type(fact) in {ClosedPackedCuFactRecord, ClosedLabelBoundFactRecord}:
-            if fact.side not in {"sm", "pm"}:
-                raise ValueError("retained side-specific authority fact has invalid side")
-            return ({fact.tid}, set()) if fact.side == "sm" else (set(), {fact.tid})
-        raise ValueError(f"unsupported retained fact record: {type(fact).__name__}")
-
-    def latest_ref(side, tid, end):
-        nodes = ir.sm_nodes if side == "sm" else ir.pm_nodes
-        latest = f"init:{tid}"
-        for index, node in enumerate(nodes[:end]):
-            for slot, out in enumerate(node.outs):
-                if out == tid:
-                    latest = f"{side}:{index}:{slot}"
-        return latest
-
-    def source_exact(fact, sm_end, pm_end):
-        source = fact.source
-        if source.layout != fact.kind or source.gather_dim != fact.gather_dim or source.source_step_triples:
-            raise ValueError("BW_gelu/WRED source layout/axis mismatch")
-        tids = (fact.sm_tid, *fact.pm_tids)
-        expected = (latest_ref("sm", tids[0], sm_end),
-                    *(latest_ref("pm", tid, pm_end) for tid in tids[1:]))
-        if source.step_triple != expected:
-            raise ValueError("BW_gelu/WRED source is not the latest ordered TID authority")
-        joined = None if fact.joined_pm_tid is None else latest_ref("pm", fact.joined_pm_tid, pm_end)
-        if source.joined_pm_step != joined:
-            raise ValueError("BW_gelu/WRED joined source is not the latest writer")
+        from relation_compiler import get_closed_rule_spec, KRankAllReduceReconstructionCertificate
 
     spec = get_closed_rule_spec("bw-gelu-pointwise-sharded-k-rank")
     rule = spec.rule_id
@@ -207,9 +138,9 @@ def render_closed_bw_gelu_wred_segment(ir, relation, segment_id: str) -> str:
         if tuple(shape) != f.full_shape:
             raise ValueError("BW_gelu/WRED gather shape contract mismatch")
     for f in (gradient, activation, wpre):
-        source_exact(f, sm_start, pm_start)
+        source_exact(ir, f, sm_start, pm_start, context="BW_gelu/WRED")
     for f in (output, wpost):
-        source_exact(f, sm_end, pm_end)
+        source_exact(ir, f, sm_end, pm_end, context="BW_gelu/WRED")
     all_records = (*chain.relation_facts, *chain.authority_facts, chain.anchor_fact)
     by_id = {f.fact_id: f for f in all_records}
     if len(by_id) != len(all_records):
