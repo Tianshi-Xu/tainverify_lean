@@ -309,6 +309,19 @@ def exchange_fixture(**kwargs):
     adapters={writer_export_id(w['ref']):w for w in snapshot['adapter_source']}
     fresh['adapter_source']=[adapters[writer_export_id(w['ref'])] for w in fresh['writers']]
     bind_reducers(fresh); bind_adapters(fresh)
+    # Actual SM continuation is torch.softmax, not the placeholder matmul.
+    div=next(c for c in sm.cells if c.node.cid==alias+18000)
+    x=div._output_irs[0]; y=IR(alias+21000,'probabilities',x.parent.shape,x.indmap)
+    softmax=NS(node=N('s',0,0,y.tid,'FW_softmax'),rank=0,opname='FW_softmax',
+        inputs=div.outputs[:],outputs=[T('s',0,0,y.tid,1)],
+        kwargs=dict(dim=-1,dtype=None,__consts=[]),_input_irs=[copy.deepcopy(x)],_output_irs=[y])
+    softmax.ir=NS(signature='torch.softmax',inputs=lambda c=softmax:c._input_irs,outputs=lambda c=softmax:c._output_irs)
+    sm.cells.insert(sm.cells.index(div)+1,softmax); sm.shapes[softmax.outputs[0]]=y.shape
+    consumer=next(c for c in sm.cells if c.node.cid==alias+16002)
+    consumer.inputs[0]=softmax.outputs[0]; consumer._input_irs[0]=copy.deepcopy(y)
+    sm.cells.remove(consumer)
+    writers=[c for c in sm.cells if any(r in c.outputs for r in consumer.inputs)]
+    sm.cells.insert(max(sm.cells.index(c) for c in writers)+1,consumer)
     return sm,pm,(copy.deepcopy(sm.cells),copy.deepcopy(pm.cells),fresh,*authority[3:])
 
 
@@ -320,6 +333,8 @@ def test_dynamic_nonsquare_next_exchange_public():
     assert [len(result[k]) for k in ('reads','units','frontier_units','retained_units','deferred_units')]==[4,1,3,1,1]
     assert row['global_shape']==[1,3,6,6] and row['local_shape']==[1,3,6,2]
     assert row['dimensions']==dict(D=1,T=3,B=1,H=3,Q=6,C=2)
+    sm_next=[c for c in row['downstream_consumers'] if c['node'][0]=='s']
+    assert len(sm_next)==1 and sm_next[0]['op']=='FW_softmax' and sm_next[0]['value_proved'] is False
     aa=[c for c in row['downstream_consumers'] if c['op']=='AllToAllPrim']
     assert len(aa)==3 and all(c['source_kwargs']['idim']==3 and c['source_kwargs']['odim']==2 and c['value_proved'] is False for c in aa)
     assert text.count('SourceDivRead.div_value_of_split')==4
@@ -362,3 +377,28 @@ def test_next_exchange_inventory(next_source):
         assert row['op']=='AllToAllPrim' and row['axes']==[3,2] and row['value_proved'] is False
         assert row['output_shapes']==[[1,3,2,6]]
         assert len(row['source_inputs'])==3
+
+
+@pytest.mark.parametrize('fault',[None,'signature','dim-bool','wrong-axis','dtype','input-parent','shape-float','scope'])
+def test_actual_softmax_inventory_only(next_source,fault):
+    from types import SimpleNamespace as NS
+    from Verdict.runtime_lineage import _Index
+    from Verdict import runtime_softmax_values as softmax
+    args=copy.deepcopy(next_source); index=_Index(args[0],args[3]._inputs[0])
+    cell=next(c for c in index.raw.values() if c.node.cid==411019)
+    if fault=='signature': cell.ir.signature='torch.log_softmax'
+    elif fault=='dim-bool': cell.kwargs['dim']=True
+    elif fault=='wrong-axis': cell.kwargs['dim']=1
+    elif fault=='dtype': cell.kwargs['dtype']='float64'
+    elif fault=='input-parent': cell._input_irs[0].parent.tid+=1
+    elif fault=='shape-float': cell._output_irs[0].shape=tuple(float(d) for d in cell._output_irs[0].shape)
+    elif fault=='scope':
+        index.view.chunk_scopes=dict(getattr(index.view,'chunk_scopes',{})); index.view.chunk_scopes[cell.node]=NS()
+    with patch.object(softmax,'_read',side_effect=AssertionError('inventory consumed softmax read')), \
+         patch.object(softmax,'_unit',side_effect=AssertionError('inventory consumed softmax unit')):
+        if fault is not None:
+            with pytest.raises(ValueError): api()._successor(index,cell)
+        else:
+            row=api()._successor(index,cell)
+            assert row['source_signature']=='torch.softmax' and row['normalization_axis']==3
+            assert row['value_proved'] is False and row['input_shapes']==row['output_shapes']==[[1,3,6,6]]

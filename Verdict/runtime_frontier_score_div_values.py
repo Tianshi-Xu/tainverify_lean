@@ -173,6 +173,14 @@ def _unit(si, pi, old, global_, locals_, names, c):
 
 def _successor(index, cell):
     """Inventory AA(3,2) directly; no old AA(3,1) backend or new value law."""
+    if op(cell)=='FW_softmax':
+        from Verdict import runtime_softmax_values as inventory
+        producer, = _score._ordinary_raw(index,cell,'FW_softmax','torch.softmax',1)
+        step,auth = inventory._softmax(index,cell,producer)
+        return dict(node=list(step.node),op=step.op,source_signature=cell.ir.signature,
+            source_inputs=[list(r) for r in cell.inputs],source_outputs=[list(r) for r in cell.outputs],
+            input_shapes=[list(p.endpoint.shape) for p in step.inputs],
+            output_shapes=[list(p.endpoint.shape) for p in step.outputs],value_proved=False,**auth)
     if op(cell) != 'AllToAllPrim':
         return _score._successor(index,cell)
     node = _view.source.residual._identity(index,cell)
