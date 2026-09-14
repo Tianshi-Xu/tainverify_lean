@@ -138,6 +138,15 @@ The QKV partition's 21 changed paths and backward partition's 179 changed paths 
 - Fresh saved-source replay on the implementation commit reproduced all 12 accepted fragment sources byte-for-byte, calling each of the 11 recorded predecessors exactly once. The post-removal Lean cache observer passed with the standard three axioms. No recapture, accepted-module recompilation, division implementation, canonical attachment, whole-model/public completion, Torch refinement or push to main was introduced.
 - Detailed RED/GREEN receipts, collected test IDs, source pins, link plan, file verification and replay equivalence are in the artifact-tooling evidence directory above. `result.json` is the final closure record. Historical receipts and their original logical identifiers were not rewritten.
 
+## Canonical score acceptance tooling checkpoint
+
+- The maintained canonical observer, explicit reference/cumulative-joint preparer, and full-Expr checker are integrated as tooling only. Neither score attachment nor a budget optimization enters this checkpoint. The canonical production boundary remains K middle exchange.
+- The isolated score attachment candidate has passed source/focused review. Its complete saved-capture run uses frozen source under `canonical-score-stages/candidate`; do not modify that materialization or reuse its private verifier cache while the run is active. Its actual budget and candidate entry kernel have not yet been accepted.
+- Independent reference preparation consumes accepted middle + accepted score matmul/exchange fragments. New reference Lean checks produced 549 full Expr and 527 joint Expr records, retaining all old 536/506 records exactly; all use kernel3. This is reference acceptance, not the new canonical candidate or whole-model/public/Torch acceptance.
+- A real long-name `#print axioms` output exposed a multiline-parser bookkeeping failure after matmul Lean exited zero. The bounded parser was fixed for both axiom-only and mixed outputs; original source/object/log/failed receipt were preserved and a separate revalidation receipt was issued without recompiling that module.
+- The integrated tooling suite passed 167 tests plus 5 subtests, with no skipped tests, including real small Lean positive/negative controls. Independent scoped source/tool and reference review reports are under `canonical-score-stages/source-review/` and `reference-review/`. Default-path evidence is structural control-flow compatibility plus historical byte readback, not a fresh candidate default capture.
+- Evidence root: `/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/canonical-score-stages/`; see `reference-kernel/reference-closure.json`, `tool-integration/pytest.xml`, and the explicit input/layout/manifest records. No push or merge to main.
+
 ## Reproduction / receipts
 
 Integration checks, exact source preservation, protected-tree inventory, partial-test checkpoints and final coverage reconciliation are under:

@@ -18,6 +18,20 @@ The maintained entry points are:
   `artifact_tools check-score-exchange`. Both following divisions remain
   inventory only. This is not a Torch-refinement or kernel claim.
 
+Additional maintained canonical acceptance tools:
+
+- `python -m trainverify.canonical_run`: complete saved-capture generation and
+  exact publication readback; see [canonical-run.md](canonical-run.md). It does
+  not confer kernel or public-completion status.
+- `python -m trainverify.canonical_contract_prepare`: independently pinned
+  reference fragments and cumulative full-value joint preparation; see
+  [canonical-contract-prepare.md](canonical-contract-prepare.md).
+- `python -m trainverify.artifact_contracts`: `render`, `check`, and `compare`
+  complete Lean Expr records against an explicit target manifest, retaining old
+  records exactly. The axiom-only and mixed readers accept Lean's normal wrapped
+  axiom lists but reject unrecognized output. Use each subcommand's `--help` for
+  the explicit source, layout, manifest and output arguments.
+
 These replace fixed-path `render_actual.py`, `check_raw.py`,
 `check_frontier_joint.py`/`check_joint.py`, and kernel/path-verification wrappers.
 Use pytest directly with an external `--basetemp`, `--junitxml` and
