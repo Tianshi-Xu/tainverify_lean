@@ -50,8 +50,11 @@ and public acceptance answer different questions:
 ```
 
 The [historical coverage diagnostic](DEVELOPMENT.md#historical-coverage-diagnostic)
-currently rejects the checked-in corpus; it does not reproduce the historical
-counts above and is not a clean-checkout success gate.
+has an intentional **historical-only** boundary: default invocation rejects
+without printing a current ratio. Use `--historical --repo PATH` to reproduce
+only the pinned historical source-name count, or `--inventory` for deterministic
+current source-only discovery IDs/counts. Neither mode is proof coverage or
+kernel verification; unchanged names do not establish unchanged statements.
 
 In the `trainverify/` package, bare `lake build` selects **`Trainverify`**, only
 a Basic/hello stub. The actual library is **`lake build denote`**. Push/PR CI

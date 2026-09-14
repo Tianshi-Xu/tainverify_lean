@@ -102,9 +102,18 @@ def test_historical_coverage_has_diagnostic_guidance():
     assert section, "separate historical coverage from clean-checkout verification"
     diagnostic = section.group(1)
     assert "count_yoco_faithful_coverage.py" in diagnostic
-    assert "unexpected corpus size" in diagnostic
+    for term in (
+        "historical-only", "--historical --repo", "--inventory", "1154/1156",
+        "ad821ce18494d30b5517a36260faa817fb45cda1", "HISTORICAL SOURCE-NAME CHECK",
+        "source-only", "not proof coverage", "not kernel verification",
+        "suppressed", "emitter discoveries", "not verified counterexamples",
+    ):
+        assert term in diagnostic
+    assert "unexpected corpus size: 1096" not in diagnostic
     assert re.search(r"\b(?:fails?|rejects?)\b", diagnostic, re.I)
-    assert "kernel" in diagnostic.lower()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for term in ("historical-only", "--historical --repo", "--inventory", "source-only"):
+        assert term in readme
 
 
 @dataclass(frozen=True)
@@ -131,6 +140,7 @@ HELP_CASES = (
     HelpCase("trainverify.artifact_contracts", "render", ("--manifest", "--source-output")),
     HelpCase("trainverify.artifact_contracts", "check", ("--source", "--sha256", "--out-dir")),
     HelpCase("trainverify.artifact_contracts", "compare", ("--reference-stdout", "--candidate-stdout")),
+    HelpCase("trainverify.scripts.count_yoco_faithful_coverage", flags=("--historical", "--inventory", "--repo")),
 )
 
 

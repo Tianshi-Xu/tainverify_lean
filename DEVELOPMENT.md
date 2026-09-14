@@ -57,6 +57,7 @@ They expose existing entry points rather than another umbrella planner.
 "$TV_PY" -m trainverify.artifact_contracts render --help
 "$TV_PY" -m trainverify.artifact_contracts check --help
 "$TV_PY" -m trainverify.artifact_contracts compare --help
+"$TV_PY" -m trainverify.scripts.count_yoco_faithful_coverage --help
 ```
 
 | Entry | What a real invocation does; limits |
@@ -120,23 +121,63 @@ inputs.
 
 ## Historical coverage diagnostic
 
+The coverage boundary is **historical-only**: default invocation intentionally
+rejects with exit 2 and actionable mode guidance, without reading sources or
+printing a current percentage. Import and `--help` are safe. Choose explicitly:
+
 ```bash
-"$TV_PY" trainverify/scripts/count_yoco_faithful_coverage.py
+# TV_REPO is a local Git repository containing the pinned historical objects.
+# It may differ from TV_ROOT when TV_ROOT is an archive without .git.
+TV_REPO=/absolute/path/to/local/git-repository
+"$TV_PY" trainverify/scripts/count_yoco_faithful_coverage.py --historical --repo "$TV_REPO"
+"$TV_PY" trainverify/scripts/count_yoco_faithful_coverage.py --inventory "$TV_ROOT/trainverify"
 ```
 
-This historical-checkpoint script counts exact theorem names and source
-declarations; it does not invoke the kernel. On the current checked-in corpus
-it **fails with exit 1**, reporting `unexpected corpus size: 1096` against its
-historical expected 1,156. The same failure occurs on the original cleanup
-baseline, not just the documentation candidate.
+The tested historical invocation reports **HISTORICAL SOURCE-NAME CHECK** at
+fixed commit `ad821ce18494d30b5517a36260faa817fb45cda1`: ordinary `649/649`, zigzag
+`505/505`, and `1154/1156` exact-name matches including two nonordinary top
+source discoveries in the denominator. The historical 1,156 denominator and
+1,154 name expectation are unchanged. The repository is selectable, the commit
+is not. Only that commit's generated source and immediate `yoco_goals/*.lean`
+blobs are read with local Git `ls-tree`/`show`; no historical Python execution,
+checkout, materialization, or network fetch occurs. Missing repositories or
+objects fail with instructions, never fall back to current files. This is
+**not fresh Lean acceptance**. Name matches cannot establish record-body,
+graph, statement, evaluator, or object identity across checkpoints.
 
-Do not use this command as a clean-checkout success gate or treat its current
-name count as a new proof-coverage assessment. The reported historical
-649 ordinary / 505 zigzag / 2 false-finding checkpoint remains a historical
-claim, not a result reproduced by this invocation. Resolving the script/corpus
-checkpoint mismatch is separate work: do not change the expected denominator,
-delete negative controls, or rewrite generated authority to obtain a green
-status.
+Inventory reads only `denote/GeneratedYOCOMoE.lean` below the explicit package
+root (omitting the root selects the script's own `trainverify/` package, not the
+caller's working directory). It emits deterministic JSON: exact sorted base
+target IDs and counts for ordinary intermediate, emitted zigzag, ordinary top,
+nonordinary top discoveries, and suppressed nonordinary intermediate discoveries.
+`emitted_zigzag` IDs denote declarations with the `_zigzag` suffix. On the tested
+current source those counts are **646, 445, 5, 0, 60**, respectively; these are
+observations, not success thresholds. The suppressed set is the nonordinary
+intermediate comment discoveries minus emitted zigzag IDs, not a retirement list.
+Raw comments are **emitter discoveries**, **not verified counterexamples**.
+
+Both modes are **source-only**, **not proof coverage**, and **not kernel verification**.
+Inventory never reads theorem files or emits percentages or name-based acceptance
+flags. It checks duplicate headers and ordinary/nonordinary consistency rather
+than silently dropping IDs. This is a narrow scanner for the emitter's exact
+line-oriented headers, not a general Lean parser: record bodies, statement
+helpers, comment truth, and Lean syntax/kernel acceptance are not validated.
+Missing/unreadable source, unknown target headers, and inconsistent classifications
+fail rather than producing a partial successful inventory.
+
+The focused CLI suite also exercises the authentic historical blobs. For an
+archive-only source root, set `YOCO_HISTORICAL_REPO` explicitly; otherwise the
+suite uses `TV_ROOT` as its Git repository. Missing historical objects fail the
+suite, not skip it. Use a fresh external receipt directory as above:
+
+```bash
+YOCO_HISTORICAL_REPO="$TV_REPO" "$TV_PY" -m pytest \
+  scripts/tests/test_yoco_coverage_cli.py scripts/tests/test_developer_entry_docs.py \
+  -q -p no:cacheprovider --basetemp="$TV_CHECKS/tmp" --junitxml="$TV_CHECKS/junit.xml" \
+  >"$TV_CHECKS/stdout.txt" 2>"$TV_CHECKS/stderr.txt"
+status=$?
+printf '%s\n' "$status" >"$TV_CHECKS/exit.txt"
+```
 
 ## Lean: stub, smoke, and release gate
 
