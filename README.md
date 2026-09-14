@@ -9,7 +9,10 @@ ownership relations, proof rules, and source-bound proof generation.
 
 The current runtime canonical path attaches QKV projection/layout facts,
 Q/K score matmul, and PM score AllToAll(1 -> 3). Both following divisions remain
-**inventory-only**. Its public entry intentionally raises
+**inventory-only in that canonical path**. A separate score-division adapter
+is source/kernel/joint-checked and available in the local integration; it is
+not canonically attached. See the [current handoff](docs/HANDOFF.md).
+The public entry intentionally raises
 `RuntimeLineageBlocked`: conditional frontier proofs are not a complete public
 equivalence proof or a witness of successful whole-capture execution.
 
@@ -25,6 +28,7 @@ Different proof routes do not have interchangeable evaluators or axiom policies.
 
 | Entry | Purpose |
 | --- | --- |
+| [Current handoff](docs/HANDOFF.md) | Accepted results, paused development, evidence selection and low-cost readback |
 | [Architecture](docs/ARCHITECTURE.md) | SMT, graph-authority, and runtime routes; mathematics and trust boundaries |
 | [Development](DEVELOPMENT.md) | Prerequisites, real CLI entry points, focused checks, and build gates |
 | [Contribution rules](AGENTS.md) | Authority-first changes and evidence discipline |

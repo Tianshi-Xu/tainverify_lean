@@ -158,6 +158,15 @@ The QKV partition's 21 changed paths and backward partition's 179 changed paths 
 - Evidence: `/home/v-zhouziyu/trainverify-audits/general-parallel-internal1/canonical-score-stages/acceptance.json`, `actual2/rechecked.json`, `candidate-kernel/comparison.json`, `candidate-kernel/entry-revalidated.json`, `budget-review/REPORT.md`, `candidate-kernel-review/REPORT.md` and `integration/pytest.xml`. Original refusals and wrapper failures remain preserved.
 - **Scope is conditional canonical frontier acceptance only.** Whole-model/public completion, successful whole-capture execution, remaining saved-primal reconstruction and Torch/CUDA refinement are not established. Renderer/public flags remain false. No push or merge to main.
 
+## Score-division handoff and development pause
+
+- Accepted source `05584e60f6216b153175c3f49ea1754a7f64d07a` is imported locally with its complete two-commit candidate history; only the two division renderer/test files change production/test code. The primary `integration/trainverify-forward-backward` checkout is the only modification destination. Private worker/acceptance source copies are frozen evidence dependencies, not parallel development roots.
+- Final source-bound regression is **147 passed** (146 new suite cases and one prior public tracer), zero failures/errors/skips, with exact collected-ID/JUnit/source reconciliation. Fresh saved-source actual2 emits **5 original reads, 2 complete unit facts and 6 ordered mixed rows**. All **7 new declarations** and the **six-row joint** passed kernel3; all **154 previous full Expr contracts** and **12 predecessor source fragments** remain exact. V replica equality and both residual histories survive.
+- Actual1 exposed the missing SM `torch.softmax` inventory; the final two-file candidate includes that metadata-only fix. Softmax and next PM AA(3,2) values are not consumed. Failed runs and the earlier 139-case Python checkpoint remain historical, not alternative current candidates or additive coverage.
+- **User direction: pause further development; lower handoff cost only.** Do not start AA(3,2), softmax value adapters, later saved-primal stages, canonical attachment or public-completion work merely because an earlier handoff lists them as next steps.
+- Canonical attachment remains score matmul + score AA(1,3), with its existing budget/public boundary. Standalone division acceptance does not change canonical bundle size, establish a common inhabited full run, or prove Torch/CUDA refinement. Renderer flags remain false.
+- Start at [the current handoff](docs/HANDOFF.md), then the [readback runbook](docs/score-division-runbook.md). `docs/handoff/score-division.json` and its SHA-256 companion identify the accepted source and external checkpoint files. Historical verification reports retain their original pre-integration wording; Git and this handoff describe local integration state. No remote push or merge to `main` is part of this cleanup.
+
 ## Reproduction / receipts
 
 Integration checks, exact source preservation, protected-tree inventory, partial-test checkpoints and final coverage reconciliation are under:
