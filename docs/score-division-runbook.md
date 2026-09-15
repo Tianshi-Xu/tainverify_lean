@@ -4,7 +4,7 @@
 
 ## 1. 环境与路径
 
-此 checkpoint 的验证环境为 Python 3.11.13、pytest 9.1.1、nnScaler 0.9+internal.1、Torch 2.6.0+cu124、Lean 4.32.2。它们是已观察配置，不是任意版本兼容承诺。nnScaler 内部依赖获取方式及工具入口见 [Development](../DEVELOPMENT.md)。不要将仓内 `nnscaler_genmodel` 当成当前安装包。
+此 checkpoint 的验证环境为 Python 3.11.13、pytest 9.1.1、nnScaler 0.9+internal.1、Torch 2.6.0+cu124、Lean 4.32.2。它们是已观察配置，不是任意版本兼容承诺。nnScaler 的精确公开源码及新环境恢复步骤见[第 6 节](#6-公开-python-环境恢复)；工具入口见 [Development](../DEVELOPMENT.md)。Development 中向团队索取依赖的方式仍可用，但并非唯一来源。不要将仓内 `nnscaler_genmodel` 当成当前安装包。
 
 在主 integration checkout 内运行。三个路径可由调用者预先设置；否则读取[索引](handoff/score-division.json)中此机器的提示。换机器时必须调整路径/layout，不能修改旧 receipts 或其 expected hashes 来消除缺文件错误。
 
@@ -95,3 +95,52 @@ recipe 必须先通过第 2 节的独立 SHA 清单校验；这里计算的 SHA 
 - 真实 kernel/type/axiom 不匹配：停止声称该候选已验收；保留完整 source/object/command/log，按当前声明处理。
 
 后续 AA(3→2)、softmax 值关系、canonical attachment 和 public 完成属于暂停的开发。接手维护的结束标准是入口清楚、既有结果可核验、边界与依赖准确，而不是继续扩展 frontier。
+
+## 6. 公开 Python 环境恢复
+
+这一节独立于本机旧 evidence 路径：从远程源码和公共包源重新安装，不要求保存旧 wheel、venv 或 Git 对象库。新环境已实际验证 **Python 3.11.16、nnScaler 0.9+internal.1、Torch 2.6.0+cu124、pytest 9.1.1**，`pip check` 和 31 项轻量测试通过，零失败/错误/跳过。原始环境是 Python 3.11.13；这里不声称二进制逐字节相同。
+
+前置条件：Linux x86_64、明确指向 Python 3.11 的解释器（含 venv/开发头文件）、Git、C++ 编译器和公开网络访问。已验证环境复用了宿主解释器/编译器，没有复用其安装包。轻量测试不要求 GPU；这不代表真实 CUDA capture 可免 GPU。不要仅凭 `python3` 名字假定版本，首次恢复尝试曾因此误选 3.12，随后完整重建了独立 3.11 环境。
+
+公开 nnScaler 来源是 [subfish-zhou/nnscaler](https://github.com/subfish-zhou/nnscaler/tree/6b95728ac9301d06f361791a3981240bb2db15aa)，不是 PyPI 上的同名官方发行版。版本中的 `internal` 是保留的维护版本标识，不表示源码仍只在本地。本地旧源码包的 633 个普通文件已与远程该提交逐一比对一致。
+
+从当前仓库 checkout 执行下面步骤。安装命令取自成功的独立恢复，版本约束来自同一新环境的实际安装清单；不是跨平台兼容矩阵。使用新的私有目录保存 wheel、安装报告和构建日志。此命令未隔离继承的 HOME/TMPDIR；依赖工具仍可能在其他位置创建临时文件或缓存。
+
+```bash
+set -euo pipefail
+TV_ROOT="$(git rev-parse --show-toplevel)"
+TV_PY311="$(command -v python3.11)"
+"$TV_PY311" -c 'import sys; assert sys.version_info[:2] == (3,11), sys.version'
+TV_RESTORE="$(mktemp -d "${TMPDIR:-/tmp}/trainverify-python.XXXXXX")"
+printf 'Recovery outputs: %s\n' "$TV_RESTORE"
+unset PYTHONPATH PYTHONHOME
+export PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 PIP_CONFIG_FILE=/dev/null
+"$TV_PY311" -m venv "$TV_RESTORE/venv"
+TV_PY="$TV_RESTORE/venv/bin/python"
+"$TV_PY" -c 'import sys,site; assert sys.version_info[:2] == (3,11); assert sys.prefix != sys.base_prefix; assert not site.ENABLE_USER_SITE'
+"$TV_PY" -c 'import json,pathlib,sys; versions=json.loads(pathlib.Path(sys.argv[1]).read_text())["public_python_recovery"]["public_package_versions"]; pathlib.Path(sys.argv[2]).write_text("".join(f"{k}=={v}\n" for k,v in sorted(versions.items())))' \
+  "$TV_ROOT/docs/handoff/score-division.json" "$TV_RESTORE/constraints.txt"
+"$TV_PY" -m pip --isolated --no-cache-dir install --index-url https://pypi.org/simple \
+  -c "$TV_RESTORE/constraints.txt" --upgrade pip setuptools wheel 'pybind11[global]<3'
+"$TV_PY" -m pip --isolated --no-cache-dir install --index-url https://download.pytorch.org/whl/cu124 \
+  -c "$TV_RESTORE/constraints.txt" --report "$TV_RESTORE/torch-install.json" 'torch==2.6.0+cu124'
+git -c credential.helper= clone --no-checkout https://github.com/subfish-zhou/nnscaler.git "$TV_RESTORE/nnscaler"
+git -C "$TV_RESTORE/nnscaler" checkout --detach 6b95728ac9301d06f361791a3981240bb2db15aa
+(cd "$TV_RESTORE/nnscaler" && "$TV_PY" -m pip --isolated --no-cache-dir wheel \
+  --index-url https://pypi.org/simple --no-deps --no-build-isolation -v \
+  --wheel-dir "$TV_RESTORE/wheels" .) >"$TV_RESTORE/build.log" 2>&1
+"$TV_PY" -m pip --isolated --no-cache-dir install --index-url https://pypi.org/simple \
+  -c "$TV_RESTORE/constraints.txt" -r "$TV_RESTORE/nnscaler/requirements.txt" \
+  --report "$TV_RESTORE/runtime-install.json" pytest regex z3-solver
+"$TV_PY" -m pip --isolated --no-cache-dir install --no-index --no-deps \
+  "$TV_RESTORE/wheels/nnscaler-0.9+internal.1-cp311-cp311-linux_x86_64.whl"
+"$TV_PY" -m pip --isolated check
+"$TV_PY" -c 'import sys,nnscaler,torch; from nnscaler.autodist import dp_solver; print(sys.version,nnscaler.__version__,nnscaler.__file__,torch.__version__,dp_solver.__file__)'
+TV_CHECKS="$TV_RESTORE/checks"
+mkdir "$TV_CHECKS"
+export PYTHONPATH="$TV_ROOT:$TV_ROOT/Verdict"
+```
+
+随后执行第 3 节的 pytest 命令（该节使用上述 `TV_PY` 和 `TV_CHECKS`）。若需旧验收完整性核查，另按第 1 节显式提供 evidence/layout，不能把这次重新安装当成旧 `.olean`、capture 或日志的恢复。
+
+[机器可读索引](handoff/score-division.json)中的 `public_python_recovery` 记录这次新环境的 52 个公共包版本、来源提交及验证范围。安装时保留 pip 报告和构建日志即可；旧环境里的绝对路径不是依赖。此验证只解决 Python/nnScaler 安装及轻量入口，**完整 capture/Lean 重建与本地全量删除就绪仍未完成**。

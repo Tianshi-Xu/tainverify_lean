@@ -45,7 +45,7 @@ Renderer 返回的 `proof_admissible`、`kernel_value_proved` 等 flags 仍为 f
 4. `acceptance/kernel-div/result.json`、`acceptance/kernel-joint/result.json`：实际命令、源/对象/import/log hashes、axiom 查询结果。
 5. `acceptance/old-contract-comparison.json`、`acceptance-final-reconciliation.json`：旧完整合同保留与最终测试覆盖。
 
-[SHA-256 清单](handoff/score-division.sha256)覆盖本切片的选定验收文件；它不是所有外部依赖的自包含打包。外部依赖另由显式 layout 验证。**仓库 clone 本身不包含 captures、nnScaler 内部 wheel 和所有已接受 Lean 缓存。**
+[SHA-256 清单](handoff/score-division.sha256)覆盖本切片的选定验收文件；它不是所有外部依赖的自包含打包。外部依赖另由显式 layout 验证。**仓库 clone 本身不包含 captures 和已接受 Lean 缓存。** nnScaler 虽保留 `0.9+internal.1` 版本号，其精确源码已公开；[公开 Python 环境恢复](score-division-runbook.md#6-公开-python-环境恢复)已从独立下载及源码构建通过 31 项轻量测试，不需要旧 wheel。完整 capture/Lean 恢复尚未验收，不能据此删除全部本地实验材料。
 
 ## 历史材料怎么处理
 
