@@ -20,7 +20,8 @@
     "docs/HANDOFF.md",
     "docs/score-division-runbook.md",
     "docs/handoff/score-division.json",
-    "docs/handoff/score-division.sha256"
+    "docs/handoff/score-division.sha256",
+    "artifacts/score-division-cold-build"
   ],
   "external_evidence_root_hint": "/home/v-zhouziyu/trainverify-audits/authority-public-closure-ef859127/score-div/evidence",
   "external_dependency_layout_hint": "/home/v-zhouziyu/trainverify-audits/authority-public-closure-ef859127/score-div/evidence/acceptance/joint-layout.json",
@@ -634,5 +635,23 @@
     "runtime_recovery_complete": false,
     "local_execution_receipt_hint": "/home/v-zhouziyu/trainverify-audits/remote-recovery/python-restore/result.json",
     "receipt_scope": "The local receipt is an execution record, not a dependency required for a new install. The public package versions are an observed compatible set, not a universal compatibility matrix."
+  },
+  "public_lean_recovery": {
+    "scope": "Existing full score-division + six-row mixed joint, with original conditional theorem contracts.",
+    "source_commit": "97547f38242a61d89b30e1970ec8faf64d82a105",
+    "publication_manifest": "artifacts/score-division-cold-build/publication.json",
+    "publication_manifest_sha256": "cf71e5ba1d6249fc0025b0191078b23a8d5ee3cb116cfecafe90507c09407e4d",
+    "portable_inputs": "artifacts/score-division-cold-build/portable-rebuild-inputs.tar.gz",
+    "portable_inputs_sha256": "299c1f12b2d1c80180a797bdafbc6af5743a18f83ccc1d63daab9076e49c48b8",
+    "cold_compiled_task_modules": 239,
+    "complete_import_source_modules": 5151,
+    "additional_source_modules_published": 143,
+    "full_expr_contracts_preserved": 154,
+    "kernel3_source_queries": 8223,
+    "old_task_objects_used": false,
+    "old_shared_package_cache_used": false,
+    "accepted_generated_sources_reused": true,
+    "canonical_attached": false,
+    "whole_capture_witness": false
   }
 }

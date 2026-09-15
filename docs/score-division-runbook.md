@@ -24,14 +24,14 @@ printf 'Private outputs: %s\n' "$TV_CHECKS"
 
 ## 2. 默认只读核查
 
-首先检查源码没有越过这个验收边界。只允许本次六个交接文件与已接受 commit 不同；其余 tracked 内容和工作树都必须干净。若失败，先看差异，不要 reset/stash，也不要自动将它称为已验收的新版本。
+首先检查源码没有越过这个验收边界。允许列出的交接文档、数据索引及已验证冷构建发布目录与原验收 commit 不同；其余 tracked 内容和工作树都必须干净。若失败，先看差异，不要 reset/stash，也不要自动将它称为已验收的新版本。
 
 ```bash
 test -z "$(git -C "$TV_ROOT" status --porcelain)"
 git -C "$TV_ROOT" diff --exit-code 05584e60f6216b153175c3f49ea1754a7f64d07a -- . \
   ':!README.md' ':!WORKSTREAMS.md' ':!docs/HANDOFF.md' \
   ':!docs/score-division-runbook.md' ':!docs/handoff/score-division.json' \
-  ':!docs/handoff/score-division.sha256'
+  ':!docs/handoff/score-division.sha256' ':!artifacts/score-division-cold-build'
 "$TV_PY" -c 'import hashlib,json,pathlib,sys; root=pathlib.Path(sys.argv[1]); d=json.loads((root/"docs/handoff/score-division.json").read_text()); assert all(hashlib.sha256((root/p).read_bytes()).hexdigest()==v["sha256"] for p,v in d["source_files"].items()); print("accepted adapter/test bytes match")' "$TV_ROOT"
 (cd "$TV_EVIDENCE" && sha256sum -c "$TV_ROOT/docs/handoff/score-division.sha256")
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$TV_ROOT:$TV_ROOT/Verdict" \
@@ -143,4 +143,26 @@ export PYTHONPATH="$TV_ROOT:$TV_ROOT/Verdict"
 
 随后执行第 3 节的 pytest 命令（该节使用上述 `TV_PY` 和 `TV_CHECKS`）。若需旧验收完整性核查，另按第 1 节显式提供 evidence/layout，不能把这次重新安装当成旧 `.olean`、capture 或日志的恢复。
 
-[机器可读索引](handoff/score-division.json)中的 `public_python_recovery` 记录这次新环境的 52 个公共包版本、来源提交及验证范围。安装时保留 pip 报告和构建日志即可；旧环境里的绝对路径不是依赖。此验证只解决 Python/nnScaler 安装及轻量入口，**完整 capture/Lean 重建与本地全量删除就绪仍未完成**。
+[机器可读索引](handoff/score-division.json)中的 `public_python_recovery` 记录这次新环境的 52 个公共包版本、来源提交及验证范围。安装时保留 pip 报告和构建日志即可；旧环境里的绝对路径不是依赖。此验证只解决 Python/nnScaler 安装及轻量入口；已有结果的 Lean 冷重建另见第 7 节。原始 capture/input 的完整恢复与本地全量删除就绪不能由 Python 安装或 Lean 条件定理单独推出。
+
+## 7. 公开 Lean 源码冷构建
+
+已有 score-division + 六行 mixed joint 的完整冷构建已通过：239 个任务模块从源码编译，154 个完整 Expr 合同不变，8,223 项源码公理检查满足 kernel3；未使用旧任务 `.olean`、旧共享包缓存或旧安装的 Lean。此次复用了已接受的生成 `.lean` 原字节，没有重新生成 capture，也没有推进数学 frontier。
+
+[仓内发布目录](../artifacts/score-division-cold-build/README.md)包含固定公开 Git 中缺少的 143 份源码补充、可运行输入胶囊、完整来源清单、原始结果和压缩文本证据。该目录的 `publication.json` / `SHA256SUMS` 是本次发布清单，与上文旧验收的 SHA 清单分开，不重写旧 receipts。
+
+在本仓库 checkout 内执行：
+
+```bash
+set -euo pipefail
+TV_ROOT="$(git rev-parse --show-toplevel)"
+TV_ARTIFACT="$TV_ROOT/artifacts/score-division-cold-build"
+(cd "$TV_ARTIFACT" && sha256sum -c SHA256SUMS)
+TV_COLD="$(mktemp -d "${TMPDIR:-/tmp}/trainverify-lean-cold.XXXXXX")"
+tar -xzf "$TV_ARTIFACT/portable-rebuild-inputs.tar.gz" -C "$TV_COLD"
+python3 "$TV_COLD/restore.py" --build
+```
+
+要求兼容 Linux x86-64、Python 3.11+、Git、curl、tar、zstd、`sha256sum`、`/usr/bin/time` 和公开网络。脚本新建官方 Lean 4.32.2 与精确 package revisions，并从官方缓存恢复依赖，随后仅编译目标闭包。无需本机旧 layout、nnScaler、Torch 或 GPU。不要直接在 tracked 发布目录运行；不要把带旧对象/旧 receipts 的目录称作冷构建。
+
+原完整构建耗时 80.81 分钟，最多四个单线程编译器。新运行需检查 `build-result.json`、`contract-verification.json`、`all-module-axioms.json` 均成功。只执行 `restore.py --skip-provision` 只能验证源码恢复，不是再次编译。结果重建不以新旧 `.olean` 字节相同为前提；默认 canonical attachment、whole-capture witness 与 capture/input 恢复边界保持不变。

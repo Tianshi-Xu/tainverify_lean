@@ -1,0 +1,168 @@
+{
+  "toolchain": {
+    "url": "https://github.com/leanprover/lean4/releases/download/v4.32.2/lean-4.32.2-linux.tar.zst",
+    "archive_sha256": "5f2069e6f5db73780f374ccb49ce8ea649aa20a0cebf0116816744c999ce72aa",
+    "version": "Lean (version 4.32.2, x86_64-unknown-linux-gnu, commit f3b06c705e6c85f5314019d5d3baab0fec5b580c, Release)",
+    "provision": "Fresh official release archive; no installed elan tree used",
+    "official_release_asset": {
+      "id": 492935897,
+      "name": "lean-4.32.2-linux.tar.zst",
+      "size": 563991635,
+      "digest": "sha256:5f2069e6f5db73780f374ccb49ce8ea649aa20a0cebf0116816744c999ce72aa",
+      "browser_download_url": "https://github.com/leanprover/lean4/releases/download/v4.32.2/lean-4.32.2-linux.tar.zst"
+    },
+    "official_digest_verified": true
+  },
+  "packages": [
+    {
+      "name": "mathlib",
+      "url": "https://github.com/leanprover-community/mathlib4",
+      "rev": "905b95818eb32af7874a58b427f50c1711a5e96c",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/mathlib/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    },
+    {
+      "name": "plausible",
+      "url": "https://github.com/leanprover-community/plausible",
+      "rev": "e12c1910fe855cbfc38803cd4e55543906d5fa62",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/plausible/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    },
+    {
+      "name": "LeanSearchClient",
+      "url": "https://github.com/leanprover-community/LeanSearchClient",
+      "rev": "c5d5b8fe6e5158def25cd28eb94e4141ad97c843",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/LeanSearchClient/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    },
+    {
+      "name": "importGraph",
+      "url": "https://github.com/leanprover-community/import-graph",
+      "rev": "7e9612bf0b9ee66db3cb5b9988a35afc706f5a12",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/importGraph/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    },
+    {
+      "name": "proofwidgets",
+      "url": "https://github.com/leanprover-community/ProofWidgets4",
+      "rev": "6e311e2a844da9b2cc3971187df2fe0066947b93",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/proofwidgets/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    },
+    {
+      "name": "aesop",
+      "url": "https://github.com/leanprover-community/aesop",
+      "rev": "a7dbf0c63b694e47f425f3dcddbc0e178bb432d3",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/aesop/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    },
+    {
+      "name": "Qq",
+      "url": "https://github.com/leanprover-community/quote4",
+      "rev": "38d591e778f100aec9762bb582f9c7f55f50e9dc",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/Qq/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    },
+    {
+      "name": "batteries",
+      "url": "https://github.com/leanprover-community/batteries",
+      "rev": "023ce7d62a0531e22a5331e20b587817a80d49ff",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/batteries/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    },
+    {
+      "name": "Cli",
+      "url": "https://github.com/leanprover/lean4-cli",
+      "rev": "88679d088c9720c27ebdf2ba4dafe17341747f94",
+      "build_root": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/Cli/.lake/build",
+      "provision": "Fresh public Git clone via pinned Lake manifest; official mathlib cache download, isolated HOME"
+    }
+  ],
+  "lock_sha256": "06e20e9226a72a47bec51ac04e35f466de539cd963b7179ea1a9e208b4f225ed",
+  "cache_log_sha256": "b1a5a9530dd7a034528bf4c6da10bba9e300e979ba30a862f5ca25d06cb6cce1",
+  "official_file_manifest_sha256": "99e147c40f555bb91658fb29feb101fe301c4c966e52d8390a1f4dddf5f9fb4b",
+  "official_file_count": 127135,
+  "native_linkage": "\tlinux-vdso.so.1 (0x00007ffc07975000)\n\tlibInit_shared.so => /home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/bin/../lib/lean/libInit_shared.so (0x00007dd8813c2000)\n\tlibleanshared_2.so => /home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/bin/../lib/lean/libleanshared_2.so (0x00007dd8813be000)\n\tlibleanshared_1.so => /home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/bin/../lib/lean/libleanshared_1.so (0x00007dd8813ba000)\n\tlibleanshared.so => /home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/bin/../lib/lean/libleanshared.so (0x00007dd877a00000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007dd877600000)\n\tlibpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007dd88139d000)\n\tlibdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007dd881398000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007dd8812af000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007dd8813cc000)\n\tlibrt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x00007dd8812aa000)\n",
+  "host_packages": "curl\t8.5.0-2ubuntu10.13\ngit\t1:2.43.0-1ubuntu7.3\nlibc6:amd64\t2.39-0ubuntu8.8\nlibgmp10:amd64\t2:6.3.0+dfsg-2ubuntu6.1\nzstd\t1.5.5+dfsg2-2build1.1\n",
+  "host_libraries": [
+    {
+      "path": "/lib/x86_64-linux-gnu/libc.so.6",
+      "resolved": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+      "sha256": "8db37cf3f2169f59a0f07ef1fea308c35656668c64c8ff294e1860f4121eb161"
+    },
+    {
+      "path": "/lib/x86_64-linux-gnu/libpthread.so.0",
+      "resolved": "/usr/lib/x86_64-linux-gnu/libpthread.so.0",
+      "sha256": "a27ffa9bf233d61a5f02ddb0cf770dd6579021afc1aa8aec0fb58ee4a965281a"
+    },
+    {
+      "path": "/lib/x86_64-linux-gnu/libdl.so.2",
+      "resolved": "/usr/lib/x86_64-linux-gnu/libdl.so.2",
+      "sha256": "292d5f5af2e7360b3e18c56591a4960115373ecf40627660f9149b6c68a33f80"
+    },
+    {
+      "path": "/lib/x86_64-linux-gnu/libm.so.6",
+      "resolved": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+      "sha256": "e9c4b28d340e415b8137480ec442662f981e1399386c5931dae0e886e3639e91"
+    },
+    {
+      "path": "/lib64/ld-linux-x86-64.so.2",
+      "resolved": "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+      "sha256": "cd4df4f3c7b83673d61189bf2eaebd33ca4f2853ab9772b8a25e025ef99b1e81"
+    },
+    {
+      "path": "/lib/x86_64-linux-gnu/librt.so.1",
+      "resolved": "/usr/lib/x86_64-linux-gnu/librt.so.1",
+      "sha256": "c6e6288545e24b0b3cfbf33320bda9236521625d8c3d628f3444f1ed40e5c7c5"
+    }
+  ],
+  "freshly_compiled_cache_bootstrap_modules": [
+    "Cache.Cli",
+    "Cache.Lean",
+    "Cache.Infra",
+    "Batteries.Tactic.OpenPrivate",
+    "Cache.IO",
+    "Cache.Hashing",
+    "Cache.Requests",
+    "Cache.Marker",
+    "Cache.Query",
+    "Cache.Warning",
+    "Cache.Main"
+  ],
+  "cache_origin": "https://lakecache.blob.core.windows.net/mathlib4",
+  "official_cache_entries_decompressed": 8639,
+  "cache_attempt_urls": [
+    "https://lakecache.blob.core.windows.net/mathlib4-master",
+    "https://lakecache.blob.core.windows.net/mathlib4"
+  ],
+  "cache_note": "The master endpoint had no entries for this pin; the official mathlib4 fallback supplied all 8639 entries.",
+  "setup_command": [
+    "lean-4.32.2-linux/bin/lake",
+    "exe",
+    "cache",
+    "get"
+  ],
+  "setup_cwd": "public/trainverify",
+  "setup_environment": {
+    "HOME": "<private>/home",
+    "LEAN_PATH": "unset",
+    "LEAN_SYSROOT": "unset",
+    "PATH": "<private>/lean-4.32.2-linux/bin:/usr/bin:/bin",
+    "LEAN_NUM_THREADS": "4"
+  },
+  "tested_platform": {
+    "uname": [
+      "Linux",
+      "GCRSANDBOX131",
+      "6.8.0-139-generic",
+      "#139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 03:52:05 UTC 2026",
+      "x86_64",
+      "x86_64"
+    ],
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.4 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.4 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+    "python": "3.11.16"
+  },
+  "private_mathlib_cache_files": 8639,
+  "private_mathlib_cache_path": "home/.cache/mathlib",
+  "official_file_manifest_scope": "Complete extracted official Lean distribution and all files in fresh public package build trees, including cache bootstrap executable and native .o.export artifacts."
+}

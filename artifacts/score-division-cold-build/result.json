@@ -1,0 +1,1608 @@
+{
+  "schema": "trainverify.score-division-source-first-rebuild.v1",
+  "status": "SUCCESS",
+  "complete_division_and_six_row_mixed_joint_compiled": true,
+  "source_commit": "97547f38242a61d89b30e1970ec8faf64d82a105",
+  "root_module": "ScoreDivFrontierJoint",
+  "task_module_count": 239,
+  "newly_compiled_task_modules": [
+    "FreshGatheredExchange",
+    "FreshGatheredLinear",
+    "FreshHeadExchange",
+    "FreshInputLinear",
+    "FreshMiddleExchange",
+    "FreshPostTranspose",
+    "FreshProjectionExchange",
+    "FreshProjectionTranspose",
+    "FreshProjectionView",
+    "FreshScoreDiv",
+    "FreshScoreExchange",
+    "FreshScoreMatmul",
+    "FreshSequenceAlias",
+    "RuntimeWorld",
+    "ScoreDivFrontierJoint",
+    "TrainVerifyRuntimePrefix0000",
+    "TrainVerifyRuntimePrefix0001",
+    "TrainVerifyRuntimePrefix0002",
+    "TrainVerifyRuntimePrefix0003",
+    "TrainVerifyRuntimePrefix0004",
+    "TrainVerifyRuntimePrefix0005",
+    "TrainVerifyRuntimePrefix0006",
+    "TrainVerifyRuntimePrefix0007",
+    "TrainVerifyRuntimePrefix0008",
+    "TrainVerifyRuntimePrefix0009",
+    "TrainVerifyRuntimePrefix0010",
+    "TrainVerifyRuntimePrefix0011",
+    "TrainVerifyRuntimePrefix0012",
+    "TrainVerifyRuntimePrefix0013",
+    "TrainVerifyRuntimePrefix0014",
+    "TrainVerifyRuntimePrefix0015",
+    "TrainVerifyRuntimePrefix0016",
+    "TrainVerifyRuntimePrefix0017",
+    "TrainVerifyRuntimePrefix0018",
+    "TrainVerifyRuntimePrefix0019",
+    "TrainVerifyRuntimePrefix0020",
+    "TrainVerifyRuntimePrefix0021",
+    "TrainVerifyRuntimePrefix0022",
+    "TrainVerifyRuntimePrefix0023",
+    "TrainVerifyRuntimePrefix0024",
+    "TrainVerifyRuntimePrefix0025",
+    "TrainVerifyRuntimePrefix0026",
+    "TrainVerifyRuntimePrefix0027",
+    "TrainVerifyRuntimePrefix0028",
+    "TrainVerifyRuntimePrefix0029",
+    "TrainVerifyRuntimePrefix0030",
+    "TrainVerifyRuntimePrefix0031",
+    "TrainVerifyRuntimePrefix0032",
+    "TrainVerifyRuntimePrefix0033",
+    "TrainVerifyRuntimePrefix0034",
+    "TrainVerifyRuntimePrefix0035",
+    "TrainVerifyRuntimePrefix0036",
+    "TrainVerifyRuntimePrefix0037",
+    "TrainVerifyRuntimePrefix0038",
+    "TrainVerifyRuntimePrefix0039",
+    "TrainVerifyRuntimePrefix0040",
+    "TrainVerifyRuntimePrefix0041",
+    "TrainVerifyRuntimePrefix0042",
+    "TrainVerifyRuntimePrefix0043",
+    "TrainVerifyRuntimePrefix0044",
+    "TrainVerifyRuntimePrefix0045",
+    "TrainVerifyRuntimePrefix0046",
+    "TrainVerifyRuntimePrefix0047",
+    "TrainVerifyRuntimePrefix0048",
+    "TrainVerifyRuntimePrefix0049",
+    "TrainVerifyRuntimePrefix0050",
+    "TrainVerifyRuntimePrefix0051",
+    "TrainVerifyRuntimePrefix0052",
+    "TrainVerifyRuntimePrefix0053",
+    "TrainVerifyRuntimePrefix0054",
+    "TrainVerifyRuntimePrefix0055",
+    "TrainVerifyRuntimePrefix0056",
+    "TrainVerifyRuntimePrefix0057",
+    "TrainVerifyRuntimePrefix0058",
+    "TrainVerifyRuntimePrefix0059",
+    "TrainVerifyRuntimePrefix0060",
+    "TrainVerifyRuntimePrefix0061",
+    "TrainVerifyRuntimePrefix0062",
+    "TrainVerifyRuntimePrefix0063",
+    "TrainVerifyRuntimePrefix0064",
+    "TrainVerifyRuntimePrefix0065",
+    "TrainVerifyRuntimePrefix0066",
+    "TrainVerifyRuntimePrefix0067",
+    "TrainVerifyRuntimePrefix0068",
+    "TrainVerifyRuntimePrefix0069",
+    "TrainVerifyRuntimePrefix0070",
+    "TrainVerifyRuntimePrefix0071",
+    "TrainVerifyRuntimePrefix0072",
+    "TrainVerifyRuntimePrefix0073",
+    "TrainVerifyRuntimePrefix0074",
+    "TrainVerifyRuntimePrefix0075",
+    "TrainVerifyRuntimePrefix0076",
+    "TrainVerifyRuntimePrefix0077",
+    "TrainVerifyRuntimePrefix0078",
+    "TrainVerifyRuntimePrefix0079",
+    "TrainVerifyRuntimePrefix0080",
+    "TrainVerifyRuntimePrefix0081",
+    "TrainVerifyRuntimePrefix0082",
+    "TrainVerifyRuntimePrefix0083",
+    "TrainVerifyRuntimePrefix0084",
+    "TrainVerifyRuntimePrefix0085",
+    "TrainVerifyRuntimePrefix0086",
+    "TrainVerifyRuntimePrefix0087",
+    "TrainVerifyRuntimePrefix0088",
+    "TrainVerifyRuntimePrefix0089",
+    "TrainVerifyRuntimePrefix0090",
+    "TrainVerifyRuntimePrefix0091",
+    "TrainVerifyRuntimePrefix0092",
+    "TrainVerifyRuntimePrefix0093",
+    "TrainVerifyRuntimePrefix0094",
+    "TrainVerifyRuntimePrefix0095",
+    "TrainVerifyRuntimePrefix0096",
+    "TrainVerifyRuntimePrefix0097",
+    "TrainVerifyRuntimePrefix0098",
+    "TrainVerifyRuntimePrefix0099",
+    "TrainVerifyRuntimePrefix0100",
+    "TrainVerifyRuntimePrefix0101",
+    "TrainVerifyRuntimePrefix0102",
+    "TrainVerifyRuntimePrefix0103",
+    "TrainVerifyRuntimePrefix0104",
+    "TrainVerifyRuntimePrefix0105",
+    "TrainVerifyRuntimePrefix0106",
+    "TrainVerifyRuntimePrefix0107",
+    "TrainVerifyRuntimePrefix0108",
+    "TrainVerifyRuntimePrefix0109",
+    "TrainVerifyRuntimePrefix0110",
+    "TrainVerifyRuntimePrefix0111",
+    "TrainVerifyRuntimePrefix0112",
+    "TrainVerifyRuntimePrefix0113",
+    "TrainVerifyRuntimePrefix0114",
+    "TrainVerifyRuntimePrefix0115",
+    "TrainVerifyRuntimePrefix0116",
+    "TrainVerifyRuntimePrefix0117",
+    "TrainVerifyRuntimePrefix0118",
+    "TrainVerifyRuntimePrefix0119",
+    "TrainVerifyRuntimePrefix0120",
+    "TrainVerifyRuntimePrefix0121",
+    "TrainVerifyRuntimePrefix0122",
+    "TrainVerifyRuntimePrefix0123",
+    "TrainVerifyRuntimePrefix0124",
+    "TrainVerifyRuntimePrefix0125",
+    "TrainVerifyRuntimePrefix0126",
+    "TrainVerifyRuntimePrefixNamesV3",
+    "TrainVerifyRuntimePrefixSupport",
+    "TrainVerifyRuntimeWorldData",
+    "denote.AllToAllSourceFaithful",
+    "denote.ChunkGatherDim0",
+    "denote.Denote",
+    "denote.DenoteDistributedFaithful",
+    "denote.DenoteMoE",
+    "denote.EmbeddingHiddenShard",
+    "denote.EmbeddingSequenceShard",
+    "denote.Gather2Rel",
+    "denote.GroupScopedEval",
+    "denote.InnerChunkCELossShard",
+    "denote.InnerChunkCEShard",
+    "denote.KRankAddGather",
+    "denote.KRankAllToAll",
+    "denote.KRankDivGather",
+    "denote.KRankInitValue",
+    "denote.KRankLayernormGather",
+    "denote.KRankLinearGather",
+    "denote.KRankLinearReduction",
+    "denote.KRankMatmul",
+    "denote.KRankMatmulHeadAxis",
+    "denote.KRankMatmulQueryAxis",
+    "denote.KRankSoftmaxGather",
+    "denote.KRankSwiGLUGather",
+    "denote.KRankTranspose",
+    "denote.KRankTranspose23Extra",
+    "denote.KRankViewFlatten",
+    "denote.KRankViewUnflatten",
+    "denote.MoEFullSplitCommute",
+    "denote.MultirefGeneral",
+    "denote.PointwiseGather",
+    "denote.RelationCompiler",
+    "denote.RotaryGather1D",
+    "denote.SlidingWindowReconstruction",
+    "denote.SourceAddFacts",
+    "denote.SourceAddRead",
+    "denote.SourceAddUnit",
+    "denote.SourceAllGatherRead",
+    "denote.SourceContiguousRead",
+    "denote.SourceDivRead",
+    "denote.SourceDivUnit",
+    "denote.SourceEmbeddingBatch",
+    "denote.SourceEmbeddingExchange",
+    "denote.SourceEmbeddingFacts",
+    "denote.SourceEmbeddingPositionUnit",
+    "denote.SourceEmbeddingRead",
+    "denote.SourceEmbeddingUnit",
+    "denote.SourceGeluRead",
+    "denote.SourceGeluUnit",
+    "denote.SourceHiddenSequenceExchange",
+    "denote.SourceInitialInputEncoding",
+    "denote.SourceInitialInputRead",
+    "denote.SourceInitialInputs",
+    "denote.SourceInitialParameterSpecs",
+    "denote.SourceInitialParameters",
+    "denote.SourceLayernormRead",
+    "denote.SourceLayernormUnit",
+    "denote.SourceLayoutRead",
+    "denote.SourceLinearInputUnit",
+    "denote.SourceLinearRead",
+    "denote.SourceLinearUnit",
+    "denote.SourceMatmulRead",
+    "denote.SourceMatmulUnit",
+    "denote.SourceMultirefRead",
+    "denote.SourceParameterFrame",
+    "denote.SourcePrimitiveRead",
+    "denote.SourcePrimitiveSteps",
+    "denote.SourceQueryMatmulUnit",
+    "denote.SourceQueryTransposeUnit",
+    "denote.SourceRank4Exchange",
+    "denote.SourceRank4InnerExchange",
+    "denote.SourceRank4MiddleExchange",
+    "denote.SourceRank4ReverseExchange",
+    "denote.SourceReduceScatterRead",
+    "denote.SourceScopedEval",
+    "denote.SourceScopedPrefix",
+    "denote.SourceSequenceHiddenExchange",
+    "denote.SourceSoftmaxRead",
+    "denote.SourceSoftmaxUnit",
+    "denote.SourceTranspose23Unit",
+    "denote.SourceTransposeUnit",
+    "denote.SourceValueRead",
+    "denote.SourceViewFlattenUnit",
+    "denote.SourceViewUnit",
+    "denote.ZigzagCollective",
+    "denote.yoco_goals.FaithfulStackGather",
+    "denote.yoco_goals.ZigzagAttentionRel",
+    "denote.yoco_goals.ZigzagBroadcastMul",
+    "denote.yoco_goals.ZigzagElemwiseRel",
+    "denote.yoco_goals.ZigzagLayoutRel",
+    "denote.yoco_goals.ZigzagLinearRel",
+    "denote.yoco_goals.ZigzagMoEGmmRel",
+    "denote.yoco_goals.ZigzagPointwiseRel",
+    "denote.yoco_goals.ZigzagRouterRel",
+    "denote.yoco_goals.ZigzagViewRel"
+  ],
+  "additional_new_probe_modules": [
+    "ColdContracts"
+  ],
+  "newly_compiled_official_bootstrap_modules": [
+    "Cache.Cli",
+    "Cache.Lean",
+    "Cache.Infra",
+    "Batteries.Tactic.OpenPrivate",
+    "Cache.IO",
+    "Cache.Hashing",
+    "Cache.Requests",
+    "Cache.Marker",
+    "Cache.Query",
+    "Cache.Warning",
+    "Cache.Main"
+  ],
+  "full_import_source_closure_count": 5151,
+  "closure_counts_by_origin": {
+    "task": 239,
+    "lean4": 2270,
+    "mathlib": 2385,
+    "batteries": 74,
+    "Qq": 14,
+    "aesop": 132,
+    "plausible": 13,
+    "LeanSearchClient": 4,
+    "importGraph": 10,
+    "proofwidgets": 10
+  },
+  "source_classification_counts": {
+    "pinned_git": 94,
+    "missing_from_reachable_git": 143,
+    "pinned_git_history": 2
+  },
+  "missing_source_bytes": 2638213,
+  "missing_source_bundle_bytes": 320194,
+  "contract_verification": {
+    "status": "verified",
+    "exact_saved_full_Expr_contracts_equal": 154,
+    "kernel3_queries": 162,
+    "division_and_joint_sources": "Byte-identical accepted sources; complete original explicit statements re-elaborated, no old objects loaded",
+    "all_candidate_source_hashes_preserved": true,
+    "command": [
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/bin/lean",
+      "-j1",
+      "--tstack=65536",
+      "-DmaxHeartbeats=500000",
+      "-DmaxRecDepth=4096",
+      "-o",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/objects/ColdContracts.olean",
+      "ColdContracts.lean"
+    ],
+    "exit_code": 0,
+    "object_sha256": "6bce2ca7510506f83bc26bdde95bcd85bec88de2887b26693f5c5c55a8fbcb06",
+    "source_sha256": "0bc1f401b6e0fad3db51db8fcb07bfca058a2c2d2c066e4e1cee1d0bc4609626"
+  },
+  "old_task_olean_used": false,
+  "old_shared_package_cache_used": false,
+  "old_toolchain_tree_used": false,
+  "accepted_generated_source_reused": true,
+  "new_capture_generated": false,
+  "historical_object_hash_equality_required": false,
+  "canonical_attachment": false,
+  "theorem_policy": "kernel3 only; original explicit full theorem statements and all candidate source bytes unchanged",
+  "failures": [],
+  "task_build_wall_seconds": 4848.629749059677,
+  "max_observed_compile_workers": 4,
+  "max_observed_aggregate_compile_rss_kib": 13047208,
+  "module_timings": [
+    {
+      "module": "denote.Denote",
+      "wall_seconds": 486.4287142753601,
+      "max_rss_kib": 5371540
+    },
+    {
+      "module": "denote.GroupScopedEval",
+      "wall_seconds": 7.127005100250244,
+      "max_rss_kib": 3096380
+    },
+    {
+      "module": "denote.KRankLinearReduction",
+      "wall_seconds": 7.987057685852051,
+      "max_rss_kib": 3088732
+    },
+    {
+      "module": "denote.AllToAllSourceFaithful",
+      "wall_seconds": 3.3199069499969482,
+      "max_rss_kib": 3157780
+    },
+    {
+      "module": "denote.KRankLinearGather",
+      "wall_seconds": 10.692232370376587,
+      "max_rss_kib": 3127452
+    },
+    {
+      "module": "denote.KRankInitValue",
+      "wall_seconds": 2.818776845932007,
+      "max_rss_kib": 3142552
+    },
+    {
+      "module": "denote.SourceScopedEval",
+      "wall_seconds": 3.9213860034942627,
+      "max_rss_kib": 3162400
+    },
+    {
+      "module": "denote.KRankAddGather",
+      "wall_seconds": 4.3222126960754395,
+      "max_rss_kib": 3169392
+    },
+    {
+      "module": "denote.SourceScopedPrefix",
+      "wall_seconds": 3.0195798873901367,
+      "max_rss_kib": 3151628
+    },
+    {
+      "module": "denote.KRankLayernormGather",
+      "wall_seconds": 9.732849836349487,
+      "max_rss_kib": 3189252
+    },
+    {
+      "module": "denote.KRankAllToAll",
+      "wall_seconds": 3.9720046520233154,
+      "max_rss_kib": 3167616
+    },
+    {
+      "module": "denote.SlidingWindowReconstruction",
+      "wall_seconds": 5.173283100128174,
+      "max_rss_kib": 3184608
+    },
+    {
+      "module": "denote.DenoteMoE",
+      "wall_seconds": 38.39197540283203,
+      "max_rss_kib": 3201780
+    },
+    {
+      "module": "denote.InnerChunkCEShard",
+      "wall_seconds": 5.2742249965667725,
+      "max_rss_kib": 3178680
+    },
+    {
+      "module": "denote.KRankSwiGLUGather",
+      "wall_seconds": 7.428173780441284,
+      "max_rss_kib": 3192252
+    },
+    {
+      "module": "denote.InnerChunkCELossShard",
+      "wall_seconds": 10.183409690856934,
+      "max_rss_kib": 3164096
+    },
+    {
+      "module": "denote.ZigzagCollective",
+      "wall_seconds": 26.612573623657227,
+      "max_rss_kib": 3236200
+    },
+    {
+      "module": "denote.DenoteDistributedFaithful",
+      "wall_seconds": 9.29040241241455,
+      "max_rss_kib": 2837196
+    },
+    {
+      "module": "denote.ChunkGatherDim0",
+      "wall_seconds": 13.04114556312561,
+      "max_rss_kib": 2834276
+    },
+    {
+      "module": "denote.Gather2Rel",
+      "wall_seconds": 11.045763731002808,
+      "max_rss_kib": 3094952
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagLayoutRel",
+      "wall_seconds": 12.548179626464844,
+      "max_rss_kib": 3110316
+    },
+    {
+      "module": "TrainVerifyRuntimeWorldData",
+      "wall_seconds": 73.3712809085846,
+      "max_rss_kib": 4777588
+    },
+    {
+      "module": "denote.MultirefGeneral",
+      "wall_seconds": 2.779257297515869,
+      "max_rss_kib": 3128300
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagLinearRel",
+      "wall_seconds": 3.721303701400757,
+      "max_rss_kib": 3149444
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagRouterRel",
+      "wall_seconds": 6.676397085189819,
+      "max_rss_kib": 3190152
+    },
+    {
+      "module": "denote.KRankTranspose",
+      "wall_seconds": 84.18786263465881,
+      "max_rss_kib": 3194768
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagPointwiseRel",
+      "wall_seconds": 4.421365976333618,
+      "max_rss_kib": 3163656
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagViewRel",
+      "wall_seconds": 4.222201585769653,
+      "max_rss_kib": 3157656
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagMoEGmmRel",
+      "wall_seconds": 7.277061462402344,
+      "max_rss_kib": 3183496
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagAttentionRel",
+      "wall_seconds": 13.088348150253296,
+      "max_rss_kib": 3172804
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagElemwiseRel",
+      "wall_seconds": 6.575428009033203,
+      "max_rss_kib": 3204108
+    },
+    {
+      "module": "denote.PointwiseGather",
+      "wall_seconds": 6.226796865463257,
+      "max_rss_kib": 3176676
+    },
+    {
+      "module": "denote.yoco_goals.ZigzagBroadcastMul",
+      "wall_seconds": 4.221581935882568,
+      "max_rss_kib": 3161704
+    },
+    {
+      "module": "denote.RotaryGather1D",
+      "wall_seconds": 3.521024703979492,
+      "max_rss_kib": 3143312
+    },
+    {
+      "module": "denote.MoEFullSplitCommute",
+      "wall_seconds": 11.43478775024414,
+      "max_rss_kib": 3206996
+    },
+    {
+      "module": "denote.SourceInitialInputEncoding",
+      "wall_seconds": 2.92012357711792,
+      "max_rss_kib": 3142252
+    },
+    {
+      "module": "denote.SourceEmbeddingBatch",
+      "wall_seconds": 3.2202036380767822,
+      "max_rss_kib": 3139644
+    },
+    {
+      "module": "denote.SourceAddUnit",
+      "wall_seconds": 2.9694390296936035,
+      "max_rss_kib": 3135908
+    },
+    {
+      "module": "denote.EmbeddingHiddenShard",
+      "wall_seconds": 8.479225397109985,
+      "max_rss_kib": 3181528
+    },
+    {
+      "module": "denote.SourceAddFacts",
+      "wall_seconds": 2.8195998668670654,
+      "max_rss_kib": 3129316
+    },
+    {
+      "module": "denote.SourceHiddenSequenceExchange",
+      "wall_seconds": 3.5707433223724365,
+      "max_rss_kib": 3149344
+    },
+    {
+      "module": "denote.EmbeddingSequenceShard",
+      "wall_seconds": 4.021907329559326,
+      "max_rss_kib": 3154880
+    },
+    {
+      "module": "denote.SourceEmbeddingUnit",
+      "wall_seconds": 3.119859457015991,
+      "max_rss_kib": 3129768
+    },
+    {
+      "module": "denote.SourceLayernormUnit",
+      "wall_seconds": 3.721475124359131,
+      "max_rss_kib": 3147444
+    },
+    {
+      "module": "denote.SourceEmbeddingExchange",
+      "wall_seconds": 4.0718748569488525,
+      "max_rss_kib": 3139716
+    },
+    {
+      "module": "denote.SourceLinearUnit",
+      "wall_seconds": 3.370333433151245,
+      "max_rss_kib": 3146816
+    },
+    {
+      "module": "denote.KRankViewFlatten",
+      "wall_seconds": 3.7210474014282227,
+      "max_rss_kib": 3140160
+    },
+    {
+      "module": "denote.SourceEmbeddingPositionUnit",
+      "wall_seconds": 2.8196284770965576,
+      "max_rss_kib": 3131420
+    },
+    {
+      "module": "denote.SourceTransposeUnit",
+      "wall_seconds": 3.72184681892395,
+      "max_rss_kib": 3147440
+    },
+    {
+      "module": "denote.KRankViewUnflatten",
+      "wall_seconds": 3.1202011108398438,
+      "max_rss_kib": 3133776
+    },
+    {
+      "module": "denote.yoco_goals.FaithfulStackGather",
+      "wall_seconds": 30.568691730499268,
+      "max_rss_kib": 3241800
+    },
+    {
+      "module": "denote.SourceEmbeddingFacts",
+      "wall_seconds": 3.270256519317627,
+      "max_rss_kib": 3136220
+    },
+    {
+      "module": "denote.SourceQueryTransposeUnit",
+      "wall_seconds": 3.020127534866333,
+      "max_rss_kib": 3132300
+    },
+    {
+      "module": "denote.SourceViewUnit",
+      "wall_seconds": 3.3204410076141357,
+      "max_rss_kib": 3140508
+    },
+    {
+      "module": "denote.SourceViewFlattenUnit",
+      "wall_seconds": 3.1701769828796387,
+      "max_rss_kib": 3142916
+    },
+    {
+      "module": "denote.SourceSequenceHiddenExchange",
+      "wall_seconds": 3.571127414703369,
+      "max_rss_kib": 3149352
+    },
+    {
+      "module": "denote.SourceGeluUnit",
+      "wall_seconds": 3.2199525833129883,
+      "max_rss_kib": 3141420
+    },
+    {
+      "module": "denote.SourcePrimitiveSteps",
+      "wall_seconds": 3.269914388656616,
+      "max_rss_kib": 3145312
+    },
+    {
+      "module": "TrainVerifyRuntimePrefixSupport",
+      "wall_seconds": 3.671018600463867,
+      "max_rss_kib": 3430016
+    },
+    {
+      "module": "denote.SourceLinearInputUnit",
+      "wall_seconds": 3.0191197395324707,
+      "max_rss_kib": 3138724
+    },
+    {
+      "module": "TrainVerifyRuntimePrefixNamesV3",
+      "wall_seconds": 3.0698587894439697,
+      "max_rss_kib": 3415456
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0000",
+      "wall_seconds": 4.321711540222168,
+      "max_rss_kib": 3439784
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0001",
+      "wall_seconds": 4.573299884796143,
+      "max_rss_kib": 3435292
+    },
+    {
+      "module": "denote.RelationCompiler",
+      "wall_seconds": 22.656618356704712,
+      "max_rss_kib": 3363872
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0002",
+      "wall_seconds": 4.523167610168457,
+      "max_rss_kib": 3441368
+    },
+    {
+      "module": "denote.SourceInitialParameters",
+      "wall_seconds": 2.8690977096557617,
+      "max_rss_kib": 3119584
+    },
+    {
+      "module": "denote.SourceInitialInputs",
+      "wall_seconds": 3.1202590465545654,
+      "max_rss_kib": 3123568
+    },
+    {
+      "module": "denote.KRankMatmul",
+      "wall_seconds": 5.223969459533691,
+      "max_rss_kib": 3187460
+    },
+    {
+      "module": "denote.SourceInitialParameterSpecs",
+      "wall_seconds": 2.8693580627441406,
+      "max_rss_kib": 3161240
+    },
+    {
+      "module": "denote.SourceInitialInputRead",
+      "wall_seconds": 2.718839406967163,
+      "max_rss_kib": 3148220
+    },
+    {
+      "module": "denote.SourceParameterFrame",
+      "wall_seconds": 2.969291925430298,
+      "max_rss_kib": 3154108
+    },
+    {
+      "module": "denote.SourceEmbeddingRead",
+      "wall_seconds": 3.169628381729126,
+      "max_rss_kib": 3164828
+    },
+    {
+      "module": "denote.KRankMatmulHeadAxis",
+      "wall_seconds": 5.274014949798584,
+      "max_rss_kib": 3196608
+    },
+    {
+      "module": "denote.SourceValueRead",
+      "wall_seconds": 2.7695930004119873,
+      "max_rss_kib": 3151312
+    },
+    {
+      "module": "denote.KRankMatmulQueryAxis",
+      "wall_seconds": 4.4217143058776855,
+      "max_rss_kib": 3185736
+    },
+    {
+      "module": "denote.SourceRank4ReverseExchange",
+      "wall_seconds": 3.871556043624878,
+      "max_rss_kib": 3168732
+    },
+    {
+      "module": "denote.SourceAddRead",
+      "wall_seconds": 2.9696402549743652,
+      "max_rss_kib": 3161744
+    },
+    {
+      "module": "denote.SourceMultirefRead",
+      "wall_seconds": 3.0194075107574463,
+      "max_rss_kib": 3163612
+    },
+    {
+      "module": "denote.SourceLinearRead",
+      "wall_seconds": 3.019855499267578,
+      "max_rss_kib": 3161980
+    },
+    {
+      "module": "denote.SourceLayernormRead",
+      "wall_seconds": 3.1195309162139893,
+      "max_rss_kib": 3162420
+    },
+    {
+      "module": "denote.SourceAllGatherRead",
+      "wall_seconds": 3.220158576965332,
+      "max_rss_kib": 3166888
+    },
+    {
+      "module": "denote.SourceLayoutRead",
+      "wall_seconds": 3.4206156730651855,
+      "max_rss_kib": 3162872
+    },
+    {
+      "module": "denote.SourceRank4Exchange",
+      "wall_seconds": 4.422041654586792,
+      "max_rss_kib": 3177452
+    },
+    {
+      "module": "denote.SourceRank4MiddleExchange",
+      "wall_seconds": 3.620617628097534,
+      "max_rss_kib": 3169308
+    },
+    {
+      "module": "denote.SourceMatmulRead",
+      "wall_seconds": 3.068960666656494,
+      "max_rss_kib": 3161808
+    },
+    {
+      "module": "denote.SourceMatmulUnit",
+      "wall_seconds": 3.5202131271362305,
+      "max_rss_kib": 3163232
+    },
+    {
+      "module": "denote.SourceDivRead",
+      "wall_seconds": 3.019028902053833,
+      "max_rss_kib": 3161536
+    },
+    {
+      "module": "denote.KRankDivGather",
+      "wall_seconds": 3.0191595554351807,
+      "max_rss_kib": 3151924
+    },
+    {
+      "module": "denote.SourceSoftmaxRead",
+      "wall_seconds": 3.068960189819336,
+      "max_rss_kib": 3161300
+    },
+    {
+      "module": "denote.SourceDivUnit",
+      "wall_seconds": 3.1191325187683105,
+      "max_rss_kib": 3158308
+    },
+    {
+      "module": "denote.SourceRank4InnerExchange",
+      "wall_seconds": 3.621453285217285,
+      "max_rss_kib": 3169180
+    },
+    {
+      "module": "denote.SourceQueryMatmulUnit",
+      "wall_seconds": 2.9203054904937744,
+      "max_rss_kib": 3153204
+    },
+    {
+      "module": "denote.KRankSoftmaxGather",
+      "wall_seconds": 7.628032684326172,
+      "max_rss_kib": 3226080
+    },
+    {
+      "module": "denote.SourceContiguousRead",
+      "wall_seconds": 3.0699901580810547,
+      "max_rss_kib": 3162300
+    },
+    {
+      "module": "denote.SourceGeluRead",
+      "wall_seconds": 3.0197081565856934,
+      "max_rss_kib": 3160756
+    },
+    {
+      "module": "denote.SourceSoftmaxUnit",
+      "wall_seconds": 3.270256280899048,
+      "max_rss_kib": 3162916
+    },
+    {
+      "module": "denote.SourcePrimitiveRead",
+      "wall_seconds": 2.9693045616149902,
+      "max_rss_kib": 3152784
+    },
+    {
+      "module": "denote.SourceReduceScatterRead",
+      "wall_seconds": 3.421374559402466,
+      "max_rss_kib": 3171756
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0003",
+      "wall_seconds": 11.98580265045166,
+      "max_rss_kib": 3539652
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0004",
+      "wall_seconds": 11.434123277664185,
+      "max_rss_kib": 3520148
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0005",
+      "wall_seconds": 11.284794569015503,
+      "max_rss_kib": 3466028
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0006",
+      "wall_seconds": 15.292181491851807,
+      "max_rss_kib": 3468376
+    },
+    {
+      "module": "denote.KRankTranspose23Extra",
+      "wall_seconds": 87.77440881729126,
+      "max_rss_kib": 3238000
+    },
+    {
+      "module": "denote.SourceTranspose23Unit",
+      "wall_seconds": 3.720304489135742,
+      "max_rss_kib": 3166840
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0007",
+      "wall_seconds": 13.940033912658691,
+      "max_rss_kib": 3468616
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0008",
+      "wall_seconds": 16.244378328323364,
+      "max_rss_kib": 3473472
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0009",
+      "wall_seconds": 16.6948299407959,
+      "max_rss_kib": 3479488
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0010",
+      "wall_seconds": 15.79313325881958,
+      "max_rss_kib": 3470844
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0011",
+      "wall_seconds": 15.645027160644531,
+      "max_rss_kib": 3465140
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0012",
+      "wall_seconds": 17.4982488155365,
+      "max_rss_kib": 3550632
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0013",
+      "wall_seconds": 18.09939193725586,
+      "max_rss_kib": 3520620
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0014",
+      "wall_seconds": 19.551513195037842,
+      "max_rss_kib": 3536300
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0015",
+      "wall_seconds": 14.741146802902222,
+      "max_rss_kib": 3471352
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0016",
+      "wall_seconds": 15.894339561462402,
+      "max_rss_kib": 3481576
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0017",
+      "wall_seconds": 18.547653913497925,
+      "max_rss_kib": 3477944
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0018",
+      "wall_seconds": 17.748156547546387,
+      "max_rss_kib": 3479980
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0019",
+      "wall_seconds": 19.751515865325928,
+      "max_rss_kib": 3491304
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0020",
+      "wall_seconds": 17.847060680389404,
+      "max_rss_kib": 3473320
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0021",
+      "wall_seconds": 17.09523630142212,
+      "max_rss_kib": 3484872
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0022",
+      "wall_seconds": 17.647948741912842,
+      "max_rss_kib": 3471304
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0023",
+      "wall_seconds": 20.150277137756348,
+      "max_rss_kib": 3558808
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0024",
+      "wall_seconds": 17.396028995513916,
+      "max_rss_kib": 3482176
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0025",
+      "wall_seconds": 20.15312910079956,
+      "max_rss_kib": 3558376
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0026",
+      "wall_seconds": 19.19847083091736,
+      "max_rss_kib": 3532640
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0027",
+      "wall_seconds": 16.144734144210815,
+      "max_rss_kib": 3477000
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0028",
+      "wall_seconds": 16.996578216552734,
+      "max_rss_kib": 3531668
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0029",
+      "wall_seconds": 19.30172085762024,
+      "max_rss_kib": 3535848
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0030",
+      "wall_seconds": 17.246263027191162,
+      "max_rss_kib": 3530420
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0031",
+      "wall_seconds": 21.603328704833984,
+      "max_rss_kib": 3569936
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0032",
+      "wall_seconds": 18.697196006774902,
+      "max_rss_kib": 3539608
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0033",
+      "wall_seconds": 21.70267081260681,
+      "max_rss_kib": 3491264
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0034",
+      "wall_seconds": 21.403701543807983,
+      "max_rss_kib": 3495384
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0035",
+      "wall_seconds": 21.902413368225098,
+      "max_rss_kib": 3497204
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0036",
+      "wall_seconds": 22.809349060058594,
+      "max_rss_kib": 3507560
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0037",
+      "wall_seconds": 21.953713178634644,
+      "max_rss_kib": 3504404
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0038",
+      "wall_seconds": 20.801167488098145,
+      "max_rss_kib": 3497128
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0039",
+      "wall_seconds": 20.600964307785034,
+      "max_rss_kib": 3499188
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0040",
+      "wall_seconds": 20.45427918434143,
+      "max_rss_kib": 3548900
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0041",
+      "wall_seconds": 23.906654596328735,
+      "max_rss_kib": 3549224
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0042",
+      "wall_seconds": 21.85221004486084,
+      "max_rss_kib": 3547572
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0043",
+      "wall_seconds": 23.208589792251587,
+      "max_rss_kib": 3574004
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0044",
+      "wall_seconds": 23.205331563949585,
+      "max_rss_kib": 3551192
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0045",
+      "wall_seconds": 21.904739379882812,
+      "max_rss_kib": 3512724
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0046",
+      "wall_seconds": 21.853741884231567,
+      "max_rss_kib": 3490104
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0047",
+      "wall_seconds": 23.360913038253784,
+      "max_rss_kib": 3492632
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0048",
+      "wall_seconds": 21.502971172332764,
+      "max_rss_kib": 3510152
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0049",
+      "wall_seconds": 24.863017797470093,
+      "max_rss_kib": 3491512
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0050",
+      "wall_seconds": 24.260660409927368,
+      "max_rss_kib": 3511976
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0051",
+      "wall_seconds": 20.752685546875,
+      "max_rss_kib": 3513848
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0052",
+      "wall_seconds": 21.604973554611206,
+      "max_rss_kib": 3551936
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0053",
+      "wall_seconds": 25.11237120628357,
+      "max_rss_kib": 3584456
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0054",
+      "wall_seconds": 22.80597972869873,
+      "max_rss_kib": 3552856
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0055",
+      "wall_seconds": 20.105391263961792,
+      "max_rss_kib": 3578060
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0056",
+      "wall_seconds": 20.25040030479431,
+      "max_rss_kib": 3549652
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0057",
+      "wall_seconds": 19.699169874191284,
+      "max_rss_kib": 3501036
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0058",
+      "wall_seconds": 22.253862142562866,
+      "max_rss_kib": 3500620
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0059",
+      "wall_seconds": 22.25383687019348,
+      "max_rss_kib": 3502220
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0060",
+      "wall_seconds": 24.961240530014038,
+      "max_rss_kib": 3504228
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0061",
+      "wall_seconds": 25.562111139297485,
+      "max_rss_kib": 3512884
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0062",
+      "wall_seconds": 24.15894317626953,
+      "max_rss_kib": 3502720
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0063",
+      "wall_seconds": 25.862587928771973,
+      "max_rss_kib": 3490880
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0064",
+      "wall_seconds": 26.31196117401123,
+      "max_rss_kib": 3563740
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0065",
+      "wall_seconds": 27.46600031852722,
+      "max_rss_kib": 3569660
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0066",
+      "wall_seconds": 26.361773252487183,
+      "max_rss_kib": 3561444
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0067",
+      "wall_seconds": 22.70594573020935,
+      "max_rss_kib": 3513004
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0068",
+      "wall_seconds": 25.511273622512817,
+      "max_rss_kib": 3514732
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0069",
+      "wall_seconds": 27.216347217559814,
+      "max_rss_kib": 3514140
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0070",
+      "wall_seconds": 24.409608840942383,
+      "max_rss_kib": 3515776
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0071",
+      "wall_seconds": 29.96973419189453,
+      "max_rss_kib": 3523356
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0072",
+      "wall_seconds": 27.414180040359497,
+      "max_rss_kib": 3510108
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0073",
+      "wall_seconds": 25.46133255958557,
+      "max_rss_kib": 3522144
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0074",
+      "wall_seconds": 24.609086513519287,
+      "max_rss_kib": 3523336
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0075",
+      "wall_seconds": 27.664117574691772,
+      "max_rss_kib": 3591296
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0076",
+      "wall_seconds": 26.770127058029175,
+      "max_rss_kib": 3525536
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0077",
+      "wall_seconds": 28.521264791488647,
+      "max_rss_kib": 3590172
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0078",
+      "wall_seconds": 29.717974185943604,
+      "max_rss_kib": 3564668
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0079",
+      "wall_seconds": 25.61115264892578,
+      "max_rss_kib": 3515496
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0080",
+      "wall_seconds": 21.307522773742676,
+      "max_rss_kib": 3584204
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0081",
+      "wall_seconds": 23.755850791931152,
+      "max_rss_kib": 3565220
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0082",
+      "wall_seconds": 24.46223282814026,
+      "max_rss_kib": 3562604
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0083",
+      "wall_seconds": 24.7132408618927,
+      "max_rss_kib": 3594488
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0084",
+      "wall_seconds": 25.061126708984375,
+      "max_rss_kib": 3573984
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0085",
+      "wall_seconds": 27.264906883239746,
+      "max_rss_kib": 3528800
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0086",
+      "wall_seconds": 28.367408990859985,
+      "max_rss_kib": 3525920
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0087",
+      "wall_seconds": 28.970601081848145,
+      "max_rss_kib": 3517824
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0088",
+      "wall_seconds": 29.37021541595459,
+      "max_rss_kib": 3542016
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0089",
+      "wall_seconds": 28.01553750038147,
+      "max_rss_kib": 3540992
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0090",
+      "wall_seconds": 30.920972108840942,
+      "max_rss_kib": 3529776
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0091",
+      "wall_seconds": 31.672236442565918,
+      "max_rss_kib": 3542812
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0092",
+      "wall_seconds": 30.674379348754883,
+      "max_rss_kib": 3543464
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0093",
+      "wall_seconds": 28.71744656562805,
+      "max_rss_kib": 3584008
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0094",
+      "wall_seconds": 30.771812438964844,
+      "max_rss_kib": 3583380
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0095",
+      "wall_seconds": 26.41404366493225,
+      "max_rss_kib": 3602908
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0096",
+      "wall_seconds": 31.82389760017395,
+      "max_rss_kib": 3612368
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0097",
+      "wall_seconds": 30.670427083969116,
+      "max_rss_kib": 3585124
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0098",
+      "wall_seconds": 29.668041467666626,
+      "max_rss_kib": 3549272
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0099",
+      "wall_seconds": 28.662476301193237,
+      "max_rss_kib": 3526596
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0100",
+      "wall_seconds": 31.420539379119873,
+      "max_rss_kib": 3525592
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0101",
+      "wall_seconds": 29.91696834564209,
+      "max_rss_kib": 3548912
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0102",
+      "wall_seconds": 31.87148427963257,
+      "max_rss_kib": 3542068
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0103",
+      "wall_seconds": 30.920828819274902,
+      "max_rss_kib": 3550784
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0104",
+      "wall_seconds": 27.666161060333252,
+      "max_rss_kib": 3556448
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0105",
+      "wall_seconds": 26.009532690048218,
+      "max_rss_kib": 3591204
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0106",
+      "wall_seconds": 31.82531213760376,
+      "max_rss_kib": 3592504
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0107",
+      "wall_seconds": 27.21184015274048,
+      "max_rss_kib": 3540016
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0108",
+      "wall_seconds": 24.60745358467102,
+      "max_rss_kib": 3547740
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0109",
+      "wall_seconds": 27.366405725479126,
+      "max_rss_kib": 3550612
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0110",
+      "wall_seconds": 28.666687488555908,
+      "max_rss_kib": 3542708
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0111",
+      "wall_seconds": 27.31705403327942,
+      "max_rss_kib": 3545512
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0112",
+      "wall_seconds": 24.66165781021118,
+      "max_rss_kib": 3544096
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0113",
+      "wall_seconds": 29.76814079284668,
+      "max_rss_kib": 3552912
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0114",
+      "wall_seconds": 32.6738715171814,
+      "max_rss_kib": 3553872
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0115",
+      "wall_seconds": 32.07414746284485,
+      "max_rss_kib": 3554376
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0116",
+      "wall_seconds": 36.98475122451782,
+      "max_rss_kib": 3554520
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0117",
+      "wall_seconds": 33.47422742843628,
+      "max_rss_kib": 3552412
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0118",
+      "wall_seconds": 35.326966762542725,
+      "max_rss_kib": 3563652
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0119",
+      "wall_seconds": 33.226398229599,
+      "max_rss_kib": 3562388
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0120",
+      "wall_seconds": 37.44250559806824,
+      "max_rss_kib": 3561532
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0121",
+      "wall_seconds": 42.30405807495117,
+      "max_rss_kib": 3625236
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0122",
+      "wall_seconds": 40.394097328186035,
+      "max_rss_kib": 3736812
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0123",
+      "wall_seconds": 65.7971305847168,
+      "max_rss_kib": 3886844
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0124",
+      "wall_seconds": 68.34078454971313,
+      "max_rss_kib": 3909424
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0125",
+      "wall_seconds": 70.09819102287292,
+      "max_rss_kib": 3523624
+    },
+    {
+      "module": "TrainVerifyRuntimePrefix0126",
+      "wall_seconds": 104.5618257522583,
+      "max_rss_kib": 3518180
+    },
+    {
+      "module": "RuntimeWorld",
+      "wall_seconds": 640.2295734882355,
+      "max_rss_kib": 5125384
+    },
+    {
+      "module": "FreshSequenceAlias",
+      "wall_seconds": 11.535871982574463,
+      "max_rss_kib": 3588520
+    },
+    {
+      "module": "FreshProjectionExchange",
+      "wall_seconds": 24.659149646759033,
+      "max_rss_kib": 3605092
+    },
+    {
+      "module": "FreshInputLinear",
+      "wall_seconds": 50.15563488006592,
+      "max_rss_kib": 3611556
+    },
+    {
+      "module": "FreshGatheredLinear",
+      "wall_seconds": 26.10934615135193,
+      "max_rss_kib": 3609280
+    },
+    {
+      "module": "FreshGatheredExchange",
+      "wall_seconds": 13.639978885650635,
+      "max_rss_kib": 3616760
+    },
+    {
+      "module": "FreshProjectionView",
+      "wall_seconds": 28.81687045097351,
+      "max_rss_kib": 3597532
+    },
+    {
+      "module": "FreshHeadExchange",
+      "wall_seconds": 35.830854415893555,
+      "max_rss_kib": 3612176
+    },
+    {
+      "module": "FreshProjectionTranspose",
+      "wall_seconds": 28.71436858177185,
+      "max_rss_kib": 3596804
+    },
+    {
+      "module": "FreshPostTranspose",
+      "wall_seconds": 22.30463480949402,
+      "max_rss_kib": 3624500
+    },
+    {
+      "module": "FreshMiddleExchange",
+      "wall_seconds": 13.689616680145264,
+      "max_rss_kib": 3619620
+    },
+    {
+      "module": "FreshScoreMatmul",
+      "wall_seconds": 14.992326974868774,
+      "max_rss_kib": 3624312
+    },
+    {
+      "module": "FreshScoreExchange",
+      "wall_seconds": 13.63823413848877,
+      "max_rss_kib": 3619988
+    },
+    {
+      "module": "FreshScoreDiv",
+      "wall_seconds": 11.635415077209473,
+      "max_rss_kib": 3591492
+    },
+    {
+      "module": "ScoreDivFrontierJoint",
+      "wall_seconds": 3.1195082664489746,
+      "max_rss_kib": 3506924
+    }
+  ],
+  "official_provenance_sha256": "a1bd49d6e2022b936b4d95d1132be5a0f6bfecc72cb0a37ccc3953da9051da98",
+  "source_manifest_sha256": "c456bd2f56b8af00d3bd08e33cab47f16a466b59ae59750feca8804f72a8ccd8",
+  "full_import_closure_sha256": "acae9df34d6230121f367f3006df24da5557af2a86487037e3b4a9142bfffaf7",
+  "build_receipts_sha256": "dc83d030cb03cfd865f1548d72bf60f7bc8d1df5bf33756cdf7bbee375d0aa6e",
+  "publication_required": [
+    "minimal-missing-sources.tar.gz",
+    "source-manifest.json",
+    "restore.py",
+    "build.py",
+    "verify_contracts.py",
+    "contract-manifest.json",
+    "expected-contracts.json",
+    "official-provenance.json",
+    "audit_axiom_logs.py",
+    "expected-module-axioms.json"
+  ],
+  "uploaded": false,
+  "deleted_old_task_artifacts": false,
+  "safe_to_delete_all_old_task_trees": "Not authorized or claimed. This closes only the Lean rebuild path after publishing the input bundle; capture/input/runtime and historical receipt retention are separate.",
+  "old_task_trees_required_for_Lean_rebuild_after_publishing_portable_inputs": false,
+  "all_module_axiom_verification": {
+    "status": "verified",
+    "module_count": 239,
+    "printed_axiom_queries": 8223,
+    "distinct_declarations_queried": 8223,
+    "saved_module_axiom_contracts_equal": 131,
+    "saved_axiom_queries_preserved": 7896,
+    "scope": "All explicit source #print axioms commands and their #a macro aliases; not a census of every unqueried declaration in imported libraries."
+  },
+  "source_policy_scan": {
+    "status": "clean",
+    "checked_sources": 239,
+    "findings": [],
+    "scope": "Token scan excludes nested comments and strings; complements, does not replace, kernel axiom checks."
+  },
+  "source_restoration": {
+    "status": "verified",
+    "module_count": 239,
+    "source_output": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/restored-sources",
+    "public_remote": "https://github.com/Tianshi-Xu/tainverify_lean.git",
+    "pinned_commit": "97547f38242a61d89b30e1970ec8faf64d82a105",
+    "manifest_sha256": "c456bd2f56b8af00d3bd08e33cab47f16a466b59ae59750feca8804f72a8ccd8",
+    "missing_bundle_sha256": "5d2b5981a10b3c8636794d2196060bc208ee92fd1f14dc7847f21ff2cf6e850a",
+    "historical_local_source_paths_opened": false,
+    "objects_restored": false
+  },
+  "negative_control": {
+    "status": "expected_failure",
+    "command": [
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/bin/lean",
+      "-j1",
+      "-o",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/negative/NoTaskObjects.olean",
+      "NoTaskObjects.lean"
+    ],
+    "lean_path": [
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/Cli/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/aesop/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/mathlib/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/LeanSearchClient/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/plausible/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/importGraph/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/batteries/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/Qq/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/proofwidgets/.lake/build/lib/lean",
+      "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/lib/lean"
+    ],
+    "exit_code": 1,
+    "output": "NoTaskObjects.lean:1:0: error: unknown module prefix 'denote'\n\nNo directory 'denote' or file 'denote.olean' in the search path entries:\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/Cli/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/aesop/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/mathlib/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/LeanSearchClient/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/plausible/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/importGraph/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/batteries/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/Qq/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/public/trainverify/.lake/packages/proofwidgets/.lake/build/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/lib/lean\n/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/lean-4.32.2-linux/lib/lean\n",
+    "old_task_cache_not_found": true
+  },
+  "portable_input_bundle": {
+    "path": "portable-rebuild-inputs.tar.gz",
+    "sha256": "299c1f12b2d1c80180a797bdafbc6af5743a18f83ccc1d63daab9076e49c48b8",
+    "bytes": 416269,
+    "contains_task_or_package_objects": false
+  },
+  "portable_capsule_source_test": {
+    "status": "verified",
+    "module_count": 239,
+    "source_output": "/home/v-zhouziyu/trainverify-audits/remote-recovery/rebuild-lean/portable-capsule-source-test/sources",
+    "public_remote": "https://github.com/Tianshi-Xu/tainverify_lean.git",
+    "pinned_commit": "97547f38242a61d89b30e1970ec8faf64d82a105",
+    "manifest_sha256": "c456bd2f56b8af00d3bd08e33cab47f16a466b59ae59750feca8804f72a8ccd8",
+    "missing_bundle_sha256": "5d2b5981a10b3c8636794d2196060bc208ee92fd1f14dc7847f21ff2cf6e850a",
+    "historical_local_source_paths_opened": false,
+    "objects_restored": false,
+    "seconds": 32.898139238357544,
+    "capsule_test": "Only portable bundle unpacked into a new directory; fresh shallow public Git fetches; no local discovery scripts or old trees.",
+    "capsule_sha256": "299c1f12b2d1c80180a797bdafbc6af5743a18f83ccc1d63daab9076e49c48b8",
+    "all_restored_files_rehashed": true
+  },
+  "all_expected_task_objects_regular_and_readonly": true,
+  "unrelated_old_goal_corpus_built": false
+}
